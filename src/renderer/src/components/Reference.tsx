@@ -13,9 +13,31 @@ import {
   ComboboxList
 } from '@/components/ui/combobox'
 
+/** Locate a reference's definition and open it in the user's text editor. */
+export async function openReferenceTarget(
+  locate: () => Promise<RefLocation | null>,
+  label: string
+): Promise<void> {
+  const loc = await locate()
+  if (!loc) {
+    toast.error(`Couldn't find where "${label}" is defined`)
+    return
+  }
+  const result = await window.ck3tools.openInEditor(loc.path, loc.line)
+  if (!result.ok) toast.error(result.error)
+}
+
 interface Props {
-  value: string | null
-  onChange: (value: string | null) => void
+  /** Single-value mode: the current selection. Omit when using onAdd. */
+  value?: string | null
+  onChange?: (value: string | null) => void
+  /**
+   * Add mode (multi-value fields like traits): selecting an option calls this
+   * and resets the input, so several entries can be added in a row. The follow
+   * button is omitted — a committed value never lingers in the input; put a
+   * ReferenceBadge on the added entries instead.
+   */
+  onAdd?: (value: string) => void
   options: string[]
   placeholder?: string
   /**
@@ -28,20 +50,25 @@ interface Props {
    * user's text editor. Ignored when onNavigate is provided.
    */
   locate?: (value: string) => Promise<RefLocation | null>
+  /** Custom option rendering (e.g. trait icons); defaults to the plain id */
+  renderItem?: (item: string) => React.ReactNode
+  /** Cap on dropdown entries; mod lists (dynasties especially) can run to thousands */
+  limit?: number
 }
 
-/** Cap the dropdown; mod lists (dynasties especially) can run to thousands of ids. */
-const LIMIT = 100
-
 export default function Reference({
-  value,
+  value = null,
   onChange,
+  onAdd,
   options,
   placeholder,
   onNavigate,
-  locate
+  locate,
+  renderItem,
+  limit = 100
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
+  const [inputText, setInputText] = useState('')
 
   // Keep a value that isn't in the reference lists (typo, unscanned file) visible
   const items = useMemo(
@@ -58,44 +85,61 @@ export default function Reference({
     if (!locate) return
     setOpening(true)
     try {
-      const loc = await locate(value)
-      if (!loc) {
-        toast.error(`Couldn't find where "${value}" is defined`)
-        return
-      }
-      const result = await window.ck3tools.openInEditor(loc.path, loc.line)
-      if (!result.ok) toast.error(result.error)
+      await openReferenceTarget(() => locate(value), value)
     } finally {
       setOpening(false)
     }
   }
 
-  const canFollow = Boolean(value) && Boolean(onNavigate ?? locate)
+  const select = (v: string | null): void => {
+    if (onAdd) {
+      if (v) onAdd(v)
+      setInputText('')
+      return
+    }
+    onChange?.(v)
+  }
+
+  const showFollow = !onAdd && Boolean(onNavigate ?? locate)
 
   return (
     <ButtonGroup className="w-full">
-      <Combobox items={items} limit={LIMIT} value={value} onValueChange={onChange}>
-        <ComboboxInput className="flex-1" placeholder={placeholder} showClear />
+      <Combobox
+        items={items}
+        limit={limit}
+        value={onAdd ? null : value}
+        onValueChange={select}
+        inputValue={onAdd ? inputText : undefined}
+        onInputValueChange={(text, details) => {
+          // In add mode, selecting an item syncs the label back into the input;
+          // ignore that so the reset in select() sticks and only typing counts
+          if (onAdd && details.reason !== 'input-change') return
+          setInputText(text)
+        }}
+      >
+        <ComboboxInput className="flex-1" placeholder={placeholder} showClear={!onAdd} />
         <ComboboxContent>
           <ComboboxEmpty>No matches.</ComboboxEmpty>
           <ComboboxList>
             {(item: string) => (
               <ComboboxItem key={item} value={item}>
-                {item}
+                {renderItem ? renderItem(item) : item}
               </ComboboxItem>
             )}
           </ComboboxList>
         </ComboboxContent>
       </Combobox>
-      <Button
-        variant="outline"
-        size="icon"
-        disabled={!canFollow || opening}
-        title={onNavigate ? 'Go to this entry' : 'Open definition in text editor'}
-        onClick={follow}
-      >
-        {onNavigate ? <ArrowRight /> : <ExternalLink />}
-      </Button>
+      {showFollow && (
+        <Button
+          variant="outline"
+          size="icon"
+          disabled={!value || opening}
+          title={onNavigate ? 'Go to this entry' : 'Open definition in text editor'}
+          onClick={follow}
+        >
+          {onNavigate ? <ArrowRight /> : <ExternalLink />}
+        </Button>
+      )}
     </ButtonGroup>
   )
 }

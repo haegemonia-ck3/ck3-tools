@@ -4,16 +4,30 @@ import type { CharacterDetail, RefKind, ReferenceData } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
-import TraitPicker from './TraitPicker'
 import Reference from './Reference'
+import ReferenceBadge from './ReferenceBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { isValidCK3Date } from '@/lib/ck3Date'
+
+/** Dropdown row for the trait picker; fetches its own icon (module-level cached) */
+function TraitOption({ trait, iconCtx }: { trait: string; iconCtx: IconContext }): React.JSX.Element {
+  const icon = useTraitIcons(iconCtx, [trait])(trait)
+  return (
+    <span className="flex items-center gap-2.5">
+      {icon ? (
+        <img className="size-6 shrink-0 object-contain" src={icon} alt="" />
+      ) : (
+        <span className="inline-block size-6 shrink-0" />
+      )}
+      {trait}
+    </span>
+  )
+}
 
 interface Props {
   modPath: string
@@ -208,31 +222,23 @@ export default function CharacterDetailPanel({
         <div className="space-y-1.5">
           <Label className="text-xs tracking-wide text-muted-foreground uppercase">Traits</Label>
           <div className="flex min-h-6 flex-wrap gap-1.5">
-            {draft.traits.map((t) => {
-              const icon = iconFor(t)
-              return (
-                <Badge key={t} variant="secondary" className="gap-1 pr-1">
-                  {icon && <img className="-ml-1 size-5 object-contain" src={icon} alt="" />}
-                  {t}
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="size-4 text-muted-foreground hover:text-destructive"
-                    title={`Remove ${t}`}
-                    onClick={() => set({ traits: draft.traits.filter((x) => x !== t) })}
-                  >
-                    <X />
-                  </Button>
-                </Badge>
-              )
-            })}
+            {draft.traits.map((t) => (
+              <ReferenceBadge
+                key={t}
+                label={t}
+                icon={iconFor(t)}
+                locate={() => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'trait', t)}
+                onRemove={() => set({ traits: draft.traits.filter((x) => x !== t) })}
+              />
+            ))}
             {draft.traits.length === 0 && <span className="text-sm text-muted-foreground">none</span>}
           </div>
-          <TraitPicker
-            available={refData?.traits ?? []}
-            exclude={draft.traits}
-            iconCtx={iconCtx}
+          <Reference
+            options={(refData?.traits ?? []).filter((t) => !draft.traits.includes(t))}
+            placeholder="Add trait…"
             onAdd={addTrait}
+            renderItem={(t) => <TraitOption trait={t} iconCtx={iconCtx} />}
+            limit={40}
           />
         </div>
 
