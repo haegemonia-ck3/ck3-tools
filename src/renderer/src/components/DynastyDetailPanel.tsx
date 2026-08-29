@@ -8,7 +8,7 @@ import type {
   SaveResult
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
-import Reference, { openReferenceTarget } from './Reference'
+import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -417,7 +417,7 @@ export default function DynastyDetailPanel({
                 <Label className="text-xs tracking-wide text-muted-foreground uppercase">
                   Culture
                 </Label>
-                <Reference
+                <ReferenceInput
                   value={draft.culture}
                   onChange={(v) => set({ culture: v })}
                   options={refData?.cultures ?? []}
@@ -433,7 +433,7 @@ export default function DynastyDetailPanel({
                 <Label className="text-xs tracking-wide text-muted-foreground uppercase">
                   Dynasty
                 </Label>
-                <Reference
+                <ReferenceInput
                   value={draft.dynasty}
                   onChange={(v) => set({ dynasty: v })}
                   options={data.dynasties.map((d) => d.id)}

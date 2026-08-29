@@ -25,7 +25,7 @@ import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
 import DateRangeFilterField from '../components/DateRangeFilterField'
 import DebouncedInput from '../components/DebouncedInput'
-import Reference from '../components/Reference'
+import ReferenceInput from '../components/ReferenceInput'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -212,7 +212,7 @@ function ColumnFilter({
   }
 
   return (
-    <Reference
+    <ReferenceInput
       className="font-normal"
       value={value === '' ? null : value}
       onChange={(v) => column.setFilterValue(v ?? '')}

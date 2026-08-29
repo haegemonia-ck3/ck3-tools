@@ -25,7 +25,8 @@ import ModPicker from '../components/ModPicker'
 import DebouncedInput from '../components/DebouncedInput'
 import DynastyDetailPanel from '../components/DynastyDetailPanel'
 import FamilyTree from '../components/FamilyTree'
-import Reference from '../components/Reference'
+import ReferenceInput from '../components/ReferenceInput'
+import ReferenceDisplay from '../components/ReferenceDisplay'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -161,13 +162,8 @@ const columns = columnHelper.columns([
     header: 'Parent',
     sortFn: bySortableString,
     filterFn: 'equalsString',
-    meta: { filter: 'parent' },
-    cell: (info) =>
-      info.getValue() ? (
-        <span className="font-mono">{info.getValue()}</span>
-      ) : (
-        <em className="text-muted-foreground">—</em>
-      )
+    meta: { filter: 'parent' }
+    // Cell rendering is overridden in the body: it needs openRow to navigate.
   }),
   columnHelper.accessor('members', {
     header: 'Members',
@@ -239,7 +235,7 @@ function ColumnFilter({
   }
 
   return (
-    <Reference
+    <ReferenceInput
       className="font-normal"
       value={value === '' ? null : value}
       onChange={(v) => column.setFilterValue(v ?? '')}
@@ -622,7 +618,15 @@ export default function DynastyEditorPage(): React.JSX.Element {
                             : undefined
                       )}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {cell.column.id === 'parent' ? (
+                        <ReferenceDisplay
+                          value={row.original.parent}
+                          onNavigate={(v) => openRow('dynasty', v)}
+                          className="font-mono"
+                        />
+                      ) : (
+                        flexRender(cell.column.columnDef.cell, cell.getContext())
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>

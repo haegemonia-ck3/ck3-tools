@@ -11,7 +11,7 @@ import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
-import Reference from './Reference'
+import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -337,7 +337,7 @@ export default function CharacterDetailPanel({
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
-      <Reference
+      <ReferenceInput
         value={value}
         onChange={onChange}
         options={options}
@@ -362,7 +362,7 @@ export default function CharacterDetailPanel({
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
-      <Reference
+      <ReferenceInput
         value={value}
         onChange={onChange}
         options={options}
@@ -381,7 +381,7 @@ export default function CharacterDetailPanel({
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
-      <Reference
+      <ReferenceInput
         value={value}
         onChange={onChange}
         options={characterIds}
@@ -489,7 +489,7 @@ export default function CharacterDetailPanel({
               ))}
               {draft.traits.length === 0 && <span className="text-sm text-muted-foreground">none</span>}
             </div>
-            <Reference
+            <ReferenceInput
               options={(refData?.traits ?? []).filter((t) => !draft.traits.includes(t))}
               placeholder="Add trait…"
               onAdd={addTrait}
