@@ -29,6 +29,7 @@ const characters: CharacterDetail[] = [
     file: 'mock_characters.txt',
     name: 'Alexios',
     dynasty: 'dynn_Mock',
+    house: null,
     birth: '1050.1.1',
     death: null,
     culture: 'greek',
@@ -50,6 +51,7 @@ const characters: CharacterDetail[] = [
     file: 'mock_characters.txt',
     name: 'Ioannes',
     dynasty: 'dynn_Mock',
+    house: null,
     birth: '1020.1.1',
     death: '1078.4.2',
     culture: 'greek',
@@ -71,6 +73,7 @@ const characters: CharacterDetail[] = [
     file: 'mock_characters.txt',
     name: 'Eirene',
     dynasty: 'dynn_Mock',
+    house: null,
     birth: '1052.6.3',
     death: '1099.2.14',
     culture: 'greek',
@@ -92,6 +95,7 @@ const characters: CharacterDetail[] = [
     file: 'mock_characters.txt',
     name: null,
     dynasty: null,
+    house: null,
     birth: '1041.11.2',
     death: null,
     culture: 'greek',
@@ -113,6 +117,7 @@ const characters: CharacterDetail[] = [
     file: 'mock_norse.txt',
     name: 'Ragnvald',
     dynasty: 'dynn_Other',
+    house: null,
     birth: '1044.3.20',
     death: null,
     culture: 'norse',
@@ -133,7 +138,9 @@ const characters: CharacterDetail[] = [
     id: '3411',
     file: 'mock_norse.txt',
     name: 'Astrid',
-    dynasty: 'house_Mockington',
+    // The house-only case: no `dynasty =` line, lineage comes via the house
+    dynasty: null,
+    house: 'house_Mockington',
     birth: '1048.9.9',
     death: null,
     culture: 'norse',
@@ -313,7 +320,8 @@ const mock: Ck3ToolsApi = {
     cultures: ['greek', 'norse', 'saxon'],
     faiths: ['orthodox', 'catholic', 'asatru'],
     traits: ['brave', 'ambitious', 'craven', 'shy'],
-    dynasties: ['dynn_Mock', 'dynn_Other', 'house_Mockington']
+    dynasties: ['dynn_Mock', 'dynn_Other'],
+    houses: ['house_Mockington', 'house_Other']
   }),
   locateRef: async (_g, _m, _r, kind, id) =>
     id.includes('missing')

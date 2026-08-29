@@ -103,7 +103,14 @@ export interface CharacterDetail {
   id: string
   file: string
   name: string | null
+  /**
+   * Raw `dynasty =` value. Distinct from `house`: a character joins a lineage
+   * through either key, and a house already implies its parent dynasty, so
+   * most characters carry one or the other rather than both.
+   */
   dynasty: string | null
+  /** Raw `dynasty_house =` value */
+  house: string | null
   birth: string | null
   death: string | null
   culture: string | null
@@ -200,8 +207,10 @@ export interface ReferenceData {
   cultures: string[]
   faiths: string[]
   traits: string[]
-  /** Union of dynasty and dynasty-house ids (the two are interchangeable in history files) */
+  /** Ids from `common/dynasties` */
   dynasties: string[]
+  /** Ids from `common/dynasty_houses` */
+  houses: string[]
 }
 
 /** Kinds of reference data whose definition site can be located on disk */

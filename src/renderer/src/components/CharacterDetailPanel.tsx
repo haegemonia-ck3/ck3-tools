@@ -70,6 +70,15 @@ function DateHint({ label, value }: { label: string; value: string }): React.JSX
   )
 }
 
+/**
+ * Drafts persisted before Dynasty and House became separate fields have no
+ * `house`. Treat it as unset so a resumed draft neither reads as dirty against
+ * a freshly parsed character nor writes `undefined` back to the file.
+ */
+function withHouse(detail: CharacterDetail): CharacterDetail {
+  return { ...detail, house: detail.house ?? null }
+}
+
 interface Props {
   modPath: string
   file: string
@@ -83,8 +92,8 @@ interface Props {
   characterIds: string[]
   /** Switch the editor to another character in the mod (father/mother jump) */
   onNavigate: (id: string) => void
-  /** Open this character's dynasty (or house) in the Dynasty & House Editor */
-  onOpenDynasty: (id: string) => void
+  /** Open a lineage row in the Dynasty & House Editor */
+  onOpenLineage: (kind: 'dynasty' | 'house', id: string) => void
   /** Persisted unsaved edits for this character, if any; read once per open */
   storedDraft: CharacterDraft | null
   /**
@@ -107,7 +116,7 @@ export default function CharacterDetailPanel({
   refData,
   characterIds,
   onNavigate,
-  onOpenDynasty,
+  onOpenLineage,
   storedDraft,
   onDraftChange,
   onSaved,
@@ -144,8 +153,8 @@ export default function CharacterDetailPanel({
       // Resume a persisted draft; `original` stays the file's CURRENT state so
       // dirty/save/revert all work against what's really on disk.
       if (storedDraft) {
-        setDraft(structuredClone(storedDraft.draft))
-        setStale(JSON.stringify(storedDraft.original) !== JSON.stringify(d))
+        setDraft(withHouse(structuredClone(storedDraft.draft)))
+        setStale(JSON.stringify(withHouse(storedDraft.original)) !== JSON.stringify(d))
       } else {
         setDraft(structuredClone(d))
       }
@@ -339,19 +348,26 @@ export default function CharacterDetailPanel({
   )
 
   /**
-   * Dynasty is managed data too, so it opens in the Dynasty & House Editor
-   * instead of a text editor. The picker's options cover houses as well, and
-   * that editor resolves whichever kind the id turns out to be.
+   * Dynasty and house are managed data, so they open in the Dynasty & House
+   * Editor rather than a text editor. They are separate keys in the file:
+   * a house implies its parent dynasty, so a character usually sets one or
+   * the other, but nothing stops a file from carrying both.
    */
-  const dynastyField = (): React.JSX.Element => (
+  const lineageField = (
+    label: string,
+    kind: 'dynasty' | 'house',
+    value: string | null,
+    onChange: (v: string | null) => void,
+    options: string[]
+  ): React.JSX.Element => (
     <div className="space-y-1.5">
-      <Label className="text-xs tracking-wide text-muted-foreground uppercase">Dynasty</Label>
+      <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
       <Reference
-        value={draft.dynasty}
-        onChange={(v) => set({ dynasty: v })}
-        options={refData?.dynasties ?? []}
+        value={value}
+        onChange={onChange}
+        options={options}
         placeholder="none"
-        onNavigate={onOpenDynasty}
+        onNavigate={(v) => onOpenLineage(kind, v)}
         followTitle="Open in Dynasty & House Editor"
       />
     </div>
@@ -433,7 +449,22 @@ export default function CharacterDetailPanel({
               placeholder: 'alive'
             })}
           </div>
-          {dynastyField()}
+          <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
+            {lineageField(
+              'Dynasty',
+              'dynasty',
+              draft.dynasty,
+              (v) => set({ dynasty: v }),
+              refData?.dynasties ?? []
+            )}
+            {lineageField(
+              'House',
+              'house',
+              draft.house,
+              (v) => set({ house: v }),
+              refData?.houses ?? []
+            )}
+          </div>
           <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
             {parentField('Father', draft.father, (v) => set({ father: v }))}
             {parentField('Mother', draft.mother, (v) => set({ mother: v }))}

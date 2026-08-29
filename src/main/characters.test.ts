@@ -161,3 +161,79 @@ describe('CRLF files', () => {
     expect(text.replace(/\r\n/g, '')).not.toContain('\n')
   })
 })
+
+// `dynasty` and `dynasty_house` are separate keys, editable independently.
+// They used to collapse into one field, which hid whichever the file didn't
+// use and made a house-only character look like it had no lineage.
+describe('dynasty and house', () => {
+  const lineageFile = 'lineage.txt'
+  const lineagePath = join(modPath, 'history', 'characters', lineageFile)
+  const LINEAGE_SOURCE = [
+    '1 = {',
+    '\tname = "OnlyDynasty"',
+    '\tdynasty = dynn_A',
+    '\t900.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '}',
+    '',
+    '2 = {',
+    '\tname = "OnlyHouse"',
+    '\tdynasty_house = house_B',
+    '\t900.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '}',
+    '',
+    '3 = {',
+    '\tname = "Both"',
+    '\tdynasty = dynn_A',
+    '\tdynasty_house = house_B',
+    '\t900.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '}',
+    ''
+  ].join('\n')
+  beforeEach(() => writeFileSync(lineagePath, LINEAGE_SOURCE, 'utf-8'))
+
+  it('reads each key into its own field', () => {
+    const only = getCharacter(modPath, lineageFile, '1')!
+    expect([only.dynasty, only.house]).toEqual(['dynn_A', null])
+    const house = getCharacter(modPath, lineageFile, '2')!
+    expect([house.dynasty, house.house]).toEqual([null, 'house_B'])
+    const both = getCharacter(modPath, lineageFile, '3')!
+    expect([both.dynasty, both.house]).toEqual(['dynn_A', 'house_B'])
+  })
+
+  it('round-trips byte-for-byte on no-op saves of all three shapes', () => {
+    for (const id of ['1', '2', '3']) {
+      const detail = getCharacter(modPath, lineageFile, id)!
+      expect(saveCharacter(modPath, lineageFile, id, detail)).toEqual({ ok: true })
+    }
+    expect(readFileSync(lineagePath, 'utf-8')).toBe(LINEAGE_SOURCE)
+  })
+
+  it('edits one key without disturbing the other', () => {
+    const both = getCharacter(modPath, lineageFile, '3')!
+    expect(saveCharacter(modPath, lineageFile, '3', { ...both, house: 'house_C' })).toEqual({
+      ok: true
+    })
+    const after = getCharacter(modPath, lineageFile, '3')!
+    expect([after.dynasty, after.house]).toEqual(['dynn_A', 'house_C'])
+  })
+
+  it('adds a house to a dynasty-only character, and clears it again', () => {
+    const before = readFileSync(lineagePath, 'utf-8')
+    const only = getCharacter(modPath, lineageFile, '1')!
+    expect(saveCharacter(modPath, lineageFile, '1', { ...only, house: 'house_B' })).toEqual({
+      ok: true
+    })
+    expect(readFileSync(lineagePath, 'utf-8')).toContain('\tdynasty_house = house_B\n\t900.1.1')
+    expect(getCharacter(modPath, lineageFile, '1')!.house).toBe('house_B')
+
+    const added = getCharacter(modPath, lineageFile, '1')!
+    expect(saveCharacter(modPath, lineageFile, '1', { ...added, house: null })).toEqual({ ok: true })
+    expect(readFileSync(lineagePath, 'utf-8')).toBe(before)
+  })
+})
