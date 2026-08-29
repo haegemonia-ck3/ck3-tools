@@ -36,6 +36,10 @@ interface Props {
   gameDir: string | null
   replacePaths: string[]
   refData: ReferenceData | null
+  /** Ids of every character in the mod, offered as father/mother options */
+  characterIds: string[]
+  /** Switch the editor to another character in the mod (father/mother jump) */
+  onNavigate: (id: string) => void
   /** Called after a successful save; newId may differ from the selected id */
   onSaved: (file: string, newId: string) => void
   onClose: () => void
@@ -48,6 +52,8 @@ export default function CharacterDetailPanel({
   gameDir,
   replacePaths,
   refData,
+  characterIds,
+  onNavigate,
   onSaved,
   onClose
 }: Props): React.JSX.Element {
@@ -162,6 +168,24 @@ export default function CharacterDetailPanel({
     </div>
   )
 
+  /** Parent fields reference other characters in the mod, so they jump in-app. */
+  const parentField = (
+    label: string,
+    value: string | null,
+    onChange: (v: string | null) => void
+  ): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
+      <Reference
+        value={value}
+        onChange={onChange}
+        options={characterIds}
+        placeholder="none"
+        onNavigate={onNavigate}
+      />
+    </div>
+  )
+
   return (
     <Card className="flex min-h-0 w-100 shrink-0 flex-col gap-0 py-0">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -192,6 +216,8 @@ export default function CharacterDetailPanel({
         </div>
         {refField('Culture', 'culture', draft.culture, (v) => set({ culture: v }), refData?.cultures ?? [])}
         {refField('Faith', 'faith', draft.faith, (v) => set({ faith: v }), refData?.faiths ?? [])}
+        {parentField('Father', draft.father, (v) => set({ father: v }))}
+        {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
 
         <div className="space-y-1.5">
           <Label className="text-xs tracking-wide text-muted-foreground uppercase">Traits</Label>

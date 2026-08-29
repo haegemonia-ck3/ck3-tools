@@ -26,6 +26,8 @@ const characters: CharacterDetail[] = [
     death: null,
     culture: 'greek',
     faith: 'orthodox',
+    father: '218',
+    mother: null,
     traits: ['brave', 'ambitious'],
     stats: {
       diplomacy: 4,
@@ -37,6 +39,27 @@ const characters: CharacterDetail[] = [
     }
   },
   {
+    id: '218',
+    file: 'mock_characters.txt',
+    name: 'Ioannes',
+    dynasty: 'dynn_Mock',
+    birth: '1020.1.1',
+    death: '1078.4.2',
+    culture: 'greek',
+    faith: 'orthodox',
+    father: null,
+    mother: null,
+    traits: ['just'],
+    stats: {
+      diplomacy: 6,
+      martial: 3,
+      stewardship: 5,
+      intrigue: 2,
+      learning: 4,
+      prowess: 3
+    }
+  },
+  {
     id: '1002',
     file: 'mock_characters.txt',
     name: 'Eirene',
@@ -45,6 +68,8 @@ const characters: CharacterDetail[] = [
     death: '1099.2.14',
     culture: 'greek',
     faith: 'orthodox',
+    father: null,
+    mother: null,
     traits: ['shy'],
     stats: {
       diplomacy: 6,
@@ -64,6 +89,8 @@ const characters: CharacterDetail[] = [
     death: null,
     culture: 'greek',
     faith: 'orthodox',
+    father: null,
+    mother: null,
     traits: [],
     stats: {
       diplomacy: null,
@@ -83,6 +110,8 @@ const characters: CharacterDetail[] = [
     death: null,
     culture: 'norse',
     faith: 'asatru',
+    father: null,
+    mother: null,
     traits: ['brave'],
     stats: {
       diplomacy: 2,
@@ -102,6 +131,8 @@ const characters: CharacterDetail[] = [
     death: null,
     culture: 'norse',
     faith: 'asatru',
+    father: null,
+    mother: null,
     traits: ['ambitious', 'craven'],
     stats: {
       diplomacy: 5,

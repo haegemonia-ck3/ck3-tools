@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table'
 import type { Column, Row, SortFn } from '@tanstack/react-table'
 import { FilterX, Star } from 'lucide-react'
+import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
@@ -298,6 +299,8 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const rows = table.getRowModel().rows
 
   const byKey = new Map(characters.map((c) => [`${c.file}:${c.id}`, c]))
+  // Ids are unique across a mod's history files, so parent refs resolve by id alone
+  const byId = new Map(characters.map((c) => [c.id, c]))
   // Hide refs to characters missing from the current scan without pruning them from settings
   const existing = (list: CharacterRef[]): CharacterRef[] =>
     loading || characters.length === 0
@@ -481,6 +484,15 @@ export default function CharacterEditorPage(): React.JSX.Element {
             gameDir={settings?.gameDir ?? null}
             replacePaths={selectedMod?.replacePaths ?? []}
             refData={refData}
+            characterIds={characters.map((c) => c.id)}
+            onNavigate={(id) => {
+              const target = byId.get(id)
+              if (!target) {
+                toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
+                return
+              }
+              openCharacter({ file: target.file, id: target.id, name: target.name })
+            }}
             onSaved={(file, newId) => {
               if (selected) {
                 remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)

@@ -58,6 +58,8 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     death: deathBlock ? cleanDate(deathBlock.key) : null,
     culture: scalars.get('culture') ?? null,
     faith: scalars.get('faith') ?? scalars.get('religion') ?? null,
+    father: scalars.get('father') ?? null,
+    mother: scalars.get('mother') ?? null,
     traits: scanRepeatedScalar(body, 'trait'),
     stats
   }
@@ -106,8 +108,8 @@ export function getCharacter(modPath: string, file: string, id: string): Charact
 
 /**
  * All edits are surgical: only lines that carry an edited property change; the
- * rest of the block (father/mother, dated effect blocks, comments, formatting)
- * and the rest of the file are preserved byte-for-byte.
+ * rest of the block (dated effect blocks, comments, formatting) and the rest of
+ * the file are preserved byte-for-byte.
  */
 
 const SCALAR_LINE = /^(\s*)([A-Za-z0-9_.\-']+)(\s*=\s*)("([^"]*)"|[^\s{}"]+)(\s*)$/
@@ -289,6 +291,8 @@ export function saveCharacter(
     setScalar(ed, ['dynasty', 'dynasty_house'], detail.dynasty)
     setScalar(ed, ['culture'], detail.culture)
     setScalar(ed, ['faith', 'religion'], detail.faith)
+    setScalar(ed, ['father'], detail.father)
+    setScalar(ed, ['mother'], detail.mother)
     for (const key of STAT_KEYS) {
       const v = detail.stats[key]
       setScalar(ed, [key], v === null ? null : String(v))
