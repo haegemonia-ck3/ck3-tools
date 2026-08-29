@@ -6,7 +6,9 @@ import type { AppSettings } from '@shared/types'
 const DEFAULTS: AppSettings = {
   gameDir: null,
   modDir: null,
-  selectedModFile: null
+  selectedModFile: null,
+  recentCharacters: {},
+  favoriteCharacters: {}
 }
 
 function settingsPath(): string {

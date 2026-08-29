@@ -16,7 +16,13 @@ import type { Row, SortFn } from '@tanstack/react-table'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
-import type { CharacterSummary, ReferenceData } from '@shared/types'
+import type { AppSettings, CharacterRef, CharacterSummary, ReferenceData } from '@shared/types'
+
+const RECENTS_CAP = 10
+const RECENTS_COLLAPSED = 5
+
+const sameChar = (a: CharacterRef, b: { file: string; id: string }): boolean =>
+  a.file === b.file && a.id === b.id
 
 const features = tableFeatures({
   columnFilteringFeature,
@@ -72,13 +78,60 @@ const columns = columnHelper.columns([
 ])
 
 export default function CharacterEditorPage(): React.JSX.Element {
-  const { settings, selectedMod } = useApp()
+  const { settings, selectedMod, updateSettings } = useApp()
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<{ file: string; id: string } | null>(null)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
+  const [showAllRecents, setShowAllRecents] = useState(false)
 
   const modPath = selectedMod?.path ?? null
+  const modKey = selectedMod?.file ?? null
+  const recents = (modKey && settings?.recentCharacters?.[modKey]) || []
+  const favorites = (modKey && settings?.favoriteCharacters?.[modKey]) || []
+
+  const saveList = (
+    key: 'recentCharacters' | 'favoriteCharacters',
+    list: CharacterRef[]
+  ): void => {
+    if (!modKey) return
+    void updateSettings({ [key]: { ...(settings?.[key] ?? {}), [modKey]: list } })
+  }
+
+  const recordVisit = (ref: CharacterRef): void => {
+    saveList('recentCharacters', [ref, ...recents.filter((r) => !sameChar(r, ref))].slice(0, RECENTS_CAP))
+  }
+
+  const isFavorite = (c: { file: string; id: string }): boolean =>
+    favorites.some((r) => sameChar(r, c))
+
+  const toggleFavorite = (ref: CharacterRef): void => {
+    saveList(
+      'favoriteCharacters',
+      isFavorite(ref) ? favorites.filter((r) => !sameChar(r, ref)) : [...favorites, ref]
+    )
+  }
+
+  const openCharacter = (ref: CharacterRef): void => {
+    setSelected({ file: ref.file, id: ref.id })
+    recordVisit(ref)
+  }
+
+  /** Point recents/favorites at a character's new id after a save renames it. */
+  const remapRefs = (file: string, oldId: string, newId: string, name: string | null): void => {
+    if (oldId === newId) return
+    const remap = (list: CharacterRef[]): CharacterRef[] =>
+      list.map((r) => (sameChar(r, { file, id: oldId }) ? { file, id: newId, name } : r))
+    const patch: Partial<AppSettings> = {}
+    if (modKey && recents.some((r) => sameChar(r, { file, id: oldId })))
+      patch.recentCharacters = { ...(settings?.recentCharacters ?? {}), [modKey]: remap(recents) }
+    if (modKey && favorites.some((r) => sameChar(r, { file, id: oldId })))
+      patch.favoriteCharacters = {
+        ...(settings?.favoriteCharacters ?? {}),
+        [modKey]: remap(favorites)
+      }
+    if (Object.keys(patch).length > 0) void updateSettings(patch)
+  }
 
   const reload = (): void => {
     if (!modPath) {
@@ -97,6 +150,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
 
   useEffect(() => {
     setSelected(null)
+    setShowAllRecents(false)
     if (!modPath) {
       setRefData(null)
       return
@@ -131,6 +185,32 @@ export default function CharacterEditorPage(): React.JSX.Element {
 
   const rows = table.getRowModel().rows
 
+  const byKey = new Map(characters.map((c) => [`${c.file}:${c.id}`, c]))
+  // Hide refs to characters missing from the current scan without pruning them from settings
+  const existing = (list: CharacterRef[]): CharacterRef[] =>
+    loading || characters.length === 0
+      ? list
+      : list.filter((r) => byKey.has(`${r.file}:${r.id}`))
+
+  const shownFavorites = existing(favorites)
+  const shownRecents = existing(recents)
+  const visibleRecents = showAllRecents ? shownRecents : shownRecents.slice(0, RECENTS_COLLAPSED)
+
+  const chip = (ref: CharacterRef): React.JSX.Element => {
+    const label = byKey.get(`${ref.file}:${ref.id}`)?.name ?? ref.name ?? ref.id
+    return (
+      <button
+        key={`${ref.file}:${ref.id}`}
+        className={`char-chip${selected && sameChar(ref, selected) ? ' active' : ''}`}
+        title={`${ref.id} — ${ref.file}`}
+        onClick={() => openCharacter(ref)}
+      >
+        {isFavorite(ref) && <span className="chip-star">★</span>}
+        {label}
+      </button>
+    )
+  }
+
   return (
     <div className="page page-wide">
       <header className="page-header">
@@ -149,6 +229,31 @@ export default function CharacterEditorPage(): React.JSX.Element {
         </div>
       </header>
 
+      {(shownFavorites.length > 0 || shownRecents.length > 0) && (
+        <div className="quick-access">
+          {shownFavorites.length > 0 && (
+            <div className="quick-row">
+              <span className="quick-label">Favorites</span>
+              {shownFavorites.map(chip)}
+            </div>
+          )}
+          {shownRecents.length > 0 && (
+            <div className="quick-row">
+              <span className="quick-label">Recent</span>
+              {visibleRecents.map(chip)}
+              {shownRecents.length > RECENTS_COLLAPSED && (
+                <button
+                  className="quick-toggle"
+                  onClick={() => setShowAllRecents((v) => !v)}
+                >
+                  {showAllRecents ? 'Show less' : `Show more (${shownRecents.length - RECENTS_COLLAPSED})`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {!loading && characters.length === 0 && (
         <section className="card">
           <p className="hint">
@@ -164,6 +269,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
             <thead>
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id}>
+                  <th className="col-star" aria-label="Favorite" />
                   {hg.headers.map((header) => (
                     <th
                       key={header.id}
@@ -187,9 +293,29 @@ export default function CharacterEditorPage(): React.JSX.Element {
                     selected && `${selected.file}:${selected.id}` === row.id ? 'selected' : ''
                   }
                   onClick={() =>
-                    setSelected({ file: row.original.file, id: row.original.id })
+                    openCharacter({
+                      file: row.original.file,
+                      id: row.original.id,
+                      name: row.original.name
+                    })
                   }
                 >
+                  <td className="col-star">
+                    <button
+                      className={`star-btn${isFavorite(row.original) ? ' favorited' : ''}`}
+                      title={isFavorite(row.original) ? 'Remove from favorites' : 'Add to favorites'}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleFavorite({
+                          file: row.original.file,
+                          id: row.original.id,
+                          name: row.original.name
+                        })
+                      }}
+                    >
+                      {isFavorite(row.original) ? '★' : '☆'}
+                    </button>
+                  </td>
                   {row.getAllCells().map((cell) => (
                     <td key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -210,6 +336,9 @@ export default function CharacterEditorPage(): React.JSX.Element {
           replacePaths={selectedMod?.replacePaths ?? []}
           refData={refData}
           onSaved={(file, newId) => {
+            if (selected) {
+              remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+            }
             setSelected({ file, id: newId })
             reload()
           }}

@@ -5,6 +5,18 @@ export interface AppSettings {
   modDir: string | null
   /** File name of the selected .mod descriptor within modDir, e.g. "Atlantis.mod" */
   selectedModFile: string | null
+  /** Recently visited characters per mod (.mod file name → most recent first, capped at 10) */
+  recentCharacters: Record<string, CharacterRef[]>
+  /** Favorited characters per mod (.mod file name → refs in the order they were starred) */
+  favoriteCharacters: Record<string, CharacterRef[]>
+}
+
+export interface CharacterRef {
+  /** File name within history/characters, e.g. "HAAO_Attica.txt" */
+  file: string
+  id: string
+  /** Name at the time the ref was recorded, as a fallback label */
+  name: string | null
 }
 
 export interface ModInfo {
