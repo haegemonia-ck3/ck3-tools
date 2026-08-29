@@ -84,6 +84,8 @@ export function listCharacters(modPath: string): CharacterSummary[] {
           // The list's one lineage column shows whichever key the file uses
           dynasty: detail.dynasty ?? detail.house,
           birth: detail.birth,
+          father: detail.father,
+          mother: detail.mother,
           file: entry
         })
       }

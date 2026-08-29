@@ -297,7 +297,15 @@ const mock: Ck3ToolsApi = {
     }
   ],
   listCharacters: async () =>
-    characters.map(({ id, name, dynasty, birth, file }) => ({ id, name, dynasty, birth, file })),
+    characters.map(({ id, name, dynasty, birth, father, mother, file }) => ({
+      id,
+      name,
+      dynasty,
+      birth,
+      father,
+      mother,
+      file
+    })),
   getCharacter: async (_modPath, file, id) =>
     structuredClone(characters.find((c) => c.file === file && c.id === id) ?? null),
   saveCharacter: async (_modPath, file, originalId, detail) => {

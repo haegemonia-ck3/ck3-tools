@@ -86,6 +86,10 @@ export interface CharacterSummary {
   dynasty: string | null
   /** Birth date as written, e.g. "2410.1.1" */
   birth: string | null
+  /** Character id of the father, as written in the file */
+  father: string | null
+  /** Character id of the mother, as written in the file */
+  mother: string | null
   /** File name within history/characters, e.g. "HAAO_Attica.txt" */
   file: string
 }
