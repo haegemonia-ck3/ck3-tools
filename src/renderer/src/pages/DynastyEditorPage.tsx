@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   columnFacetingFeature,
   columnFilteringFeature,
@@ -281,11 +281,12 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const [data, setData] = useState<DynastyData | null>(null)
   const [loading, setLoading] = useState(false)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
-  const [selected, setSelected] = useState<Selection | null>(null)
   const [includeHouseMembers, setIncludeHouseMembers] = useState(true)
   const [treeSelected, setTreeSelected] = useState<string | null>(null)
   const [focus, setFocus] = useState<{ id: string | null; nonce: number }>({ id: null, nonce: 0 })
-  const deepLink = useSearch({ from: '/dynasties' })
+  // Which row is open lives in the URL, not in state, so opening one pushes a
+  // history entry and the mouse "back" button returns to the list.
+  const search = useSearch({ from: '/dynasties' })
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'dynasty-editor-detail',
     panelIds: ['tree', 'detail'],
@@ -296,6 +297,19 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const gameDir = settings?.gameDir ?? null
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
   const calendar = selectedMod?.profile?.calendar ?? null
+
+  const openRow = (kind: 'dynasty' | 'house', id: string): void => {
+    void navigate({ to: '/dynasties', search: { id, kind } })
+    // Give the tree the full width: fold the tools sidebar away if it's open.
+    if (isMobile) setOpenMobile(false)
+    else setOpen(false)
+  }
+
+  // Closing replaces rather than pushes, so "back" from the list doesn't drop
+  // straight back into the row that was just closed.
+  const closeRow = (): void => {
+    void navigate({ to: '/dynasties', search: {}, replace: true })
+  }
 
   const reload = (): void => {
     if (!modPath) {
@@ -312,8 +326,14 @@ export default function DynastyEditorPage(): React.JSX.Element {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(reload, [modPath])
 
+  // Switching mods invalidates the open row, but only on a real change: on the
+  // first render the URL may already carry a deep link that must survive.
+  const prevModPath = useRef(modPath)
   useEffect(() => {
-    setSelected(null)
+    if (prevModPath.current !== modPath) {
+      prevModPath.current = modPath
+      closeRow()
+    }
     setTreeSelected(null)
     if (!modPath) {
       setRefData(null)
@@ -353,6 +373,36 @@ export default function DynastyEditorPage(): React.JSX.Element {
     table.setGlobalFilter('')
   }
 
+  // Resolve the id in the URL against the scan. The caller's `kind` is trusted
+  // when it matches, but falls back to the other list rather than erroring:
+  // files do put house ids under `dynasty =`.
+  const selected: Selection | null = useMemo(() => {
+    if (!search.id || !data) return null
+    const norm = normId(search.id)
+    const has = {
+      dynasty: data.dynasties.some((d) => normId(d.id) === norm),
+      house: data.houses.some((h) => normId(h.id) === norm)
+    }
+    const preferred = search.kind ?? 'dynasty'
+    const other = preferred === 'dynasty' ? 'house' : 'dynasty'
+    const kind = has[preferred] ? preferred : has[other] ? other : null
+    return kind === null ? null : { kind, id: search.id }
+  }, [search.id, search.kind, data])
+
+  // An id that survives the scan but matches nothing (e.g. a deep link from a
+  // character whose dynasty isn't defined) falls back to the list with a toast.
+  useEffect(() => {
+    if (!search.id || !data || selected) return
+    toast.error(`"${search.id}" isn't a dynasty or house in ${selectedMod?.name ?? 'this mod'}`)
+    closeRow()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.id, data, selected])
+
+  // A different row means the previous tree selection no longer applies.
+  useEffect(() => {
+    setTreeSelected(null)
+  }, [selected?.kind, selected?.id])
+
   const selectedRow: DynastyListRow | null =
     selected === null
       ? null
@@ -388,38 +438,6 @@ export default function DynastyEditorPage(): React.JSX.Element {
     }
     return colors
   }, [data, selected])
-
-  const openRow = (kind: 'dynasty' | 'house', id: string): void => {
-    setSelected({ kind, id })
-    setTreeSelected(null)
-    // Give the tree the full width: fold the tools sidebar away if it's open.
-    if (isMobile) setOpenMobile(false)
-    else setOpen(false)
-  }
-
-  // Deep link from another tool (e.g. a character's Dynasty or House field).
-  // Waits for the scan so the id can be confirmed against real definitions,
-  // then strips the params so a refresh doesn't re-jump.
-  useEffect(() => {
-    if (!deepLink.id || !data) return
-    const norm = normId(deepLink.id)
-    const has = {
-      dynasty: data.dynasties.some((d) => normId(d.id) === norm),
-      house: data.houses.some((h) => normId(h.id) === norm)
-    }
-    // Trust the caller's kind, but fall back to the other list rather than
-    // erroring: files do put house ids under `dynasty =`.
-    const preferred = deepLink.kind ?? 'dynasty'
-    const other = preferred === 'dynasty' ? 'house' : 'dynasty'
-    const kind = has[preferred] ? preferred : has[other] ? other : null
-    if (kind === null) {
-      toast.error(`"${deepLink.id}" isn't a dynasty or house in ${selectedMod?.name ?? 'this mod'}`)
-    } else {
-      openRow(kind, deepLink.id)
-    }
-    void navigate({ to: '/dynasties', search: {}, replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLink.id, deepLink.kind, data])
 
   const focusMember = (id: string): void => {
     // A house member clicked while the tree shows "dynasty only" — widen first
@@ -463,7 +481,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
             variant="ghost"
             size="icon-sm"
             title="Back to list (Esc)"
-            onClick={() => setSelected(null)}
+            onClick={closeRow}
           >
             <ArrowLeft />
           </Button>
@@ -538,7 +556,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
               onOpenCharacter={openCharacter}
               onOpenRow={openRow}
               onSaved={reload}
-              onClose={() => setSelected(null)}
+              onClose={closeRow}
             />
           </ResizablePanel>
         </ResizablePanelGroup>
