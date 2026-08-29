@@ -17,3 +17,7 @@ publish:
   provider: github
   owner: haegemonia-ck3
   repo: ck3-tools
+  # Upload straight onto the tag's public release; the default (draft) leaves the
+  # installer on a hidden draft while the visible release shows only GitHub's
+  # automatic source archives.
+  releaseType: release
