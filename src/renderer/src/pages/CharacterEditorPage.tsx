@@ -25,6 +25,7 @@ import DebouncedInput from '../components/DebouncedInput'
 import Reference from '../components/Reference'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { useSidebar } from '@/components/ui/sidebar'
 import {
   Table,
   TableBody,
@@ -190,6 +191,7 @@ function ColumnFilter({
 
 export default function CharacterEditorPage(): React.JSX.Element {
   const { settings, selectedMod, updateSettings } = useApp()
+  const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<{ file: string; id: string } | null>(null)
@@ -249,6 +251,9 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const openCharacter = (ref: CharacterRef): void => {
     setSelected({ file: ref.file, id: ref.id })
     recordVisit(ref)
+    // Give the detail panel the full width: fold the tools sidebar away if it's open.
+    if (isMobile) setOpenMobile(false)
+    else setOpen(false)
   }
 
   /** Point recents/favorites at a character's new id after a save renames it. */
