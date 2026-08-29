@@ -17,6 +17,7 @@ import {
 } from '@tanstack/react-table'
 import type { Column, Row, SortFn } from '@tanstack/react-table'
 import { FilterX, Star } from 'lucide-react'
+import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
@@ -25,6 +26,11 @@ import DebouncedInput from '../components/DebouncedInput'
 import Reference from '../components/Reference'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup
+} from '@/components/ui/resizable'
 import { useSidebar } from '@/components/ui/sidebar'
 import {
   Table,
@@ -197,6 +203,12 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const [selected, setSelected] = useState<{ file: string; id: string } | null>(null)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
   const [showAllRecents, setShowAllRecents] = useState(false)
+  // Remembers the character list / detail split across sessions (localStorage)
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: 'character-editor-detail',
+    panelIds: ['list', 'detail'],
+    onlySaveAfterUserInteractions: true
+  })
 
   const modPath = selectedMod?.path ?? null
   const modKey = selectedMod?.file ?? null
@@ -443,128 +455,151 @@ export default function CharacterEditorPage(): React.JSX.Element {
         </Card>
       )}
 
-      <div className="flex min-h-0 flex-1 gap-4">
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+        defaultLayout={defaultLayout}
+        onLayoutChanged={onLayoutChanged}
+      >
         {characters.length > 0 && (
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
-            <Table>
-              <TableHeader>
-                {table.getHeaderGroups().map((hg) => (
-                  <TableRow key={hg.id} className="hover:bg-transparent">
-                    <TableHead
-                      className="sticky top-0 z-10 h-auto w-9 border-b bg-card"
-                      aria-label="Favorite"
-                    />
-                    {hg.headers.map((header) => (
+          <ResizablePanel id="list" minSize={320} className="flex min-h-0 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
+              <Table>
+                <TableHeader>
+                  {table.getHeaderGroups().map((hg) => (
+                    <TableRow key={hg.id} className="hover:bg-transparent">
                       <TableHead
-                        key={header.id}
-                        className="sticky top-0 z-10 h-auto border-b bg-card py-1.5 align-top"
-                      >
-                        <div className="flex flex-col items-stretch gap-1">
-                          <button
-                            type="button"
-                            className="self-start cursor-pointer select-none hover:text-primary"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
-                          </button>
-                          <ColumnFilter
-                            column={header.column}
-                            modPath={modPath}
-                            gameDir={settings?.gameDir ?? null}
-                            replacePaths={selectedMod.replacePaths}
-                          />
-                        </div>
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const isSelected = selected !== null && `${selected.file}:${selected.id}` === row.id
-                  return (
-                    <TableRow
-                      key={row.id}
-                      className="group cursor-pointer"
-                      data-state={isSelected ? 'selected' : undefined}
-                      onClick={() =>
-                        openCharacter({
-                          file: row.original.file,
-                          id: row.original.id,
-                          name: row.original.name
-                        })
-                      }
-                    >
-                      <TableCell className="relative w-9 py-0 pr-0 pl-2">
-                        {`${row.original.file}:${row.original.id}` in drafts && (
-                          <span
-                            className="absolute top-1/2 left-0.5 size-1.5 -translate-y-1/2 rounded-full bg-primary"
-                            title="Unsaved changes"
-                          />
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className={cn(
-                            'text-muted-foreground opacity-40 group-hover:opacity-100 hover:text-amber-500',
-                            isFavorite(row.original) && 'text-amber-500 opacity-100'
-                          )}
-                          title={isFavorite(row.original) ? 'Remove from favorites' : 'Add to favorites'}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            toggleFavorite({
-                              file: row.original.file,
-                              id: row.original.id,
-                              name: row.original.name
-                            })
-                          }}
+                        className="sticky top-0 z-10 h-auto w-9 border-b bg-card"
+                        aria-label="Favorite"
+                      />
+                      {hg.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          className="sticky top-0 z-10 h-auto border-b bg-card py-1.5 align-top"
                         >
-                          <Star className={cn(isFavorite(row.original) && 'fill-current')} />
-                        </Button>
-                      </TableCell>
-                      {row.getAllCells().map((cell) => (
-                        <TableCell key={cell.id} className="max-w-70 truncate">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
+                          <div className="flex flex-col items-stretch gap-1">
+                            <button
+                              type="button"
+                              className="self-start cursor-pointer select-none hover:text-primary"
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                            </button>
+                            <ColumnFilter
+                              column={header.column}
+                              modPath={modPath}
+                              gameDir={settings?.gameDir ?? null}
+                              replacePaths={selectedMod.replacePaths}
+                            />
+                          </div>
+                        </TableHead>
                       ))}
                     </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => {
+                    const isSelected = selected !== null && `${selected.file}:${selected.id}` === row.id
+                    return (
+                      <TableRow
+                        key={row.id}
+                        className="group cursor-pointer"
+                        data-state={isSelected ? 'selected' : undefined}
+                        onClick={() =>
+                          openCharacter({
+                            file: row.original.file,
+                            id: row.original.id,
+                            name: row.original.name
+                          })
+                        }
+                      >
+                        <TableCell className="relative w-9 py-0 pr-0 pl-2">
+                          {`${row.original.file}:${row.original.id}` in drafts && (
+                            <span
+                              className="absolute top-1/2 left-0.5 size-1.5 -translate-y-1/2 rounded-full bg-primary"
+                              title="Unsaved changes"
+                            />
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className={cn(
+                              'text-muted-foreground opacity-40 group-hover:opacity-100 hover:text-amber-500',
+                              isFavorite(row.original) && 'text-amber-500 opacity-100'
+                            )}
+                            title={isFavorite(row.original) ? 'Remove from favorites' : 'Add to favorites'}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              toggleFavorite({
+                                file: row.original.file,
+                                id: row.original.id,
+                                name: row.original.name
+                              })
+                            }}
+                          >
+                            <Star className={cn(isFavorite(row.original) && 'fill-current')} />
+                          </Button>
+                        </TableCell>
+                        {row.getAllCells().map((cell) => (
+                          <TableCell key={cell.id} className="max-w-70 truncate">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </ResizablePanel>
         )}
         {selected && modPath && (
-          <CharacterDetailPanel
-            modPath={modPath}
-            file={selected.file}
-            id={selected.id}
-            gameDir={settings?.gameDir ?? null}
-            replacePaths={selectedMod?.replacePaths ?? []}
-            refData={refData}
-            characterIds={characters.map((c) => c.id)}
-            onNavigate={(id) => {
-              const target = byId.get(id)
-              if (!target) {
-                toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
-                return
-              }
-              openCharacter({ file: target.file, id: target.id, name: target.name })
-            }}
-            storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
-            onDraftChange={persistDraft}
-            onSaved={(file, newId) => {
-              if (selected) {
-                remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
-              }
-              setSelected({ file, id: newId })
-              reload()
-            }}
-            onClose={() => setSelected(null)}
-          />
+          <>
+            {characters.length > 0 && (
+              <ResizableHandle
+                withHandle
+                className="mx-2 bg-transparent hover:bg-border"
+              />
+            )}
+            <ResizablePanel
+              id="detail"
+              defaultSize={400}
+              minSize={320}
+              maxSize={720}
+              className="flex min-h-0 flex-col"
+            >
+              <CharacterDetailPanel
+                modPath={modPath}
+                file={selected.file}
+                id={selected.id}
+                gameDir={settings?.gameDir ?? null}
+                replacePaths={selectedMod?.replacePaths ?? []}
+                refData={refData}
+                characterIds={characters.map((c) => c.id)}
+                onNavigate={(id) => {
+                  const target = byId.get(id)
+                  if (!target) {
+                    toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
+                    return
+                  }
+                  openCharacter({ file: target.file, id: target.id, name: target.name })
+                }}
+                storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
+                onDraftChange={persistDraft}
+                onSaved={(file, newId) => {
+                  if (selected) {
+                    remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+                  }
+                  setSelected({ file, id: newId })
+                  reload()
+                }}
+                onClose={() => setSelected(null)}
+              />
+            </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
     </div>
   )
 }
