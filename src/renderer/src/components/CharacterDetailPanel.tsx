@@ -50,6 +50,25 @@ function TraitOption({ trait, iconCtx }: { trait: string; iconCtx: IconContext }
   )
 }
 
+/**
+ * The date's other form, hung under its input on a rounded elbow:
+ * "└ Raw: 3220.1.1" beneath an era-mode field, "└ Display: 780 BC" beneath a
+ * raw one.
+ */
+function DateHint({ label, value }: { label: string; value: string }): React.JSX.Element {
+  return (
+    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+      <span
+        aria-hidden
+        className="mt-1 ml-1 size-1.5 shrink-0 rounded-bl-[3px] border-b border-l border-current opacity-60"
+      />
+      <span className="min-w-0 truncate">
+        <span className="font-medium">{label}:</span> {value}
+      </span>
+    </p>
+  )
+}
+
 interface Props {
   modPath: string
   file: string
@@ -213,7 +232,7 @@ export default function CharacterDetailPanel({
     label: string,
     value: string | null,
     onChange: (v: string | null) => void,
-    opts: { invalid?: boolean; placeholder?: string; hint?: string | null } = {}
+    opts: { invalid?: boolean; placeholder?: string; hint?: React.ReactNode } = {}
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
@@ -224,7 +243,7 @@ export default function CharacterDetailPanel({
         aria-invalid={opts.invalid || undefined}
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
       />
-      {opts.hint != null && <p className="text-xs text-muted-foreground">{opts.hint}</p>}
+      {opts.hint}
     </div>
   )
 
@@ -241,9 +260,10 @@ export default function CharacterDetailPanel({
     opts: { invalid?: boolean; placeholder?: string }
   ): React.JSX.Element => {
     if (!calendar || showRawDates) {
+      const display = formatCalendarDate(value, calendar)
       return textField(label, value, onChange, {
         ...opts,
-        hint: formatCalendarDate(value, calendar)
+        hint: display !== null && <DateHint label="Display" value={display} />
       })
     }
     const converted = value === null ? null : toCalendarInput(value, calendar)
@@ -283,7 +303,7 @@ export default function CharacterDetailPanel({
             </SelectContent>
           </Select>
         </div>
-        {value !== null && <p className="text-xs text-muted-foreground">{value}</p>}
+        {value !== null && <DateHint label="Raw" value={value} />}
       </div>
     )
   }
