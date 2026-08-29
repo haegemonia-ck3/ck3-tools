@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  columnFacetingFeature,
   columnFilteringFeature,
   createColumnHelper,
+  createFacetedRowModel,
+  createFacetedUniqueValues,
   createFilteredRowModel,
   createSortedRowModel,
   filterFns,
@@ -12,15 +15,16 @@ import {
   tableFeatures,
   useTable
 } from '@tanstack/react-table'
-import type { Row, SortFn } from '@tanstack/react-table'
-import { Star } from 'lucide-react'
+import type { Column, Row, SortFn } from '@tanstack/react-table'
+import { FilterX, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
+import DebouncedInput from '../components/DebouncedInput'
+import Reference from '../components/Reference'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   Table,
   TableBody,
@@ -38,12 +42,24 @@ const RECENTS_COLLAPSED = 5
 const sameChar = (a: CharacterRef, b: { file: string; id: string }): boolean =>
   a.file === b.file && a.id === b.id
 
+/** Which control a column renders in the filter row under its header. */
+interface CharacterColumnMeta {
+  filter: 'text' | 'dynasty' | 'file'
+}
+
 const features = tableFeatures({
   columnFilteringFeature,
+  columnFacetingFeature,
   globalFilteringFeature,
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
+  // Faceting feeds the reference pickers the values actually present in the
+  // data; each column's facets ignore its own filter, so its options stay put
+  // while the other columns narrow them.
+  facetedRowModel: createFacetedRowModel(),
+  facetedUniqueValues: createFacetedUniqueValues(),
   sortedRowModel: createSortedRowModel(),
+  columnMeta: {} as CharacterColumnMeta,
   filterFns,
   sortFns
 })
@@ -69,27 +85,102 @@ const columns = columnHelper.columns([
   columnHelper.accessor('id', {
     header: 'ID',
     sortFn: bySortableString,
+    filterFn: 'includesString',
+    meta: { filter: 'text' },
     cell: (info) => <span className="font-mono">{info.getValue()}</span>
   }),
   columnHelper.accessor('name', {
     header: 'Name',
+    filterFn: 'includesString',
+    meta: { filter: 'text' },
     cell: (info) => info.getValue() ?? <em className="text-muted-foreground">unnamed</em>
   }),
   columnHelper.accessor('dynasty', {
     header: 'Dynasty',
     sortFn: bySortableString,
+    filterFn: 'equalsString',
+    meta: { filter: 'dynasty' },
     cell: (info) => info.getValue() ?? <em className="text-muted-foreground">—</em>
   }),
   columnHelper.accessor('birth', {
     header: 'Birth',
     sortFn: bySortableString,
+    filterFn: 'includesString',
+    meta: { filter: 'text' },
     cell: (info) => info.getValue() ?? <em className="text-muted-foreground">—</em>
   }),
   columnHelper.accessor('file', {
     header: 'File',
+    filterFn: 'equalsString',
+    meta: { filter: 'file' },
     cell: (info) => <span className="font-mono text-muted-foreground">{info.getValue()}</span>
   })
 ])
+
+interface ColumnFilterProps {
+  column: Column<Features, CharacterSummary>
+  modPath: string | null
+  gameDir: string | null
+  replacePaths: string[]
+}
+
+/** Mirrors `charactersDir` in the main process, which the renderer can't call. */
+const characterFilePath = (modPath: string, file: string): string =>
+  [modPath, 'history', 'characters', file].join('\\')
+
+/** The filter control rendered under a column header. */
+function ColumnFilter({
+  column,
+  modPath,
+  gameDir,
+  replacePaths
+}: ColumnFilterProps): React.JSX.Element {
+  const kind = column.columnDef.meta?.filter ?? 'text'
+  const value = (column.getFilterValue() as string | undefined) ?? ''
+  const facets = kind === 'text' ? null : column.getFacetedUniqueValues()
+
+  const options = useMemo(
+    () =>
+      facets === null
+        ? []
+        : [...facets.keys()]
+            .filter((v): v is string => typeof v === 'string' && v !== '')
+            .sort(numericAware),
+    [facets]
+  )
+
+  if (kind === 'text') {
+    return (
+      <DebouncedInput
+        className="font-normal"
+        type="search"
+        placeholder="Filter…"
+        value={value}
+        onChange={(v) => column.setFilterValue(v)}
+      />
+    )
+  }
+
+  return (
+    <Reference
+      className="font-normal"
+      value={value === '' ? null : value}
+      onChange={(v) => column.setFilterValue(v ?? '')}
+      options={options}
+      placeholder="Any"
+      followTitle={
+        kind === 'file' ? 'Open this file in text editor' : 'Open definition in text editor'
+      }
+      locate={async (v) =>
+        kind === 'file'
+          ? modPath === null
+            ? null
+            : { path: characterFilePath(modPath, v), line: 1, inMod: true }
+          : window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'dynasty', v)
+      }
+    />
+  )
+}
 
 export default function CharacterEditorPage(): React.JSX.Element {
   const { settings, selectedMod, updateSettings } = useApp()
@@ -186,6 +277,14 @@ export default function CharacterEditorPage(): React.JSX.Element {
     getRowId: (c: CharacterSummary) => `${c.file}:${c.id}`
   })
 
+  const globalFilter = (table.state.globalFilter as string | undefined) ?? ''
+  const filtered = globalFilter !== '' || table.state.columnFilters.length > 0
+
+  const clearFilters = (): void => {
+    table.resetColumnFilters(true)
+    table.setGlobalFilter('')
+  }
+
   if (!selectedMod) {
     return (
       <div className="max-w-4xl space-y-5 p-7">
@@ -235,13 +334,19 @@ export default function CharacterEditorPage(): React.JSX.Element {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Character Editor</h1>
         <div className="flex items-center gap-3">
-          <Input
+          <DebouncedInput
             className="w-72"
             type="search"
             placeholder="Filter by id, name, dynasty, or file…"
-            value={(table.state.globalFilter as string | undefined) ?? ''}
-            onChange={(e) => table.setGlobalFilter(e.target.value)}
+            value={globalFilter}
+            onChange={(v) => table.setGlobalFilter(v)}
           />
+          {filtered && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <FilterX />
+              Clear
+            </Button>
+          )}
           <span className="text-xs whitespace-nowrap text-muted-foreground">
             {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
           </span>
@@ -292,15 +397,31 @@ export default function CharacterEditorPage(): React.JSX.Element {
               <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
                   <TableRow key={hg.id} className="hover:bg-transparent">
-                    <TableHead className="sticky top-0 z-10 w-9 bg-card" aria-label="Favorite" />
+                    <TableHead
+                      className="sticky top-0 z-10 h-auto w-9 border-b bg-card"
+                      aria-label="Favorite"
+                    />
                     {hg.headers.map((header) => (
                       <TableHead
                         key={header.id}
-                        className="sticky top-0 z-10 cursor-pointer bg-card select-none hover:text-primary"
-                        onClick={header.column.getToggleSortingHandler()}
+                        className="sticky top-0 z-10 h-auto border-b bg-card py-1.5 align-top"
                       >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                        <div className="flex flex-col items-stretch gap-1">
+                          <button
+                            type="button"
+                            className="self-start cursor-pointer select-none hover:text-primary"
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                          </button>
+                          <ColumnFilter
+                            column={header.column}
+                            modPath={modPath}
+                            gameDir={settings?.gameDir ?? null}
+                            replacePaths={selectedMod.replacePaths}
+                          />
+                        </div>
                       </TableHead>
                     ))}
                   </TableRow>

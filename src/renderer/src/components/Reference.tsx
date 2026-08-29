@@ -12,6 +12,7 @@ import {
   ComboboxItem,
   ComboboxList
 } from '@/components/ui/combobox'
+import { cn } from '@/lib/utils'
 
 /** Locate a reference's definition and open it in the user's text editor. */
 export async function openReferenceTarget(
@@ -54,6 +55,9 @@ interface Props {
   renderItem?: (item: string) => React.ReactNode
   /** Cap on dropdown entries; mod lists (dynasties especially) can run to thousands */
   limit?: number
+  /** Tooltip for the follow button; defaults to wording for a definition site. */
+  followTitle?: string
+  className?: string
 }
 
 export default function Reference({
@@ -65,7 +69,9 @@ export default function Reference({
   onNavigate,
   locate,
   renderItem,
-  limit = 100
+  limit = 100,
+  followTitle,
+  className
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
   const [inputText, setInputText] = useState('')
@@ -103,7 +109,7 @@ export default function Reference({
   const showFollow = !onAdd && Boolean(onNavigate ?? locate)
 
   return (
-    <ButtonGroup className="w-full">
+    <ButtonGroup className={cn('w-full', className)}>
       <Combobox
         items={items}
         limit={limit}
@@ -134,7 +140,7 @@ export default function Reference({
           variant="outline"
           size="icon"
           disabled={!value || opening}
-          title={onNavigate ? 'Go to this entry' : 'Open definition in text editor'}
+          title={followTitle ?? (onNavigate ? 'Go to this entry' : 'Open definition in text editor')}
           onClick={follow}
         >
           {onNavigate ? <ArrowRight /> : <ExternalLink />}

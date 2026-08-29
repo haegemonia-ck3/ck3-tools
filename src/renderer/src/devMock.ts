@@ -58,6 +58,90 @@ const characters: CharacterDetail[] = [
       learning: 4,
       prowess: 3
     }
+  },
+  {
+    id: '1002',
+    file: 'mock_characters.txt',
+    name: 'Eirene',
+    dynasty: 'dynn_Mock',
+    birth: '1052.6.3',
+    death: '1099.2.14',
+    culture: 'greek',
+    faith: 'orthodox',
+    father: null,
+    mother: null,
+    traits: ['shy'],
+    stats: {
+      diplomacy: 6,
+      martial: 2,
+      stewardship: 7,
+      intrigue: 3,
+      learning: 5,
+      prowess: 1
+    }
+  },
+  {
+    id: '77',
+    file: 'mock_characters.txt',
+    name: null,
+    dynasty: null,
+    birth: '1041.11.2',
+    death: null,
+    culture: 'greek',
+    faith: 'orthodox',
+    father: null,
+    mother: null,
+    traits: [],
+    stats: {
+      diplomacy: null,
+      martial: null,
+      stewardship: null,
+      intrigue: null,
+      learning: null,
+      prowess: null
+    }
+  },
+  {
+    id: '3410',
+    file: 'mock_norse.txt',
+    name: 'Ragnvald',
+    dynasty: 'dynn_Other',
+    birth: '1044.3.20',
+    death: null,
+    culture: 'norse',
+    faith: 'asatru',
+    father: null,
+    mother: null,
+    traits: ['brave'],
+    stats: {
+      diplomacy: 2,
+      martial: 9,
+      stewardship: 1,
+      intrigue: 4,
+      learning: 1,
+      prowess: 8
+    }
+  },
+  {
+    id: '3411',
+    file: 'mock_norse.txt',
+    name: 'Astrid',
+    dynasty: 'house_Mockington',
+    birth: '1048.9.9',
+    death: null,
+    culture: 'norse',
+    faith: 'asatru',
+    father: null,
+    mother: null,
+    traits: ['ambitious', 'craven'],
+    stats: {
+      diplomacy: 5,
+      martial: 3,
+      stewardship: 6,
+      intrigue: 8,
+      learning: 4,
+      prowess: 2
+    }
   }
 ]
 
