@@ -18,12 +18,14 @@ export interface CharacterSearch {
 }
 
 /**
- * Deep-link target for the dynasty editor (e.g. a character's dynasty field).
- * Only the id travels — the page resolves whether it names a dynasty or a
- * house, since a character's `dynasty` field can reference either.
+ * Deep-link target for the dynasty editor (e.g. a character's Dynasty or
+ * House field). `kind` says which list to open the id in; the page falls back
+ * to the other list when the id isn't found there, so a file that puts a house
+ * id under `dynasty =` still lands somewhere useful.
  */
 export interface DynastySearch {
   id?: string
+  kind?: 'dynasty' | 'house'
 }
 
 const rootRoute = createRootRoute({
@@ -59,7 +61,8 @@ const dynastiesRoute = createRoute({
   path: '/dynasties',
   component: DynastyEditorPage,
   validateSearch: (search: Record<string, unknown>): DynastySearch => ({
-    id: typeof search.id === 'string' ? search.id : undefined
+    id: typeof search.id === 'string' ? search.id : undefined,
+    kind: search.kind === 'dynasty' || search.kind === 'house' ? search.kind : undefined
   })
 })
 

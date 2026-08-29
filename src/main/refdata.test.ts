@@ -36,9 +36,12 @@ writeFixture(modPath, 'common/dynasty_houses/my_houses.txt', 'house_Bar = {\n}\n
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 describe('getReferenceData dynasties', () => {
-  it('unions dynasty and dynasty-house ids', () => {
+  // Character `dynasty` and `dynasty_house` are separate fields, so each gets
+  // its own option list rather than one merged pool
+  it('keeps dynasty and dynasty-house ids apart', () => {
     const data = getReferenceData(gameDir, modPath, [])
-    expect(data.dynasties).toEqual(['dynn_Foo', 'house_Bar'])
+    expect(data.dynasties).toEqual(['dynn_Foo'])
+    expect(data.houses).toEqual(['house_Bar'])
   })
 })
 

@@ -93,16 +93,16 @@ function listTraits(gameDir: string | null, modPath: string | null, replacePaths
   return [...keys].sort()
 }
 
-function listDynasties(
+/** Top-level ids across every effective file of one directory. */
+function listIds(
   gameDir: string | null,
   modPath: string | null,
-  replacePaths: string[]
+  replacePaths: string[],
+  relDir: string
 ): string[] {
   const keys = new Set<string>()
-  for (const relDir of ['common/dynasties', 'common/dynasty_houses']) {
-    for (const file of effectiveFiles(gameDir, modPath, replacePaths, relDir)) {
-      for (const key of topLevelKeys(file)) keys.add(key)
-    }
+  for (const file of effectiveFiles(gameDir, modPath, replacePaths, relDir)) {
+    for (const key of topLevelKeys(file)) keys.add(key)
   }
   return [...keys].sort()
 }
@@ -116,7 +116,10 @@ export function getReferenceData(
     cultures: listCultures(gameDir, modPath, replacePaths),
     faiths: listFaiths(gameDir, modPath, replacePaths),
     traits: listTraits(gameDir, modPath, replacePaths),
-    dynasties: listDynasties(gameDir, modPath, replacePaths)
+    // Kept apart: a character's `dynasty` and `dynasty_house` are separate
+    // fields, each offering only the ids that are valid for it
+    dynasties: listIds(gameDir, modPath, replacePaths, 'common/dynasties'),
+    houses: listIds(gameDir, modPath, replacePaths, 'common/dynasty_houses')
   }
 }
 

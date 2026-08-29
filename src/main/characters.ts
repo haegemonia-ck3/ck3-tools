@@ -55,7 +55,8 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     id,
     file,
     name: scalars.get('name') ?? null,
-    dynasty: scalars.get('dynasty') ?? scalars.get('dynasty_house') ?? null,
+    dynasty: scalars.get('dynasty') ?? null,
+    house: scalars.get('dynasty_house') ?? null,
     birth: birthBlock ? cleanDate(birthBlock.key) : null,
     death: deathBlock ? cleanDate(deathBlock.key) : null,
     culture: scalars.get('culture') ?? null,
@@ -80,7 +81,8 @@ export function listCharacters(modPath: string): CharacterSummary[] {
         characters.push({
           id: detail.id,
           name: detail.name,
-          dynasty: detail.dynasty,
+          // The list's one lineage column shows whichever key the file uses
+          dynasty: detail.dynasty ?? detail.house,
           birth: detail.birth,
           file: entry
         })
@@ -249,7 +251,8 @@ export function saveCharacter(
     const set = (keys: string[], value: string | null, quoteNew = false): void =>
       setScalar(ed, keys, value, { quoteNew, insertAt: firstDateBlockLine(ed) })
     set(['name'], detail.name, true)
-    set(['dynasty', 'dynasty_house'], detail.dynasty)
+    set(['dynasty'], detail.dynasty)
+    set(['dynasty_house'], detail.house)
     set(['culture'], detail.culture)
     set(['faith', 'religion'], detail.faith)
     set(['father'], detail.father)

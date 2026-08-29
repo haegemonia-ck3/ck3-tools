@@ -167,17 +167,21 @@ export default function DynastyEditorPage(): React.JSX.Element {
     else setOpen(false)
   }
 
-  // Deep link from another tool (e.g. a character's dynasty field). Waits for
-  // the scan, since only the loaded data says whether the id names a dynasty
-  // or a house; the params are then stripped so a refresh doesn't re-jump.
+  // Deep link from another tool (e.g. a character's Dynasty or House field).
+  // Waits for the scan so the id can be confirmed against real definitions,
+  // then strips the params so a refresh doesn't re-jump.
   useEffect(() => {
     if (!deepLink.id || !data) return
     const norm = normId(deepLink.id)
-    const kind = data.dynasties.some((d) => normId(d.id) === norm)
-      ? 'dynasty'
-      : data.houses.some((h) => normId(h.id) === norm)
-        ? 'house'
-        : null
+    const has = {
+      dynasty: data.dynasties.some((d) => normId(d.id) === norm),
+      house: data.houses.some((h) => normId(h.id) === norm)
+    }
+    // Trust the caller's kind, but fall back to the other list rather than
+    // erroring: files do put house ids under `dynasty =`.
+    const preferred = deepLink.kind ?? 'dynasty'
+    const other = preferred === 'dynasty' ? 'house' : 'dynasty'
+    const kind = has[preferred] ? preferred : has[other] ? other : null
     if (kind === null) {
       toast.error(`"${deepLink.id}" isn't a dynasty or house in ${selectedMod?.name ?? 'this mod'}`)
     } else {
@@ -185,7 +189,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
     }
     void navigate({ to: '/dynasties', search: {}, replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deepLink.id, data])
+  }, [deepLink.id, deepLink.kind, data])
 
   const focusMember = (id: string): void => {
     // A house member clicked while the tree shows "dynasty only" — widen first
