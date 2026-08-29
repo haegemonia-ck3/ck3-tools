@@ -5,6 +5,11 @@ import { AppProvider } from './AppContext'
 import { router } from './router'
 import './styles.css'
 
+if (import.meta.env.DEV && !window.ck3tools) {
+  const { installDevMock } = await import('./devMock')
+  installDevMock()
+}
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <AppProvider>

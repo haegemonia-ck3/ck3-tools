@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import type { CharacterDetail, ReferenceData } from '@shared/types'
+import type { CharacterDetail, RefKind, ReferenceData } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
 import TraitPicker from './TraitPicker'
+import Reference from './Reference'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -114,17 +115,35 @@ export default function CharacterDetailPanel({
     label: string,
     value: string | null,
     onChange: (v: string | null) => void,
-    opts: { listId?: string; invalid?: boolean; placeholder?: string } = {}
+    opts: { invalid?: boolean; placeholder?: string } = {}
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
       <Input
         type="text"
-        list={opts.listId}
         value={value ?? ''}
         placeholder={opts.placeholder}
         aria-invalid={opts.invalid || undefined}
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+      />
+    </div>
+  )
+
+  const refField = (
+    label: string,
+    kind: RefKind,
+    value: string | null,
+    onChange: (v: string | null) => void,
+    options: string[]
+  ): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
+      <Reference
+        value={value}
+        onChange={onChange}
+        options={options}
+        placeholder="none"
+        locate={(v) => window.ck3tools.locateRef(gameDir, modPath, replacePaths, kind, v)}
       />
     </div>
   )
@@ -146,7 +165,7 @@ export default function CharacterDetailPanel({
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-4">
         {textField('ID', draft.id, (v) => set({ id: v ?? '' }))}
         {textField('Name', draft.name, (v) => set({ name: v }))}
-        {textField('Dynasty', draft.dynasty, (v) => set({ dynasty: v }))}
+        {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}
         <div className="flex gap-2.5 *:flex-1">
           {textField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
@@ -157,8 +176,8 @@ export default function CharacterDetailPanel({
             placeholder: 'alive'
           })}
         </div>
-        {textField('Culture', draft.culture, (v) => set({ culture: v }), { listId: 'dl-cultures' })}
-        {textField('Faith', draft.faith, (v) => set({ faith: v }), { listId: 'dl-faiths' })}
+        {refField('Culture', 'culture', draft.culture, (v) => set({ culture: v }), refData?.cultures ?? [])}
+        {refField('Faith', 'faith', draft.faith, (v) => set({ faith: v }), refData?.faiths ?? [])}
 
         <div className="space-y-1.5">
           <Label className="text-xs tracking-wide text-muted-foreground uppercase">Traits</Label>
@@ -248,21 +267,6 @@ export default function CharacterDetailPanel({
           {saving ? 'Saving…' : 'Save'}
         </Button>
       </div>
-
-      {refData && (
-        <>
-          <datalist id="dl-cultures">
-            {refData.cultures.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-          <datalist id="dl-faiths">
-            {refData.faiths.map((f) => (
-              <option key={f} value={f} />
-            ))}
-          </datalist>
-        </>
-      )}
     </Card>
   )
 }

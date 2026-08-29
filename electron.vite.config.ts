@@ -16,6 +16,8 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
+    // Honor an externally assigned port (e.g. tooling that sets PORT); vite default otherwise
+    server: process.env.PORT ? { port: Number(process.env.PORT) } : undefined,
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

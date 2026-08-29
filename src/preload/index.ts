@@ -5,7 +5,10 @@ import type {
   CharacterSummary,
   DetectionResult,
   DirValidation,
+  EditorInfo,
   ModInfo,
+  RefKind,
+  RefLocation,
   ReferenceData,
   SaveResult
 } from '@shared/types'
@@ -40,13 +43,26 @@ const api = {
     replacePaths: string[]
   ): Promise<ReferenceData> =>
     ipcRenderer.invoke('ck3:getReferenceData', gameDir, modPath, replacePaths),
+  locateRef: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    kind: RefKind,
+    id: string
+  ): Promise<RefLocation | null> =>
+    ipcRenderer.invoke('ck3:locateRef', gameDir, modPath, replacePaths, kind, id),
   validateGameDir: (dir: string): Promise<DirValidation> =>
     ipcRenderer.invoke('ck3:validateGameDir', dir),
   validateModDir: (dir: string): Promise<DirValidation> =>
     ipcRenderer.invoke('ck3:validateModDir', dir),
 
+  detectEditors: (): Promise<EditorInfo[]> => ipcRenderer.invoke('editor:detect'),
+  openInEditor: (file: string, line?: number): Promise<SaveResult> =>
+    ipcRenderer.invoke('editor:open', file, line),
+
   pickDirectory: (title: string, kind: 'game' | 'mod'): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:pickDirectory', title, kind)
+    ipcRenderer.invoke('dialog:pickDirectory', title, kind),
+  pickEditor: (): Promise<string | null> => ipcRenderer.invoke('dialog:pickEditor')
 }
 
 export type Ck3ToolsApi = typeof api

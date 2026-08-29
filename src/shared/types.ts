@@ -9,6 +9,8 @@ export interface AppSettings {
   recentCharacters: Record<string, CharacterRef[]>
   /** Favorited characters per mod (.mod file name → refs in the order they were starred) */
   favoriteCharacters: Record<string, CharacterRef[]>
+  /** Absolute path to the preferred text editor executable; null = system Notepad */
+  textEditorPath: string | null
 }
 
 export interface CharacterRef {
@@ -72,6 +74,26 @@ export interface ReferenceData {
   cultures: string[]
   faiths: string[]
   traits: string[]
+  /** Union of dynasty and dynasty-house ids (the two are interchangeable in history files) */
+  dynasties: string[]
+}
+
+/** Kinds of reference data whose definition site can be located on disk */
+export type RefKind = 'culture' | 'faith' | 'trait' | 'dynasty'
+
+export interface RefLocation {
+  /** Absolute path of the file containing the definition */
+  path: string
+  /** 1-based line of the definition */
+  line: number
+  /** Whether the definition comes from the mod (vs. the base game) */
+  inMod: boolean
+}
+
+export interface EditorInfo {
+  name: string
+  /** Absolute path to the editor executable */
+  path: string
 }
 
 export type SaveResult = { ok: true } | { ok: false; error: string }

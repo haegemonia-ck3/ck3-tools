@@ -9,9 +9,10 @@ import {
   validateModDir
 } from './ck3'
 import { getCharacter, listCharacters, saveCharacter } from './characters'
-import { getReferenceData } from './refdata'
+import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
-import type { AppSettings, CharacterDetail } from '@shared/types'
+import { detectEditors, openInEditor } from './editor'
+import type { AppSettings, CharacterDetail, RefKind } from '@shared/types'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -68,8 +69,31 @@ function registerIpc(): void {
     (_e, gameDir: string | null, modPath: string | null, replacePaths: string[]) =>
       getReferenceData(gameDir, modPath, replacePaths)
   )
+  ipcMain.handle(
+    'ck3:locateRef',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], kind: RefKind, id: string) =>
+      locateRef(gameDir, modPath, replacePaths, kind, id)
+  )
   ipcMain.handle('ck3:validateGameDir', (_e, dir: string) => validateGameDir(dir))
   ipcMain.handle('ck3:validateModDir', (_e, dir: string) => validateModDir(dir))
+
+  ipcMain.handle('editor:detect', () => detectEditors())
+  ipcMain.handle('editor:open', (_e, file: string, line?: number) =>
+    openInEditor(loadSettings().textEditorPath, file, line)
+  )
+  ipcMain.handle('dialog:pickEditor', async (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    const result = await dialog.showOpenDialog(win!, {
+      title: 'Select your text editor',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Programs', extensions: ['exe', 'cmd', 'bat'] },
+        { name: 'All files', extensions: ['*'] }
+      ]
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
 
   ipcMain.handle('dialog:pickDirectory', async (e, title: string, kind: 'game' | 'mod') => {
     const win = BrowserWindow.fromWebContents(e.sender)

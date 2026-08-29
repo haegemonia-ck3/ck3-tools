@@ -4,7 +4,10 @@ import type {
   CharacterSummary,
   DetectionResult,
   DirValidation,
+  EditorInfo,
   ModInfo,
+  RefKind,
+  RefLocation,
   ReferenceData,
   SaveResult
 } from '@shared/types'
@@ -33,9 +36,19 @@ export interface Ck3ToolsApi {
     modPath: string | null,
     replacePaths: string[]
   ) => Promise<ReferenceData>
+  locateRef: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    kind: RefKind,
+    id: string
+  ) => Promise<RefLocation | null>
   validateGameDir: (dir: string) => Promise<DirValidation>
   validateModDir: (dir: string) => Promise<DirValidation>
+  detectEditors: () => Promise<EditorInfo[]>
+  openInEditor: (file: string, line?: number) => Promise<SaveResult>
   pickDirectory: (title: string, kind: 'game' | 'mod') => Promise<string | null>
+  pickEditor: () => Promise<string | null>
 }
 
 declare global {

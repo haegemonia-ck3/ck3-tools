@@ -8,7 +8,8 @@ const DEFAULTS: AppSettings = {
   modDir: null,
   selectedModFile: null,
   recentCharacters: {},
-  favoriteCharacters: {}
+  favoriteCharacters: {},
+  textEditorPath: null
 }
 
 function settingsPath(): string {

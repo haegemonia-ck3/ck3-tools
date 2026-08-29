@@ -3,9 +3,9 @@ import { Check } from 'lucide-react'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import type { DirValidation } from '@shared/types'
+import type { DirValidation, EditorInfo } from '@shared/types'
 
 function PathRow({
   label,
@@ -48,6 +48,11 @@ export default function SettingsPage(): React.JSX.Element {
   const [gameValidation, setGameValidation] = useState<DirValidation | null>(null)
   const [modValidation, setModValidation] = useState<DirValidation | null>(null)
   const [detecting, setDetecting] = useState(false)
+  const [editors, setEditors] = useState<EditorInfo[]>([])
+
+  useEffect(() => {
+    window.ck3tools.detectEditors().then(setEditors)
+  }, [])
 
   useEffect(() => {
     if (settings?.gameDir) {
@@ -76,6 +81,17 @@ export default function SettingsPage(): React.JSX.Element {
     const dir = await window.ck3tools.pickDirectory('Select your CK3 mod directory', 'mod')
     if (dir) await updateSettings({ modDir: dir })
   }
+
+  const browseEditor = async (): Promise<void> => {
+    const path = await window.ck3tools.pickEditor()
+    if (path) await updateSettings({ textEditorPath: path })
+  }
+
+  // Notepad is the built-in default, so picking it stores null
+  const editorIsActive = (ed: EditorInfo): boolean =>
+    ed.name === 'Notepad'
+      ? settings.textEditorPath === null || settings.textEditorPath === ed.path
+      : settings.textEditorPath === ed.path
 
   const redetect = async (): Promise<void> => {
     setDetecting(true)
@@ -116,6 +132,49 @@ export default function SettingsPage(): React.JSX.Element {
             validation={modValidation}
             onBrowse={browseMod}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Text editor</CardTitle>
+          <CardDescription>
+            Used to open mod and game files that aren&apos;t managed by CK3 Tools.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs whitespace-nowrap select-text">
+              <span className="truncate">
+                {settings.textEditorPath ?? (
+                  <em className="text-muted-foreground">Notepad (default)</em>
+                )}
+              </span>
+            </div>
+            <Button variant="outline" onClick={browseEditor}>
+              Browse…
+            </Button>
+          </div>
+          {editors.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Detected:</span>
+              {editors.map((ed) => (
+                <Button
+                  key={ed.path}
+                  variant="outline"
+                  size="sm"
+                  className={cn(editorIsActive(ed) && 'border-primary/50 bg-muted')}
+                  title={ed.path}
+                  onClick={() =>
+                    updateSettings({ textEditorPath: ed.name === 'Notepad' ? null : ed.path })
+                  }
+                >
+                  {editorIsActive(ed) && <Check className="text-green-600 dark:text-green-500" />}
+                  {ed.name}
+                </Button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -17,6 +17,7 @@ import {
   SidebarRail,
   useSidebar
 } from '@/components/ui/sidebar'
+import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 const TOOLS = [
@@ -116,6 +117,7 @@ export default function RootLayout(): React.JSX.Element {
             <Outlet />
           </div>
         </SidebarInset>
+        <Toaster />
       </SidebarProvider>
     </TooltipProvider>
   )
