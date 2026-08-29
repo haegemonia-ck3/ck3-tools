@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isValidCK3Date } from './ck3Date'
+import { formatCalendarDate, formatCalendarYear, isValidCK3Date } from './ck3Date'
+import type { CalendarConfig } from '@shared/types'
 
 describe('isValidCK3Date', () => {
   it('accepts well-formed dates', () => {
@@ -51,5 +52,45 @@ describe('isValidCK3Date', () => {
     expect(isValidCK3Date('abc')).toBe(false)
     expect(isValidCK3Date('1200.1.1.1')).toBe(false)
     expect(isValidCK3Date('1200-1-1')).toBe(false)
+  })
+})
+
+// Hegemonia's convention: year 0 is 4000 BC, no year zero (3999 → 1 BC, 4000 → 1 AD)
+const bcAd: CalendarConfig = { epochYear: 4000, beforeLabel: 'BC', afterLabel: 'AD' }
+
+describe('formatCalendarYear', () => {
+  it('converts years before the epoch', () => {
+    expect(formatCalendarYear(3220, bcAd)).toBe('780 BC')
+    expect(formatCalendarYear(0, bcAd)).toBe('4000 BC')
+  })
+
+  it('crosses the epoch with no year zero', () => {
+    expect(formatCalendarYear(3999, bcAd)).toBe('1 BC')
+    expect(formatCalendarYear(4000, bcAd)).toBe('1 AD')
+    expect(formatCalendarYear(4780, bcAd)).toBe('781 AD')
+  })
+
+  it('honors custom era labels', () => {
+    const custom: CalendarConfig = { epochYear: 100, beforeLabel: 'BF', afterLabel: 'AF' }
+    expect(formatCalendarYear(88, custom)).toBe('12 BF')
+  })
+})
+
+describe('formatCalendarDate', () => {
+  it('reads the year from a full date', () => {
+    expect(formatCalendarDate('3220.1.1', bcAd)).toBe('780 BC')
+  })
+
+  it('tolerates the typo forms found in real mod files', () => {
+    expect(formatCalendarDate('3220.1.1.', bcAd)).toBe('780 BC')
+    expect(formatCalendarDate('3212.1', bcAd)).toBe('788 BC')
+    expect(formatCalendarDate('3220', bcAd)).toBe('780 BC')
+  })
+
+  it('returns null without a calendar or a readable year', () => {
+    expect(formatCalendarDate('3220.1.1', null)).toBeNull()
+    expect(formatCalendarDate(null, bcAd)).toBeNull()
+    expect(formatCalendarDate('', bcAd)).toBeNull()
+    expect(formatCalendarDate('abc', bcAd)).toBeNull()
   })
 })

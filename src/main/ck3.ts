@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { execFileSync } from 'child_process'
+import { readModProfile } from './modProfile'
 import type { DetectionResult, DirValidation, ModInfo } from '@shared/types'
 
 // ---------- Validation ----------
@@ -160,7 +161,8 @@ export function listMods(modDir: string): ModInfo[] {
         tags: parsed.tags ?? [],
         path: modPath,
         replacePaths: parsed.replace_path ?? [],
-        pathExists: modPath ? existsSync(modPath) : false
+        pathExists: modPath ? existsSync(modPath) : false,
+        profile: readModProfile(modPath)
       })
     } catch {
       // skip unreadable descriptors

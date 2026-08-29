@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { CharacterDetail, CharacterDraft, RefKind, ReferenceData } from '@shared/types'
+import type {
+  CalendarConfig,
+  CharacterDetail,
+  CharacterDraft,
+  RefKind,
+  ReferenceData
+} from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
@@ -13,7 +19,7 @@ import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { isValidCK3Date } from '@/lib/ck3Date'
+import { formatCalendarDate, isValidCK3Date } from '@/lib/ck3Date'
 
 /** Dropdown row for the trait picker; fetches its own icon (module-level cached) */
 function TraitOption({ trait, iconCtx }: { trait: string; iconCtx: IconContext }): React.JSX.Element {
@@ -36,6 +42,8 @@ interface Props {
   id: string
   gameDir: string | null
   replacePaths: string[]
+  /** The mod's offset-calendar display convention, if it declares one */
+  calendar: CalendarConfig | null
   refData: ReferenceData | null
   /** Ids of every character in the mod, offered as father/mother options */
   characterIds: string[]
@@ -59,6 +67,7 @@ export default function CharacterDetailPanel({
   id,
   gameDir,
   replacePaths,
+  calendar,
   refData,
   characterIds,
   onNavigate,
@@ -188,7 +197,7 @@ export default function CharacterDetailPanel({
     label: string,
     value: string | null,
     onChange: (v: string | null) => void,
-    opts: { invalid?: boolean; placeholder?: string } = {}
+    opts: { invalid?: boolean; placeholder?: string; hint?: string | null } = {}
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
@@ -199,6 +208,7 @@ export default function CharacterDetailPanel({
         aria-invalid={opts.invalid || undefined}
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
       />
+      {opts.hint != null && <p className="text-xs text-muted-foreground">{opts.hint}</p>}
     </div>
   )
 
@@ -272,11 +282,13 @@ export default function CharacterDetailPanel({
           <div className="flex gap-2.5 *:flex-1">
             {textField('Birth', draft.birth, (v) => set({ birth: v }), {
               invalid: badBirth,
-              placeholder: 'Y.M.D'
+              placeholder: 'Y.M.D',
+              hint: formatCalendarDate(draft.birth, calendar)
             })}
             {textField('Death', draft.death, (v) => set({ death: v }), {
               invalid: badDeath,
-              placeholder: 'alive'
+              placeholder: 'alive',
+              hint: formatCalendarDate(draft.death, calendar)
             })}
           </div>
           {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}

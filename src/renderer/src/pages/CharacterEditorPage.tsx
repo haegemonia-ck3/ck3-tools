@@ -41,8 +41,10 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
+import { formatCalendarDate } from '@/lib/ck3Date'
 import type {
   AppSettings,
+  CalendarConfig,
   CharacterDraft,
   CharacterRef,
   CharacterSummary,
@@ -94,7 +96,7 @@ const bySortableString: SortFn<Features, CharacterSummary> = (
 
 const columnHelper = createColumnHelper<Features, CharacterSummary>()
 
-const columns = columnHelper.columns([
+const buildColumns = (calendar: CalendarConfig | null) => columnHelper.columns([
   columnHelper.accessor('id', {
     header: 'ID',
     sortFn: bySortableString,
@@ -120,7 +122,18 @@ const columns = columnHelper.columns([
     sortFn: bySortableString,
     filterFn: 'includesString',
     meta: { filter: 'text' },
-    cell: (info) => info.getValue() ?? <em className="text-muted-foreground">—</em>
+    cell: (info) => {
+      const raw = info.getValue()
+      if (raw === null) return <em className="text-muted-foreground">—</em>
+      const converted = formatCalendarDate(raw, calendar)
+      return converted === null ? (
+        raw
+      ) : (
+        <>
+          {raw} <span className="text-muted-foreground">({converted})</span>
+        </>
+      )
+    }
   }),
   columnHelper.accessor('file', {
     header: 'File',
@@ -212,6 +225,8 @@ export default function CharacterEditorPage(): React.JSX.Element {
 
   const modPath = selectedMod?.path ?? null
   const modKey = selectedMod?.file ?? null
+  const calendar = selectedMod?.profile?.calendar ?? null
+  const columns = useMemo(() => buildColumns(calendar), [calendar])
   const recents = (modKey && settings?.recentCharacters?.[modKey]) || []
   const favorites = (modKey && settings?.favoriteCharacters?.[modKey]) || []
   const drafts = (modKey && settings?.draftCharacters?.[modKey]) || {}
@@ -575,6 +590,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                 id={selected.id}
                 gameDir={settings?.gameDir ?? null}
                 replacePaths={selectedMod?.replacePaths ?? []}
+                calendar={calendar}
                 refData={refData}
                 characterIds={characters.map((c) => c.id)}
                 onNavigate={(id) => {

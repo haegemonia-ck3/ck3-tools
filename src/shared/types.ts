@@ -38,6 +38,30 @@ export interface CharacterRef {
   name: string | null
 }
 
+/**
+ * An offset-calendar display convention, for total-conversion mods whose file
+ * years aren't AD (CK3 can't store negative years). Hegemonia-style reckoning
+ * with no year zero: file year 3220 under epochYear 4000 displays as "780 BC",
+ * and 4000 displays as "1 AD".
+ */
+export interface CalendarConfig {
+  /** File year that maps to year 1 of the "after" era (e.g. 4000 = 1 AD) */
+  epochYear: number
+  /** Era label for years before the epoch, e.g. "BC" */
+  beforeLabel: string
+  /** Era label for the epoch year onward, e.g. "AD" */
+  afterLabel: string
+}
+
+/**
+ * Per-mod display conventions, declared by a `ck3-tools.json` file the mod
+ * ships at its content root. Purely declarative — display-only, never affects
+ * what gets written to mod files.
+ */
+export interface ModProfile {
+  calendar: CalendarConfig | null
+}
+
 export interface ModInfo {
   /** Descriptor file name within the mod directory, e.g. "Atlantis.mod" — used as the stable id */
   file: string
@@ -50,6 +74,8 @@ export interface ModInfo {
   replacePaths: string[]
   /** Whether the mod's content folder actually exists on disk */
   pathExists: boolean
+  /** Contents of the mod's optional `ck3-tools.json`; null when absent or unreadable */
+  profile: ModProfile | null
 }
 
 export interface CharacterSummary {

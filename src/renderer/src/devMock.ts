@@ -159,7 +159,8 @@ const mock: Ck3ToolsApi = {
       tags: ['Total Conversion'],
       path: 'C:\\Mock\\mod\\MockMod',
       replacePaths: [],
-      pathExists: true
+      pathExists: true,
+      profile: { calendar: { epochYear: 4000, beforeLabel: 'BC', afterLabel: 'AD' } }
     }
   ],
   listCharacters: async () =>
