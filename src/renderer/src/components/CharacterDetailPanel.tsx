@@ -416,7 +416,10 @@ export default function CharacterDetailPanel({
           </Alert>
         )}
         <FieldSet className="gap-3.5">
-          {textField('ID', draft.id, (v) => set({ id: v ?? '' }))}
+          <div className="space-y-1.5">
+            <Label className="text-xs tracking-wide text-muted-foreground uppercase">ID</Label>
+            <p className="font-mono text-sm">{draft.id}</p>
+          </div>
           {textField('Name', draft.name, (v) => set({ name: v }))}
         </FieldSet>
 
