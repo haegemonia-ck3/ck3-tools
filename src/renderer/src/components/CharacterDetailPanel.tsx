@@ -395,8 +395,8 @@ export default function CharacterDetailPanel({
   return (
     <Card className="flex h-full min-h-0 w-full min-w-0 flex-col gap-0 py-0">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <h2 className="flex items-center gap-2 font-semibold text-primary">
-        {original.name ?? original.id}
+        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+          {original.name ?? original.id}
           {dirty && (
             <span className="size-2 rounded-full bg-primary" title="Unsaved changes" />
           )}

@@ -354,7 +354,7 @@ export default function DynastyDetailPanel({
   return (
     <Card className="flex h-full min-h-0 w-full min-w-0 flex-col gap-0 py-0">
       <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
-        <h2 className="flex min-w-0 items-center gap-2 font-semibold text-primary">
+        <h2 className="flex min-w-0 items-center gap-2 text-lg font-semibold text-foreground">
           <span className="truncate">
             {def ? (def.localizedName ?? def.name ?? def.id) : id}
           </span>
