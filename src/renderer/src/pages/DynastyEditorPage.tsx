@@ -1,4 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  columnFacetingFeature,
+  columnFilteringFeature,
+  createColumnHelper,
+  createFacetedRowModel,
+  createFacetedUniqueValues,
+  createFilteredRowModel,
+  createSortedRowModel,
+  filterFns,
+  flexRender,
+  globalFilteringFeature,
+  rowSortingFeature,
+  sortFns,
+  tableFeatures,
+  useTable
+} from '@tanstack/react-table'
+import type { Column, Row, SortFn } from '@tanstack/react-table'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, FilterX } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
@@ -8,6 +25,7 @@ import ModPicker from '../components/ModPicker'
 import DebouncedInput from '../components/DebouncedInput'
 import DynastyDetailPanel from '../components/DynastyDetailPanel'
 import FamilyTree from '../components/FamilyTree'
+import Reference from '../components/Reference'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -26,6 +44,7 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
 import type { DynastyData, ReferenceData } from '@shared/types'
 import {
   buildRows,
@@ -53,6 +72,192 @@ function houseColor(id: string): string {
   return `oklch(0.62 0.16 ${hue})`
 }
 
+/** Which control a column renders in the filter row under its header. */
+interface DynastyColumnMeta {
+  filter: 'text' | 'kind' | 'culture' | 'parent' | 'none'
+}
+
+const features = tableFeatures({
+  columnFilteringFeature,
+  columnFacetingFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  // Faceting feeds the reference pickers the values actually present in the
+  // data; each column's facets ignore its own filter, so its options stay put
+  // while the other columns narrow them.
+  facetedRowModel: createFacetedRowModel(),
+  facetedUniqueValues: createFacetedUniqueValues(),
+  sortedRowModel: createSortedRowModel(),
+  columnMeta: {} as DynastyColumnMeta,
+  filterFns,
+  sortFns
+})
+
+type Features = typeof features
+
+/** Sort ids like numbers where they contain digits ("house_2" < "house_10"). */
+function numericAware(a: string | null, b: string | null): number {
+  if (a === null) return b === null ? 0 : -1
+  if (b === null) return 1
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+const bySortableString: SortFn<Features, DynastyListRow> = (
+  rowA: Row<Features, DynastyListRow>,
+  rowB: Row<Features, DynastyListRow>,
+  columnId: string
+) => numericAware(rowA.getValue<string | null>(columnId), rowB.getValue<string | null>(columnId))
+
+const columnHelper = createColumnHelper<Features, DynastyListRow>()
+
+const columns = columnHelper.columns([
+  columnHelper.accessor('kind', {
+    header: 'Kind',
+    filterFn: 'equalsString',
+    meta: { filter: 'kind' },
+    cell: (info) => (
+      <Badge variant={info.getValue() === 'dynasty' ? 'secondary' : 'outline'}>
+        {info.getValue()}
+      </Badge>
+    )
+  }),
+  columnHelper.accessor('id', {
+    header: 'ID',
+    sortFn: bySortableString,
+    filterFn: 'includesString',
+    meta: { filter: 'text' },
+    cell: (info) => <span className="font-mono">{info.getValue()}</span>
+  }),
+  columnHelper.accessor('name', {
+    header: 'Name',
+    sortFn: bySortableString,
+    filterFn: 'includesString',
+    meta: { filter: 'text' },
+    cell: (info) => (
+      <>
+        {info.getValue() ?? <em className="text-muted-foreground">—</em>}
+        {!info.row.original.defined && (
+          <Badge variant="outline" className="ml-2 text-[10px]">
+            undefined
+          </Badge>
+        )}
+        {info.row.original.defined && !info.row.original.inMod && (
+          <Badge variant="outline" className="ml-2 text-[10px]">
+            game
+          </Badge>
+        )}
+      </>
+    )
+  }),
+  columnHelper.accessor('culture', {
+    header: 'Culture',
+    sortFn: bySortableString,
+    filterFn: 'equalsString',
+    meta: { filter: 'culture' },
+    cell: (info) => info.getValue() ?? <em className="text-muted-foreground">—</em>
+  }),
+  columnHelper.accessor('parent', {
+    header: 'Parent',
+    sortFn: bySortableString,
+    filterFn: 'equalsString',
+    meta: { filter: 'parent' },
+    cell: (info) =>
+      info.getValue() ? (
+        <span className="font-mono">{info.getValue()}</span>
+      ) : (
+        <em className="text-muted-foreground">—</em>
+      )
+  }),
+  columnHelper.accessor('members', {
+    header: 'Members',
+    meta: { filter: 'none' },
+    enableColumnFilter: false,
+    cell: (info) => info.getValue()
+  })
+])
+
+interface ColumnFilterProps {
+  column: Column<Features, DynastyListRow>
+  gameDir: string | null
+  modPath: string | null
+  replacePaths: string[]
+}
+
+/** The filter control rendered under a column header. */
+function ColumnFilter({
+  column,
+  gameDir,
+  modPath,
+  replacePaths
+}: ColumnFilterProps): React.JSX.Element | null {
+  const kind = column.columnDef.meta?.filter ?? 'text'
+  const value = (column.getFilterValue() as string | undefined) ?? ''
+  const facets = kind === 'culture' || kind === 'parent' ? column.getFacetedUniqueValues() : null
+
+  const options = useMemo(
+    () =>
+      facets === null
+        ? []
+        : [...facets.keys()]
+            .filter((v): v is string => typeof v === 'string' && v !== '')
+            .sort(numericAware),
+    [facets]
+  )
+
+  if (kind === 'none') return null
+
+  if (kind === 'kind') {
+    return (
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        spacing={0}
+        className="font-normal"
+        value={value === '' ? 'all' : value}
+        onValueChange={(v) => v && column.setFilterValue(v === 'all' ? '' : v)}
+        aria-label="Filter by kind"
+      >
+        <ToggleGroupItem value="all">All</ToggleGroupItem>
+        <ToggleGroupItem value="dynasty">Dynasties</ToggleGroupItem>
+        <ToggleGroupItem value="house">Houses</ToggleGroupItem>
+      </ToggleGroup>
+    )
+  }
+
+  if (kind === 'text') {
+    return (
+      <DebouncedInput
+        className="font-normal"
+        type="search"
+        placeholder="Filter…"
+        value={value}
+        onChange={(v) => column.setFilterValue(v)}
+      />
+    )
+  }
+
+  return (
+    <Reference
+      className="font-normal"
+      value={value === '' ? null : value}
+      onChange={(v) => column.setFilterValue(v ?? '')}
+      options={options}
+      placeholder="Any"
+      locate={async (v) =>
+        window.ck3tools.locateRef(
+          gameDir,
+          modPath,
+          replacePaths,
+          kind === 'culture' ? 'culture' : 'dynasty',
+          v
+        )
+      }
+    />
+  )
+}
+
 interface Selection {
   kind: 'dynasty' | 'house'
   id: string
@@ -70,8 +275,6 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const [treeSelected, setTreeSelected] = useState<string | null>(null)
   const [focus, setFocus] = useState<{ id: string | null; nonce: number }>({ id: null, nonce: 0 })
   const deepLink = useSearch({ from: '/dynasties' })
-  const [search, setSearch] = useState('')
-  const [kindFilter, setKindFilter] = useState<'all' | 'dynasty' | 'house'>('all')
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'dynasty-editor-detail',
     panelIds: ['tree', 'detail'],
@@ -109,19 +312,35 @@ export default function DynastyEditorPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
 
-  const rows = useMemo(() => (data ? buildRows(data) : []), [data])
+  // Pre-sorted the way the list has always read: biggest families first. The
+  // table's own sorting layers on top when a header is clicked.
+  const rows = useMemo(
+    () =>
+      (data ? buildRows(data) : []).sort(
+        (a, b) => b.members - a.members || numericAware(a.id, b.id)
+      ),
+    [data]
+  )
 
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return rows
-      .filter((r) => kindFilter === 'all' || r.kind === kindFilter)
-      .filter(
-        (r) =>
-          q === '' ||
-          [r.id, r.name, r.culture, r.parent].some((v) => v !== null && v.toLowerCase().includes(q))
-      )
-      .sort((a, b) => b.members - a.members || a.id.localeCompare(b.id, undefined, { numeric: true }))
-  }, [rows, search, kindFilter])
+  const table = useTable({
+    features,
+    columns,
+    data: rows,
+    globalFilterFn: (row, columnId, filterValue) =>
+      String(row.getValue(columnId) ?? '')
+        .toLowerCase()
+        .includes(String(filterValue).toLowerCase()),
+    getRowId: (r: DynastyListRow) => `${r.kind}:${normId(r.id)}`
+  })
+
+  const globalFilter = (table.state.globalFilter as string | undefined) ?? ''
+  const filtered = globalFilter !== '' || table.state.columnFilters.length > 0
+  const visibleRows = table.getRowModel().rows
+
+  const clearFilters = (): void => {
+    table.resetColumnFilters(true)
+    table.setGlobalFilter('')
+  }
 
   const selectedRow: DynastyListRow | null =
     selected === null
@@ -321,41 +540,21 @@ export default function DynastyEditorPage(): React.JSX.Element {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dynasty &amp; House Editor</h1>
         <div className="flex items-center gap-3">
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            spacing={0}
-            value={kindFilter}
-            onValueChange={(v) => v && setKindFilter(v as typeof kindFilter)}
-            aria-label="Kind filter"
-          >
-            <ToggleGroupItem value="all">All</ToggleGroupItem>
-            <ToggleGroupItem value="dynasty">Dynasties</ToggleGroupItem>
-            <ToggleGroupItem value="house">Houses</ToggleGroupItem>
-          </ToggleGroup>
           <DebouncedInput
             className="w-72"
             type="search"
             placeholder="Filter by id, name, culture, or parent…"
-            value={search}
-            onChange={setSearch}
+            value={globalFilter}
+            onChange={(v) => table.setGlobalFilter(v)}
           />
-          {(search !== '' || kindFilter !== 'all') && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSearch('')
-                setKindFilter('all')
-              }}
-            >
+          {filtered && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
               <FilterX />
               Clear
             </Button>
           )}
           <span className="text-xs whitespace-nowrap text-muted-foreground">
-            {loading ? 'Loading…' : `${filteredRows.length} / ${rows.length}`}
+            {loading ? 'Loading…' : `${visibleRows.length} / ${rows.length}`}
           </span>
         </div>
       </header>
@@ -376,47 +575,56 @@ export default function DynastyEditorPage(): React.JSX.Element {
         <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                {['Kind', 'ID', 'Name', 'Culture', 'Parent', 'Members'].map((h) => (
-                  <TableHead key={h} className="sticky top-0 z-10 border-b bg-card">
-                    {h}
-                  </TableHead>
-                ))}
-              </TableRow>
+              {table.getHeaderGroups().map((hg) => (
+                <TableRow key={hg.id} className="hover:bg-transparent">
+                  {hg.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="sticky top-0 z-10 h-auto border-b bg-card py-1.5 align-top"
+                    >
+                      <div className="flex flex-col items-stretch gap-1">
+                        <button
+                          type="button"
+                          className="cursor-pointer self-start select-none hover:text-primary"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                        </button>
+                        <ColumnFilter
+                          column={header.column}
+                          gameDir={gameDir}
+                          modPath={modPath}
+                          replacePaths={replacePaths}
+                        />
+                      </div>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
             </TableHeader>
             <TableBody>
-              {filteredRows.map((row) => (
+              {visibleRows.map((row) => (
                 <TableRow
-                  key={`${row.kind}:${row.id}`}
+                  key={row.id}
                   className="cursor-pointer"
-                  onClick={() => openRow(row.kind, row.id)}
+                  onClick={() => openRow(row.original.kind, row.original.id)}
                 >
-                  <TableCell>
-                    <Badge variant={row.kind === 'dynasty' ? 'secondary' : 'outline'}>
-                      {row.kind}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-60 truncate font-mono">{row.id}</TableCell>
-                  <TableCell className="max-w-70 truncate">
-                    {row.name ?? <em className="text-muted-foreground">—</em>}
-                    {!row.defined && (
-                      <Badge variant="outline" className="ml-2 text-[10px]">
-                        undefined
-                      </Badge>
-                    )}
-                    {row.defined && !row.inMod && (
-                      <Badge variant="outline" className="ml-2 text-[10px]">
-                        game
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="max-w-50 truncate">
-                    {row.culture ?? <em className="text-muted-foreground">—</em>}
-                  </TableCell>
-                  <TableCell className="max-w-50 truncate font-mono">
-                    {row.parent ?? <em className="text-muted-foreground">—</em>}
-                  </TableCell>
-                  <TableCell>{row.members}</TableCell>
+                  {row.getAllCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={cn(
+                        'max-w-70 truncate',
+                        cell.column.id === 'culture' || cell.column.id === 'parent'
+                          ? 'max-w-50'
+                          : cell.column.id === 'id'
+                            ? 'max-w-60'
+                            : undefined
+                      )}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
             </TableBody>
