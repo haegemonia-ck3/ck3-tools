@@ -72,6 +72,25 @@ function houseColor(id: string): string {
   return `oklch(0.62 0.16 ${hue})`
 }
 
+/** Badge for a row's `dynasty`/`house` kind: gold-tinted filled house for
+ *  dynasty, blue-tinted outline house for house. */
+function KindBadge({ kind }: { kind: 'dynasty' | 'house' }): React.JSX.Element {
+  const isDynasty = kind === 'dynasty'
+  return (
+    <Badge
+      variant="outline"
+      className={
+        isDynasty
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+          : 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+      }
+    >
+      <House className={cn(isDynasty && 'fill-current')} />
+      {isDynasty ? 'Dynasty' : 'House'}
+    </Badge>
+  )
+}
+
 /** Which control a column renders in the filter row under its header. */
 interface DynastyColumnMeta {
   filter: 'text' | 'kind' | 'culture' | 'parent' | 'none'
@@ -116,15 +135,7 @@ const columns = columnHelper.columns([
     header: 'Kind',
     filterFn: 'equalsString',
     meta: { filter: 'kind' },
-    cell: (info) => {
-      const isDynasty = info.getValue() === 'dynasty'
-      return (
-        <Badge variant={isDynasty ? 'secondary' : 'outline'}>
-          <House className={cn(isDynasty && 'fill-current')} />
-          {isDynasty ? 'Dynasty' : 'House'}
-        </Badge>
-      )
-    }
+    cell: (info) => <KindBadge kind={info.getValue()} />
   }),
   columnHelper.accessor('id', {
     header: 'ID',
@@ -462,10 +473,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
           </Button>
           <h1 className="flex min-w-0 items-center gap-2 text-2xl font-semibold">
             <span className="truncate">{title}</span>
-            <Badge variant={selected.kind === 'dynasty' ? 'secondary' : 'outline'}>
-              <House className={cn(selected.kind === 'dynasty' && 'fill-current')} />
-              {selected.kind === 'dynasty' ? 'Dynasty' : 'House'}
-            </Badge>
+            <KindBadge kind={selected.kind} />
             <span className="truncate font-mono text-sm font-normal text-muted-foreground">
               {selectedRow?.id ?? selected.id}
             </span>
