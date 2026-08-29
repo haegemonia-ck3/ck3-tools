@@ -36,3 +36,10 @@ Electron-based suite of editing tools for Crusader Kings III. Planned tools: Cha
 - Vite pinned to v7 and `@vitejs/plugin-react` to v5 for electron-vite 5 peer-compat — don't blindly bump to latest.
 - Real mod files contain tolerated typos (dates like `3220.1.1.` or `3212.1`, quoted and unquoted values mixed); parsers must be lenient and edits must preserve each line's existing quote style. Character history keys: `faith`/`religion` and `dynasty`/`dynasty_house` are interchangeable pairs — edit whichever exists, write the former when inserting.
 - Backend smoke tests: copy mod files to the scratchpad and run the compiled parser against the copy — never write to the user's real mod directory in tests.
+
+## Running the app (IMPORTANT)
+
+- `npm run dev` / the `dev` preview config starts a Vite server for the renderer AND spawns a real Electron window on the user's desktop. `--rendererOnly` does not avoid this (it only skips rebuilding main/preload). Each concurrent session that starts one adds another window.
+- Do NOT start the dev server unless the change is actually observable in the running app. Backend/parser work belongs in a smoke test or `npm run test`; type-level work in `npm run typecheck`. A localhost tab in the browser pane is near-useless here anyway — `window.ck3tools` doesn't exist outside Electron, so anything touching settings, mods, or characters fails.
+- Before starting it, write a short label for what you're working on to `.claude/dev-label.txt` (gitignored, first line only, e.g. `Mother and Father in character editor`). In dev the main process reads and watches that file and titles the window `CK3 Tools — <label>`, so concurrent sessions' windows are tellable apart. Rewriting the file retitles a running window within a second.
+- When you do start it: stop it (`preview_stop` with the serverId) as soon as you're done, in the same session. Never leave it running at the end of a turn. If the Electron window survives the stop, kill the stray process — `Get-Process electron -ErrorAction SilentlyContinue | Stop-Process`.

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import { join } from 'path'
+import { readFileSync, unwatchFile, watchFile } from 'fs'
 import { loadSettings, saveSettings } from './settings'
 import {
   detectPaths,
@@ -31,6 +32,25 @@ function createWindow(): void {
   })
 
   win.on('ready-to-show', () => win.show())
+
+  // Dev only: label the window from .claude/dev-label.txt so several concurrent
+  // sessions' Electron windows can be told apart on the desktop.
+  if (!app.isPackaged) {
+    const labelFile = join(app.getAppPath(), '.claude', 'dev-label.txt')
+    const applyTitle = (): void => {
+      let label = ''
+      try {
+        label = readFileSync(labelFile, 'utf8').split(/\r?\n/)[0].trim().slice(0, 120)
+      } catch {
+        // no label file — plain title
+      }
+      win.setTitle(label ? `CK3 Tools — ${label}` : 'CK3 Tools')
+    }
+    win.on('page-title-updated', (e) => e.preventDefault())
+    applyTitle()
+    watchFile(labelFile, { interval: 1000 }, applyTitle)
+    win.on('closed', () => unwatchFile(labelFile, applyTitle))
+  }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
