@@ -225,7 +225,12 @@ export default function DynastyEditorPage(): React.JSX.Element {
     return (
       <div className="flex h-full flex-col gap-3 p-7 pt-6">
         <header className="flex items-center gap-3">
-          <Button variant="ghost" size="icon-sm" title="Back to list" onClick={() => setSelected(null)}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title="Back to list (Esc)"
+            onClick={() => setSelected(null)}
+          >
             <ArrowLeft />
           </Button>
           <h1 className="flex min-w-0 items-center gap-2 text-2xl font-semibold">
@@ -299,6 +304,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
               onOpenCharacter={openCharacter}
               onOpenRow={openRow}
               onSaved={reload}
+              onClose={() => setSelected(null)}
             />
           </ResizablePanel>
         </ResizablePanelGroup>

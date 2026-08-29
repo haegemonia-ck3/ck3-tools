@@ -7,6 +7,7 @@ import type {
   RefKind,
   ReferenceData
 } from '@shared/types'
+import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
@@ -173,38 +174,11 @@ export default function CharacterDetailPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, original])
 
-  if (!draft || !original) {
-    return (
-      <Card className="flex h-full w-full min-w-0 flex-col gap-0 py-0">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h2 className="font-semibold">Character</h2>
-          <Button variant="ghost" size="icon-sm" onClick={onClose}>
-            <X />
-          </Button>
-        </div>
-        <p className="p-4 text-sm text-muted-foreground">
-          {original === null ? 'Loading…' : 'Character not found.'}
-        </p>
-      </Card>
-    )
-  }
-
-  const set = (patch: Partial<CharacterDetail>): void => {
-    setDraft({ ...draft, ...patch })
-    setSavedFlash(false)
-  }
-
-  const badBirth = draft.birth !== null && draft.birth !== '' && !isValidCK3Date(draft.birth)
-  const badDeath = draft.death !== null && draft.death !== '' && !isValidCK3Date(draft.death)
-
-  const addTrait = (value: string): void => {
-    const t = value.trim()
-    if (t && !draft.traits.includes(t)) {
-      set({ traits: [...draft.traits, t] })
-    }
-  }
+  const badBirth = !!draft?.birth && !isValidCK3Date(draft.birth)
+  const badDeath = !!draft?.death && !isValidCK3Date(draft.death)
 
   const save = async (): Promise<void> => {
+    if (!draft || !original) return
     setSaving(true)
     setError(null)
     try {
@@ -228,6 +202,40 @@ export default function CharacterDetailPanel({
       onSaved(file, toSave.id)
     } finally {
       setSaving(false)
+    }
+  }
+
+  useFormHotkeys({
+    onSave: save,
+    canSave: dirty && !saving && !badBirth && !badDeath && !!draft?.id.trim(),
+    onClose
+  })
+
+  if (!draft || !original) {
+    return (
+      <Card className="flex h-full w-full min-w-0 flex-col gap-0 py-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <h2 className="font-semibold">Character</h2>
+          <Button variant="ghost" size="icon-sm" title="Close (Esc)" onClick={onClose}>
+            <X />
+          </Button>
+        </div>
+        <p className="p-4 text-sm text-muted-foreground">
+          {original === null ? 'Loading…' : 'Character not found.'}
+        </p>
+      </Card>
+    )
+  }
+
+  const set = (patch: Partial<CharacterDetail>): void => {
+    setDraft({ ...draft, ...patch })
+    setSavedFlash(false)
+  }
+
+  const addTrait = (value: string): void => {
+    const t = value.trim()
+    if (t && !draft.traits.includes(t)) {
+      set({ traits: [...draft.traits, t] })
     }
   }
 
@@ -376,7 +384,7 @@ export default function CharacterDetailPanel({
             <span className="size-2 rounded-full bg-primary" title="Unsaved changes" />
           )}
         </h2>
-        <Button variant="ghost" size="icon-sm" onClick={onClose}>
+        <Button variant="ghost" size="icon-sm" title="Close (Esc)" onClick={onClose}>
           <X />
         </Button>
       </div>
@@ -515,6 +523,7 @@ export default function CharacterDetailPanel({
         </Button>
         <Button
           disabled={!dirty || saving || badBirth || badDeath || !draft.id.trim()}
+          title={SAVE_HOTKEY_LABEL}
           onClick={save}
         >
           {saving ? 'Saving…' : 'Save'}

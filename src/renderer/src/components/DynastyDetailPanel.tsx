@@ -7,6 +7,7 @@ import type {
   ReferenceData,
   SaveResult
 } from '@shared/types'
+import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import Reference, { openReferenceTarget } from './Reference'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +69,8 @@ interface Props {
   onOpenRow: (kind: 'dynasty' | 'house', id: string) => void
   /** Called after a successful save so the page can reload definitions */
   onSaved: () => void
+  /** Leave the row and go back to the list (the header arrow, and Esc) */
+  onClose: () => void
 }
 
 function lifespanLabel(c: DynastyCharacter, calendar: CalendarConfig | null): string {
@@ -92,7 +95,8 @@ export default function DynastyDetailPanel({
   onMemberClick,
   onOpenCharacter,
   onOpenRow,
-  onSaved
+  onSaved,
+  onClose
 }: Props): React.JSX.Element {
   const def =
     kind === 'dynasty'
@@ -187,6 +191,8 @@ export default function DynastyDetailPanel({
       setSaving(false)
     }
   }
+
+  useFormHotkeys({ onSave: save, canSave: editable && dirty && !saving, onClose })
 
   const textField = (
     label: string,
@@ -496,7 +502,7 @@ export default function DynastyDetailPanel({
           >
             Revert
           </Button>
-          <Button disabled={!dirty || saving} onClick={save}>
+          <Button disabled={!dirty || saving} title={SAVE_HOTKEY_LABEL} onClick={save}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
         </div>
