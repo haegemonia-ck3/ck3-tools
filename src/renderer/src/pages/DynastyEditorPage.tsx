@@ -17,7 +17,7 @@ import {
 } from '@tanstack/react-table'
 import type { Column, Row, SortFn } from '@tanstack/react-table'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { ArrowLeft, FilterX } from 'lucide-react'
+import { ArrowLeft, FilterX, House } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
@@ -116,11 +116,15 @@ const columns = columnHelper.columns([
     header: 'Kind',
     filterFn: 'equalsString',
     meta: { filter: 'kind' },
-    cell: (info) => (
-      <Badge variant={info.getValue() === 'dynasty' ? 'secondary' : 'outline'}>
-        {info.getValue()}
-      </Badge>
-    )
+    cell: (info) => {
+      const isDynasty = info.getValue() === 'dynasty'
+      return (
+        <Badge variant={isDynasty ? 'secondary' : 'outline'}>
+          <House className={cn(isDynasty && 'fill-current')} />
+          {isDynasty ? 'Dynasty' : 'House'}
+        </Badge>
+      )
+    }
   }),
   columnHelper.accessor('id', {
     header: 'ID',
@@ -458,7 +462,10 @@ export default function DynastyEditorPage(): React.JSX.Element {
           </Button>
           <h1 className="flex min-w-0 items-center gap-2 text-2xl font-semibold">
             <span className="truncate">{title}</span>
-            <Badge variant="secondary">{selected.kind}</Badge>
+            <Badge variant={selected.kind === 'dynasty' ? 'secondary' : 'outline'}>
+              <House className={cn(selected.kind === 'dynasty' && 'fill-current')} />
+              {selected.kind === 'dynasty' ? 'Dynasty' : 'House'}
+            </Badge>
             <span className="truncate font-mono text-sm font-normal text-muted-foreground">
               {selectedRow?.id ?? selected.id}
             </span>
