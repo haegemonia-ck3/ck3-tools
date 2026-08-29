@@ -33,6 +33,37 @@ export interface CharacterSummary {
   file: string
 }
 
+export interface CharacterStats {
+  diplomacy: number | null
+  martial: number | null
+  stewardship: number | null
+  intrigue: number | null
+  learning: number | null
+  prowess: number | null
+}
+
+export interface CharacterDetail {
+  id: string
+  file: string
+  name: string | null
+  dynasty: string | null
+  birth: string | null
+  death: string | null
+  culture: string | null
+  /** Faith key; read from either `faith =` or `religion =` in the file */
+  faith: string | null
+  traits: string[]
+  stats: CharacterStats
+}
+
+export interface ReferenceData {
+  cultures: string[]
+  faiths: string[]
+  traits: string[]
+}
+
+export type SaveResult = { ok: true } | { ok: false; error: string }
+
 export interface DetectionResult {
   gameDir: string | null
   modDir: string | null

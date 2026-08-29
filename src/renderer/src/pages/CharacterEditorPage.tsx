@@ -15,7 +15,8 @@ import {
 import type { Row, SortFn } from '@tanstack/react-table'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
-import type { CharacterSummary } from '@shared/types'
+import CharacterDetailPanel from '../components/CharacterDetailPanel'
+import type { CharacterSummary, ReferenceData } from '@shared/types'
 
 const features = tableFeatures({
   columnFilteringFeature,
@@ -71,14 +72,15 @@ const columns = columnHelper.columns([
 ])
 
 export default function CharacterEditorPage(): React.JSX.Element {
-  const { selectedMod } = useApp()
+  const { settings, selectedMod } = useApp()
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<{ file: string; id: string } | null>(null)
+  const [refData, setRefData] = useState<ReferenceData | null>(null)
 
   const modPath = selectedMod?.path ?? null
 
-  useEffect(() => {
+  const reload = (): void => {
     if (!modPath) {
       setCharacters([])
       return
@@ -88,6 +90,21 @@ export default function CharacterEditorPage(): React.JSX.Element {
       .listCharacters(modPath)
       .then(setCharacters)
       .finally(() => setLoading(false))
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(reload, [modPath])
+
+  useEffect(() => {
+    setSelected(null)
+    if (!modPath) {
+      setRefData(null)
+      return
+    }
+    window.ck3tools
+      .getReferenceData(settings?.gameDir ?? null, modPath, selectedMod?.replacePaths ?? [])
+      .then(setRefData)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
 
   const table = useTable({
@@ -140,6 +157,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
         </section>
       )}
 
+      <div className="editor-split">
       {characters.length > 0 && (
         <div className="table-wrap">
           <table className="data-table">
@@ -165,8 +183,12 @@ export default function CharacterEditorPage(): React.JSX.Element {
               {rows.map((row) => (
                 <tr
                   key={row.id}
-                  className={selectedId === row.id ? 'selected' : ''}
-                  onClick={() => setSelectedId(row.id)}
+                  className={
+                    selected && `${selected.file}:${selected.id}` === row.id ? 'selected' : ''
+                  }
+                  onClick={() =>
+                    setSelected({ file: row.original.file, id: row.original.id })
+                  }
                 >
                   {row.getAllCells().map((cell) => (
                     <td key={cell.id}>
@@ -179,6 +201,20 @@ export default function CharacterEditorPage(): React.JSX.Element {
           </table>
         </div>
       )}
+      {selected && modPath && (
+        <CharacterDetailPanel
+          modPath={modPath}
+          file={selected.file}
+          id={selected.id}
+          refData={refData}
+          onSaved={(file, newId) => {
+            setSelected({ file, id: newId })
+            reload()
+          }}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      </div>
     </div>
   )
 }

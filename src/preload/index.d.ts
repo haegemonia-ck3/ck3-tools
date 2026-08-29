@@ -1,9 +1,12 @@
 import type {
   AppSettings,
+  CharacterDetail,
   CharacterSummary,
   DetectionResult,
   DirValidation,
-  ModInfo
+  ModInfo,
+  ReferenceData,
+  SaveResult
 } from '@shared/types'
 
 export interface Ck3ToolsApi {
@@ -12,6 +15,18 @@ export interface Ck3ToolsApi {
   detectPaths: () => Promise<DetectionResult>
   listMods: (modDir: string) => Promise<ModInfo[]>
   listCharacters: (modPath: string) => Promise<CharacterSummary[]>
+  getCharacter: (modPath: string, file: string, id: string) => Promise<CharacterDetail | null>
+  saveCharacter: (
+    modPath: string,
+    file: string,
+    originalId: string,
+    detail: CharacterDetail
+  ) => Promise<SaveResult>
+  getReferenceData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<ReferenceData>
   validateGameDir: (dir: string) => Promise<DirValidation>
   validateModDir: (dir: string) => Promise<DirValidation>
   pickDirectory: (title: string, kind: 'game' | 'mod') => Promise<string | null>

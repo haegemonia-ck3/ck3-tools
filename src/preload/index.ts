@@ -1,10 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AppSettings,
+  CharacterDetail,
   CharacterSummary,
   DetectionResult,
   DirValidation,
-  ModInfo
+  ModInfo,
+  ReferenceData,
+  SaveResult
 } from '@shared/types'
 
 const api = {
@@ -16,6 +19,20 @@ const api = {
   listMods: (modDir: string): Promise<ModInfo[]> => ipcRenderer.invoke('ck3:listMods', modDir),
   listCharacters: (modPath: string): Promise<CharacterSummary[]> =>
     ipcRenderer.invoke('ck3:listCharacters', modPath),
+  getCharacter: (modPath: string, file: string, id: string): Promise<CharacterDetail | null> =>
+    ipcRenderer.invoke('ck3:getCharacter', modPath, file, id),
+  saveCharacter: (
+    modPath: string,
+    file: string,
+    originalId: string,
+    detail: CharacterDetail
+  ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveCharacter', modPath, file, originalId, detail),
+  getReferenceData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<ReferenceData> =>
+    ipcRenderer.invoke('ck3:getReferenceData', gameDir, modPath, replacePaths),
   validateGameDir: (dir: string): Promise<DirValidation> =>
     ipcRenderer.invoke('ck3:validateGameDir', dir),
   validateModDir: (dir: string): Promise<DirValidation> =>
