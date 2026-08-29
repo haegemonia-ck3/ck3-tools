@@ -344,6 +344,14 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const shownFavorites = existing(favorites)
   const shownRecents = existing(recents)
   const visibleRecents = showAllRecents ? shownRecents : shownRecents.slice(0, RECENTS_COLLAPSED)
+  // Characters with unsaved drafts; entries carry the on-file id and file name
+  const shownDrafts = existing(
+    Object.values(drafts).map((e) => ({
+      file: e.original.file,
+      id: e.original.id,
+      name: e.draft.name
+    }))
+  )
 
   const chip = (ref: CharacterRef): React.JSX.Element => {
     const label = byKey.get(`${ref.file}:${ref.id}`)?.name ?? ref.name ?? ref.id
@@ -358,6 +366,9 @@ export default function CharacterEditorPage(): React.JSX.Element {
         onClick={() => openCharacter(ref)}
       >
         {isFavorite(ref) && <Star className="fill-current text-amber-500" />}
+        {`${ref.file}:${ref.id}` in drafts && (
+          <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Unsaved changes" />
+        )}
         <span className="truncate">{label}</span>
       </Button>
     )
@@ -387,7 +398,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
         </div>
       </header>
 
-      {(shownFavorites.length > 0 || shownRecents.length > 0) && (
+      {(shownFavorites.length > 0 || shownRecents.length > 0 || shownDrafts.length > 0) && (
         <div className="space-y-1.5">
           {shownFavorites.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -408,6 +419,14 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   {showAllRecents ? 'Show less' : `Show more (${shownRecents.length - RECENTS_COLLAPSED})`}
                 </Button>
               )}
+            </div>
+          )}
+          {shownDrafts.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                Unsaved
+              </span>
+              {shownDrafts.map(chip)}
             </div>
           )}
         </div>
