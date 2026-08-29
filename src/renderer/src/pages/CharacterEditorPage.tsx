@@ -616,6 +616,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   }
                   openCharacter({ file: target.file, id: target.id, name: target.name })
                 }}
+                onOpenDynasty={(id) => void navigate({ to: '/dynasties', search: { id } })}
                 storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
                 onDraftChange={persistDraft}
                 onSaved={(file, newId) => {

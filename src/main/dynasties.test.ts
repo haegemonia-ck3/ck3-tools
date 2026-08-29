@@ -500,3 +500,24 @@ describe('review regressions', () => {
     expect(readFileSync(path2, 'utf-8')).toBe(before)
   })
 })
+
+// .mod descriptors write `path` with forward slashes; a mod path in that form
+// must still identify its own files as editable (Hegemonia showed every
+// dynasty as vanilla because the prefix comparison assumed native separators).
+describe('forward-slash mod path', () => {
+  const slashed = modPath.replace(/\\/g, '/')
+
+  it('marks mod defs as in-mod', () => {
+    const d = getDynastyData(gameDir, slashed, [])
+    expect(d.dynasties.find((x) => x.id === 'dynn_Alpha')!.inMod).toBe(true)
+    expect(d.houses.find((x) => x.id === 'house_Beta')!.inMod).toBe(true)
+    expect(d.dynasties.find((x) => x.id === 'Phokus')!.inMod).toBe(false)
+  })
+
+  it('keeps mod defs that no character references', () => {
+    // These survive only because they are recognized as mod content
+    expect(getDynastyData(gameDir, slashed, []).dynasties.some((x) => x.id === 'dynn_ModOnly')).toBe(
+      true
+    )
+  })
+})

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, FilterX } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
@@ -69,6 +69,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const [includeHouseMembers, setIncludeHouseMembers] = useState(true)
   const [treeSelected, setTreeSelected] = useState<string | null>(null)
   const [focus, setFocus] = useState<{ id: string | null; nonce: number }>({ id: null, nonce: 0 })
+  const deepLink = useSearch({ from: '/dynasties' })
   const [search, setSearch] = useState('')
   const [kindFilter, setKindFilter] = useState<'all' | 'dynasty' | 'house'>('all')
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -166,6 +167,26 @@ export default function DynastyEditorPage(): React.JSX.Element {
     else setOpen(false)
   }
 
+  // Deep link from another tool (e.g. a character's dynasty field). Waits for
+  // the scan, since only the loaded data says whether the id names a dynasty
+  // or a house; the params are then stripped so a refresh doesn't re-jump.
+  useEffect(() => {
+    if (!deepLink.id || !data) return
+    const norm = normId(deepLink.id)
+    const kind = data.dynasties.some((d) => normId(d.id) === norm)
+      ? 'dynasty'
+      : data.houses.some((h) => normId(h.id) === norm)
+        ? 'house'
+        : null
+    if (kind === null) {
+      toast.error(`"${deepLink.id}" isn't a dynasty or house in ${selectedMod?.name ?? 'this mod'}`)
+    } else {
+      openRow(kind, deepLink.id)
+    }
+    void navigate({ to: '/dynasties', search: {}, replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLink.id, data])
+
   const focusMember = (id: string): void => {
     // A house member clicked while the tree shows "dynasty only" — widen first
     if (
@@ -214,25 +235,9 @@ export default function DynastyEditorPage(): React.JSX.Element {
               {selectedRow?.id ?? selected.id}
             </span>
           </h1>
-          <div className="ml-auto flex items-center gap-3">
-            {selected.kind === 'dynasty' && (
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                spacing={0}
-                value={includeHouseMembers ? 'all' : 'no-house'}
-                onValueChange={(v) => v && setIncludeHouseMembers(v === 'all')}
-                aria-label="Which members the tree shows"
-              >
-                <ToggleGroupItem value="all">With houses</ToggleGroupItem>
-                <ToggleGroupItem value="no-house">Dynasty only</ToggleGroupItem>
-              </ToggleGroup>
-            )}
-            <span className="text-xs whitespace-nowrap text-muted-foreground">
-              {members.length} member{members.length === 1 ? '' : 's'}
-            </span>
-          </div>
+          <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground">
+            {members.length} member{members.length === 1 ? '' : 's'}
+          </span>
         </header>
 
         <ResizablePanelGroup
@@ -253,6 +258,22 @@ export default function DynastyEditorPage(): React.JSX.Element {
               focusId={focus.id}
               focusNonce={focus.nonce}
               fitKey={`${selected.kind}:${normId(selected.id)}`}
+              toolbar={
+                selected.kind === 'dynasty' ? (
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    size="sm"
+                    spacing={0}
+                    value={includeHouseMembers ? 'all' : 'no-house'}
+                    onValueChange={(v) => v && setIncludeHouseMembers(v === 'all')}
+                    aria-label="Which members the tree shows"
+                  >
+                    <ToggleGroupItem value="all">With houses</ToggleGroupItem>
+                    <ToggleGroupItem value="no-house">Dynasty only</ToggleGroupItem>
+                  </ToggleGroup>
+                ) : undefined
+              }
             />
           </ResizablePanel>
           <ResizableHandle withHandle className="mx-2 bg-transparent hover:bg-border" />

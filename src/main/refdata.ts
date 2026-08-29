@@ -4,6 +4,18 @@ import { scanBlocks } from './pdx'
 import type { RefKind, RefLocation, ReferenceData } from '@shared/types'
 
 /**
+ * Is `file` inside `dir`? Compared separator- and case-insensitively: mod paths
+ * come from .mod descriptors, which write them with forward slashes, while the
+ * files we scan are built with native separators. A raw `startsWith` between
+ * the two never matches, which would misreport every mod file as a game file.
+ */
+export function isUnderDir(file: string, dir: string | null): boolean {
+  if (dir === null) return false
+  const key = (p: string): string => p.replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase()
+  return key(file).startsWith(key(dir) + '\\')
+}
+
+/**
  * How CK3 layers mod content over the base game, at the granularity we need:
  * - A mod file with the same relative path as a game file replaces it entirely.
  * - A `replace_path` in the .mod descriptor removes the whole game folder from
@@ -164,7 +176,7 @@ export function locateRef(
       }
       const offset = findDefinition(text, kind, id)
       if (offset === null) continue
-      const inMod = modPath !== null && file.startsWith(modPath + sep)
+      const inMod = isUnderDir(file, modPath)
       const hit = { path: file, line: lineOf(text, offset), inMod }
       if (inMod) return hit
       gameHit ??= hit

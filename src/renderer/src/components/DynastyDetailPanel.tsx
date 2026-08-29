@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, ExternalLink } from 'lucide-react'
+import { ArrowRight, ChevronRight, ExternalLink } from 'lucide-react'
 import type {
   CalendarConfig,
   DynastyCharacter,
@@ -12,6 +12,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from '@/components/ui/collapsible'
 import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,6 +31,13 @@ import {
   normId,
   sortMembers
 } from '@/lib/dynastyView'
+
+/**
+ * Group key for the members who carry the dynasty but no house — the dynasty
+ * itself acts as their house. '#' opens a comment in Paradox script, so no real
+ * id can contain one and this can't collide with a house's normalized id.
+ */
+const NO_HOUSE = '#no-house'
 
 /** The editable fields of either entity; house uses `dynasty`, dynasty `culture`. */
 interface DefDraft {
@@ -104,6 +116,16 @@ export default function DynastyDetailPanel({
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const [grouped, setGrouped] = useState(true)
+  // Group keys the user has folded away; absent means open, so new groups
+  // (and every group of a freshly opened row) start expanded.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+
+  const toggleGroup = (key: string): void =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(key)) next.add(key)
+      return next
+    })
 
   useEffect(() => {
     setDraft(original ? { ...original } : null)
@@ -116,6 +138,7 @@ export default function DynastyDetailPanel({
   // the reseed above), so it resets only when a different row is opened
   useEffect(() => {
     setSavedFlash(false)
+    setCollapsed(new Set())
   }, [kind, id])
 
   const editable = def !== null && def.inMod
@@ -250,57 +273,70 @@ export default function DynastyDetailPanel({
     for (const c of members) {
       if (c.house !== null && !houseIds.has(normId(c.house))) houseIds.set(normId(c.house), c.house)
     }
-    const groups = [...houseIds.entries()].map(([norm, raw]) => ({
-      norm,
-      raw,
-      // Resolved against ALL houses: a member's house can be defined under
-      // another dynasty and still deserves its name, not an "undefined" badge
-      def: data.houses.find((h) => normId(h.id) === norm) ?? null,
-      list: members.filter((c) => c.house !== null && normId(c.house) === norm)
-    }))
+    const groups = [
+      // The base dynasty collapses like any house, so it leads the same list
+      ...(noHouse.length > 0
+        ? [{ norm: NO_HOUSE, raw: null, def: null, list: noHouse }]
+        : []),
+      ...[...houseIds.entries()].map(([norm, raw]) => ({
+        norm,
+        raw: raw as string | null,
+        // Resolved against ALL houses: a member's house can be defined under
+        // another dynasty and still deserves its name, not an "undefined" badge
+        def: data.houses.find((h) => normId(h.id) === norm) ?? null,
+        list: members.filter((c) => c.house !== null && normId(c.house) === norm)
+      }))
+    ]
     return (
       <div className="space-y-3">
-        {noHouse.length > 0 && (
-          <div>
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-              Dynasty (no house) · {noHouse.length}
-            </div>
-            {noHouse.map(memberRow)}
-          </div>
-        )}
-        {groups.map((g) => (
-          <div key={g.norm}>
-            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-              <span
-                className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: groupColors[g.norm] }}
-              />
-              <span className="truncate">
-                {g.def ? (g.def.localizedName ?? g.def.name ?? g.raw) : g.raw}
-              </span>
-              · {g.list.length}
-              {g.def === null && (
-                <Badge variant="outline" className="text-[10px]">
-                  undefined
-                </Badge>
-              )}
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="ml-auto"
-                title="Open this house"
-                onClick={() => onOpenRow('house', g.raw)}
-              >
-                <ArrowRight />
-              </Button>
-            </div>
-            {g.list.length > 0 ? (
-              g.list.map(memberRow)
-            ) : (
-              <p className="px-2 text-xs text-muted-foreground">no members</p>
-            )}
-          </div>
-        ))}
+        {groups.map((g) => {
+          const open = !collapsed.has(g.norm)
+          return (
+            <Collapsible key={g.norm} open={open} onOpenChange={() => toggleGroup(g.norm)}>
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md py-0.5 text-left hover:text-foreground">
+                  <ChevronRight
+                    className={cn('size-3 shrink-0 transition-transform', open && 'rotate-90')}
+                  />
+                  {g.raw !== null && (
+                    <span
+                      className="size-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: groupColors[g.norm] }}
+                    />
+                  )}
+                  <span className="truncate">
+                    {g.raw === null
+                      ? 'Dynasty (no house)'
+                      : (g.def?.localizedName ?? g.def?.name ?? g.raw)}
+                  </span>
+                  <span className="shrink-0">· {g.list.length}</span>
+                  {g.raw !== null && g.def === null && (
+                    <Badge variant="outline" className="text-[10px]">
+                      undefined
+                    </Badge>
+                  )}
+                </CollapsibleTrigger>
+                {g.raw !== null && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    title="Open this house"
+                    onClick={() => onOpenRow('house', g.raw!)}
+                  >
+                    <ArrowRight />
+                  </Button>
+                )}
+              </div>
+              <CollapsibleContent>
+                {g.list.length > 0 ? (
+                  g.list.map(memberRow)
+                ) : (
+                  <p className="px-2 text-xs text-muted-foreground">no members</p>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          )
+        })}
       </div>
     )
   }

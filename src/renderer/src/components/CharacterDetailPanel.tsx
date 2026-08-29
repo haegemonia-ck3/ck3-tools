@@ -82,6 +82,8 @@ interface Props {
   characterIds: string[]
   /** Switch the editor to another character in the mod (father/mother jump) */
   onNavigate: (id: string) => void
+  /** Open this character's dynasty (or house) in the Dynasty & House Editor */
+  onOpenDynasty: (id: string) => void
   /** Persisted unsaved edits for this character, if any; read once per open */
   storedDraft: CharacterDraft | null
   /**
@@ -104,6 +106,7 @@ export default function CharacterDetailPanel({
   refData,
   characterIds,
   onNavigate,
+  onOpenDynasty,
   storedDraft,
   onDraftChange,
   onSaved,
@@ -327,6 +330,25 @@ export default function CharacterDetailPanel({
     </div>
   )
 
+  /**
+   * Dynasty is managed data too, so it opens in the Dynasty & House Editor
+   * instead of a text editor. The picker's options cover houses as well, and
+   * that editor resolves whichever kind the id turns out to be.
+   */
+  const dynastyField = (): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <Label className="text-xs tracking-wide text-muted-foreground uppercase">Dynasty</Label>
+      <Reference
+        value={draft.dynasty}
+        onChange={(v) => set({ dynasty: v })}
+        options={refData?.dynasties ?? []}
+        placeholder="none"
+        onNavigate={onOpenDynasty}
+        followTitle="Open in Dynasty & House Editor"
+      />
+    </div>
+  )
+
   /** Parent fields reference other characters in the mod, so they jump in-app. */
   const parentField = (
     label: string,
@@ -403,7 +425,7 @@ export default function CharacterDetailPanel({
               placeholder: 'alive'
             })}
           </div>
-          {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}
+          {dynastyField()}
           <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
             {parentField('Father', draft.father, (v) => set({ father: v }))}
             {parentField('Mother', draft.mother, (v) => set({ mother: v }))}

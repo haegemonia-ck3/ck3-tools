@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
-import { basename, join, sep } from 'path'
+import { basename, join } from 'path'
 import type { Dirent } from 'fs'
 import { DATE_KEY } from './characters'
 import { makeEditor, setScalar } from './lineEditor'
 import { annotateLines, scanBlocks } from './pdx'
-import { effectiveFiles } from './refdata'
+import { effectiveFiles, isUnderDir } from './refdata'
 import type { BlockSpan } from './pdx'
 import type {
   DynastyCharacter,
@@ -163,7 +163,7 @@ function readDefs(files: string[], modPath: string | null): RawDef[] {
     } catch {
       continue
     }
-    const inMod = modPath !== null && path.startsWith(modPath + sep)
+    const inMod = isUnderDir(path, modPath)
     for (const block of scanBlocks(text)) {
       defs.push({
         id: block.key,

@@ -28,6 +28,8 @@ export interface FamilyTreeProps {
   onOpenCharacter?: (id: string) => void
   /** group id (house) -> CSS color used for the node's accent stripe */
   groupColors?: Record<string, string>
+  /** Controls floated over the canvas' top-right corner, opposite the zoom cluster */
+  toolbar?: React.ReactNode
   /** When focusNonce changes and focusId is set, pan/zoom to center that node */
   focusId?: string | null
   focusNonce?: number
@@ -239,6 +241,7 @@ export default function FamilyTree({
   onSelect,
   onOpenCharacter,
   groupColors,
+  toolbar,
   focusId,
   focusNonce,
   fitKey,
@@ -445,6 +448,16 @@ export default function FamilyTree({
             onSelect={onSelect}
             onOpenCharacter={onOpenCharacter}
           />
+        </div>
+      )}
+
+      {toolbar !== undefined && (
+        // Shown even with an empty canvas: the filter that emptied it lives here
+        <div
+          className="absolute top-2 right-2 flex gap-1 rounded-md border bg-background/90 p-1 shadow-xs"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {toolbar}
         </div>
       )}
 

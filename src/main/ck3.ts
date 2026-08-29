@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { existsSync, readdirSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { join, normalize as normalizePath } from 'path'
 import { execFileSync } from 'child_process'
 import { readModProfile } from './modProfile'
 import type { DetectionResult, DirValidation, ModInfo } from '@shared/types'
@@ -144,6 +144,15 @@ function isLocalMod(modPath: string | null, modDir: string): boolean {
   return normalize(modPath).startsWith(normalize(modDir) + '\\')
 }
 
+/**
+ * Descriptors write `path` with forward slashes ("C:/Users/…"), which `join`
+ * silently accepts but prefix comparisons against native paths do not — see
+ * `isUnderDir`. Normalize once here so every consumer sees native separators.
+ */
+function normalizeModPath(modPath: string | null): string | null {
+  return modPath === null ? null : normalizePath(modPath).replace(/[\\/]+$/, '')
+}
+
 export function listMods(modDir: string): ModInfo[] {
   if (!modDir || !existsSync(modDir)) return []
   const mods: ModInfo[] = []
@@ -151,7 +160,7 @@ export function listMods(modDir: string): ModInfo[] {
     if (!entry.toLowerCase().endsWith('.mod')) continue
     try {
       const parsed = parseModDescriptor(readFileSync(join(modDir, entry), 'utf-8'))
-      const modPath = parsed.path?.[0] ?? null
+      const modPath = normalizeModPath(parsed.path?.[0] ?? null)
       if (!isLocalMod(modPath, modDir)) continue
       mods.push({
         file: entry,
