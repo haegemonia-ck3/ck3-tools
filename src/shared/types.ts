@@ -66,6 +66,10 @@ export interface CharacterDetail {
   culture: string | null
   /** Faith key; read from either `faith =` or `religion =` in the file */
   faith: string | null
+  /** Character id of the father, as written in the file */
+  father: string | null
+  /** Character id of the mother, as written in the file */
+  mother: string | null
   traits: string[]
   stats: CharacterStats
 }

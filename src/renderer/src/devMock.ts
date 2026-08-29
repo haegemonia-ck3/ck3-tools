@@ -26,6 +26,8 @@ const characters: CharacterDetail[] = [
     death: null,
     culture: 'greek',
     faith: 'orthodox',
+    father: '218',
+    mother: null,
     traits: ['brave', 'ambitious'],
     stats: {
       diplomacy: 4,
@@ -34,6 +36,27 @@ const characters: CharacterDetail[] = [
       intrigue: 5,
       learning: 2,
       prowess: 6
+    }
+  },
+  {
+    id: '218',
+    file: 'mock_characters.txt',
+    name: 'Ioannes',
+    dynasty: 'dynn_Mock',
+    birth: '1020.1.1',
+    death: '1078.4.2',
+    culture: 'greek',
+    faith: 'orthodox',
+    father: null,
+    mother: null,
+    traits: ['just'],
+    stats: {
+      diplomacy: 6,
+      martial: 3,
+      stewardship: 5,
+      intrigue: 2,
+      learning: 4,
+      prowess: 3
     }
   }
 ]
