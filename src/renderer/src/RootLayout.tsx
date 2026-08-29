@@ -115,7 +115,9 @@ export default function RootLayout(): React.JSX.Element {
                     <SidebarMenuItem key={tool.to}>
                       {configured ? (
                         <SidebarMenuButton asChild isActive={pathname === tool.to} tooltip={tool.label}>
-                          <Link to={tool.to}>
+                          {/* search={{}} so a tool link always lands on its list, never
+                              back into whatever row the search params had open */}
+                          <Link to={tool.to} search={{}}>
                             <tool.icon />
                             <span>{tool.label}</span>
                           </Link>

@@ -237,9 +237,14 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
-  const [selected, setSelected] = useState<{ file: string; id: string } | null>(null)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
   const [showAllRecents, setShowAllRecents] = useState(false)
+  // Which character is open lives in the URL, not in state, so opening one
+  // pushes a history entry and the mouse "back" button returns to the list.
+  const search = useSearch({ from: '/characters' })
+  const navigate = useNavigate()
+  const selected: { file: string; id: string } | null =
+    search.file && search.id ? { file: search.file, id: search.id } : null
   // Remembers the character list / detail split across sessions (localStorage)
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'character-editor-detail',
@@ -300,11 +305,16 @@ export default function CharacterEditorPage(): React.JSX.Element {
   }
 
   const openCharacter = (ref: CharacterRef): void => {
-    setSelected({ file: ref.file, id: ref.id })
-    recordVisit(ref)
+    void navigate({ to: '/characters', search: { file: ref.file, id: ref.id } })
     // Give the detail panel the full width: fold the tools sidebar away if it's open.
     if (isMobile) setOpenMobile(false)
     else setOpen(false)
+  }
+
+  // Closing replaces rather than pushes, so "back" from the list doesn't drop
+  // straight back into the character that was just closed.
+  const closeCharacter = (): void => {
+    void navigate({ to: '/characters', search: {}, replace: true })
   }
 
   /** Point recents/favorites at a character's new id after a save renames it. */
@@ -338,8 +348,14 @@ export default function CharacterEditorPage(): React.JSX.Element {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(reload, [modPath])
 
+  // Switching mods invalidates the open character, but only on a real change:
+  // on the first render the URL may already carry a deep link that must survive.
+  const prevModPath = useRef(modPath)
   useEffect(() => {
-    setSelected(null)
+    if (prevModPath.current !== modPath) {
+      prevModPath.current = modPath
+      closeCharacter()
+    }
     setShowAllRecents(false)
     if (!modPath) {
       setRefData(null)
@@ -351,19 +367,14 @@ export default function CharacterEditorPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
 
-  // Deep link from another tool (e.g. a family-tree node): open the character,
-  // then strip the params so refresh/back don't re-trigger the jump. Declared
-  // AFTER the mod-reset effect above on purpose: on a fresh mount both fire in
-  // the same flush, and this one's selection must win over the reset's null.
-  const search = useSearch({ from: '/characters' })
-  const navigate = useNavigate()
+  // Whichever character is open — clicked here, or deep-linked from another
+  // tool — is recorded as a visit once the list knows its name.
   useEffect(() => {
-    if (search.file && search.id) {
-      openCharacter({ file: search.file, id: search.id, name: null })
-      void navigate({ to: '/characters', search: {}, replace: true })
-    }
+    if (!selected) return
+    const known = characters.find((c) => c.file === selected.file && c.id === selected.id)
+    recordVisit({ ...selected, name: known?.name ?? null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.file, search.id])
+  }, [selected?.file, selected?.id, modKey, characters])
 
   const table = useTable({
     features,
@@ -443,24 +454,6 @@ export default function CharacterEditorPage(): React.JSX.Element {
     <div className="flex h-full flex-col gap-3 p-7 pt-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Character Editor</h1>
-        <div className="flex items-center gap-3">
-          <DebouncedInput
-            className="w-72"
-            type="search"
-            placeholder="Filter by id, name, dynasty, or file…"
-            value={globalFilter}
-            onChange={(v) => table.setGlobalFilter(v)}
-          />
-          {filtered && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <FilterX />
-              Clear
-            </Button>
-          )}
-          <span className="text-xs whitespace-nowrap text-muted-foreground">
-            {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
-          </span>
-        </div>
       </header>
 
       {(shownFavorites.length > 0 || shownRecents.length > 0 || shownDrafts.length > 0) && (
@@ -515,7 +508,25 @@ export default function CharacterEditorPage(): React.JSX.Element {
         onLayoutChanged={onLayoutChanged}
       >
         {characters.length > 0 && (
-          <ResizablePanel id="list" minSize={320} className="flex min-h-0 flex-col">
+          <ResizablePanel id="list" minSize={320} className="flex min-h-0 flex-col gap-2">
+            <div className="flex items-center justify-end gap-3">
+              <DebouncedInput
+                className="w-72"
+                type="search"
+                placeholder="Filter by id, name, dynasty, or file…"
+                value={globalFilter}
+                onChange={(v) => table.setGlobalFilter(v)}
+              />
+              {filtered && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  <FilterX />
+                  Clear
+                </Button>
+              )}
+              <span className="text-xs whitespace-nowrap text-muted-foreground">
+                {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
+              </span>
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
               <Table>
                 <TableHeader>
@@ -649,10 +660,10 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   if (selected) {
                     remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
                   }
-                  setSelected({ file, id: newId })
+                  void navigate({ to: '/characters', search: { file, id: newId }, replace: true })
                   reload()
                 }}
-                onClose={() => setSelected(null)}
+                onClose={closeCharacter}
               />
             </ResizablePanel>
           </>
