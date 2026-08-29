@@ -13,6 +13,7 @@ const settings: AppSettings = {
   selectedModFile: 'MockMod.mod',
   recentCharacters: {},
   favoriteCharacters: {},
+  draftCharacters: {},
   textEditorPath: null
 }
 
@@ -165,7 +166,11 @@ const mock: Ck3ToolsApi = {
     characters.map(({ id, name, dynasty, birth, file }) => ({ id, name, dynasty, birth, file })),
   getCharacter: async (_modPath, file, id) =>
     structuredClone(characters.find((c) => c.file === file && c.id === id) ?? null),
-  saveCharacter: async () => ({ ok: true }),
+  saveCharacter: async (_modPath, file, originalId, detail) => {
+    const i = characters.findIndex((c) => c.file === file && c.id === originalId)
+    if (i >= 0) characters[i] = structuredClone(detail)
+    return { ok: true }
+  },
   getTraitIcons: async (_g, _m, _r, traits) =>
     Object.fromEntries(traits.map((t) => [t, null])),
   getReferenceData: async () => ({

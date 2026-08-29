@@ -9,8 +9,25 @@ export interface AppSettings {
   recentCharacters: Record<string, CharacterRef[]>
   /** Favorited characters per mod (.mod file name → refs in the order they were starred) */
   favoriteCharacters: Record<string, CharacterRef[]>
+  /**
+   * Unsaved character edits per mod, VS Code-style: everything stays draft
+   * until saved or reverted, surviving navigation and app restarts.
+   * Keyed .mod file name → "file:id" (id as it exists in the file).
+   */
+  draftCharacters: Record<string, Record<string, CharacterDraft>>
   /** Absolute path to the preferred text editor executable; null = system Notepad */
   textEditorPath: string | null
+}
+
+export interface CharacterDraft {
+  /** The edited, unsaved state */
+  draft: CharacterDetail
+  /**
+   * Parse of the character at the time the draft was last touched, used to
+   * detect that the file changed on disk (e.g. in an external editor) while
+   * the draft was dormant.
+   */
+  original: CharacterDetail
 }
 
 export interface CharacterRef {
