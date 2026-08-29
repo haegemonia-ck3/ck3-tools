@@ -23,6 +23,16 @@ import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
 import DebouncedInput from '../components/DebouncedInput'
 import Reference from '../components/Reference'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -189,6 +199,15 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const [selected, setSelected] = useState<{ file: string; id: string } | null>(null)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
   const [showAllRecents, setShowAllRecents] = useState(false)
+  const [panelDirty, setPanelDirty] = useState(false)
+  /** A navigation held back by unsaved edits, waiting on the confirm dialog */
+  const [pendingNav, setPendingNav] = useState<{ run: () => void } | null>(null)
+  /**
+   * Who the pending prompt is about. Held separately from `pendingNav`, and
+   * never cleared, so the dialog keeps naming the character being left behind
+   * while it animates out instead of blanking or following the new selection.
+   */
+  const [pendingLabel, setPendingLabel] = useState('This character')
 
   const modPath = selectedMod?.path ?? null
   const modKey = selectedMod?.file ?? null
@@ -220,6 +239,27 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const openCharacter = (ref: CharacterRef): void => {
     setSelected({ file: ref.file, id: ref.id })
     recordVisit(ref)
+  }
+
+  /**
+   * Leaving the detail panel throws away its draft, so anything that changes
+   * or clears the selection goes through here: with unsaved edits it parks the
+   * navigation until the user confirms, otherwise it runs straight away.
+   */
+  const guardNav = (run: () => void): void => {
+    if (!panelDirty) {
+      run()
+      return
+    }
+    const current = selected && characters.find((c) => sameChar(c, selected))
+    setPendingLabel(current?.name ?? selected?.id ?? 'This character')
+    setPendingNav({ run })
+  }
+
+  const confirmNav = (): void => {
+    pendingNav?.run()
+    setPendingNav(null)
+    setPanelDirty(false)
   }
 
   /** Point recents/favorites at a character's new id after a save renames it. */
@@ -321,7 +361,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
         size="xs"
         className={cn('max-w-56 rounded-full', active && 'border-primary/50 bg-muted')}
         title={`${ref.id} — ${ref.file}`}
-        onClick={() => openCharacter(ref)}
+        onClick={() => guardNav(() => openCharacter(ref))}
       >
         {isFavorite(ref) && <Star className="fill-current text-amber-500" />}
         <span className="truncate">{label}</span>
@@ -436,11 +476,13 @@ export default function CharacterEditorPage(): React.JSX.Element {
                       className="group cursor-pointer"
                       data-state={isSelected ? 'selected' : undefined}
                       onClick={() =>
-                        openCharacter({
-                          file: row.original.file,
-                          id: row.original.id,
-                          name: row.original.name
-                        })
+                        guardNav(() =>
+                          openCharacter({
+                            file: row.original.file,
+                            id: row.original.id,
+                            name: row.original.name
+                          })
+                        )
                       }
                     >
                       <TableCell className="w-9 py-0 pr-0 pl-2">
@@ -491,8 +533,11 @@ export default function CharacterEditorPage(): React.JSX.Element {
                 toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
                 return
               }
-              openCharacter({ file: target.file, id: target.id, name: target.name })
+              guardNav(() =>
+                openCharacter({ file: target.file, id: target.id, name: target.name })
+              )
             }}
+            onDirtyChange={setPanelDirty}
             onSaved={(file, newId) => {
               if (selected) {
                 remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
@@ -500,10 +545,30 @@ export default function CharacterEditorPage(): React.JSX.Element {
               setSelected({ file, id: newId })
               reload()
             }}
-            onClose={() => setSelected(null)}
+            onClose={() => guardNav(() => setSelected(null))}
           />
         )}
       </div>
+
+      <AlertDialog
+        open={pendingNav !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingNav(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingLabel} has edits that haven&apos;t been saved. Leaving now discards them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmNav}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

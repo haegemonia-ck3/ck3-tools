@@ -40,6 +40,11 @@ interface Props {
   characterIds: string[]
   /** Switch the editor to another character in the mod (father/mother jump) */
   onNavigate: (id: string) => void
+  /**
+   * Reports whether the draft has unsaved edits, so the page can warn before
+   * navigating away. Must be referentially stable (a useState setter).
+   */
+  onDirtyChange: (dirty: boolean) => void
   /** Called after a successful save; newId may differ from the selected id */
   onSaved: (file: string, newId: string) => void
   onClose: () => void
@@ -54,6 +59,7 @@ export default function CharacterDetailPanel({
   refData,
   characterIds,
   onNavigate,
+  onDirtyChange,
   onSaved,
   onClose
 }: Props): React.JSX.Element {
@@ -76,6 +82,16 @@ export default function CharacterDetailPanel({
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft?.traits ?? [])
 
+  // Computed before the early return below so the hook order stays stable
+  const dirty =
+    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
+
+  useEffect(() => {
+    onDirtyChange(dirty)
+    // Closing the panel drops the draft, so it is no longer holding edits
+    return () => onDirtyChange(false)
+  }, [dirty, onDirtyChange])
+
   if (!draft || !original) {
     return (
       <Card className="flex w-100 shrink-0 flex-col gap-0 py-0">
@@ -92,7 +108,6 @@ export default function CharacterDetailPanel({
     )
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(original)
   const set = (patch: Partial<CharacterDetail>): void => {
     setDraft({ ...draft, ...patch })
     setSavedFlash(false)
