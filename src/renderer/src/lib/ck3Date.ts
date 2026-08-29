@@ -43,3 +43,43 @@ export function formatCalendarDate(
   const m = YEAR_RE.exec(value.trim())
   return m ? formatCalendarYear(Number(m[1]), calendar) : null
 }
+
+export type CalendarEra = 'before' | 'after'
+
+export interface CalendarInputValue {
+  /** The date with its year rewritten era-relative: raw "3220.1.1" → "780.1.1" */
+  text: string
+  era: CalendarEra
+}
+
+// Splits the year off a date-ish string, keeping the rest (".1.1", a trailing
+// typo dot, …) verbatim so converting there and back is lossless.
+const LEADING_YEAR_RE = /^(\d{1,4})([\s\S]*)$/
+
+/** Raw file date → era-relative editing form, or null when no year can be read. */
+export function toCalendarInput(value: string, calendar: CalendarConfig): CalendarInputValue | null {
+  const m = LEADING_YEAR_RE.exec(value.trim())
+  if (!m) return null
+  const year = Number(m[1])
+  return year < calendar.epochYear
+    ? { text: `${calendar.epochYear - year}${m[2]}`, era: 'before' }
+    : { text: `${year - calendar.epochYear + 1}${m[2]}`, era: 'after' }
+}
+
+/**
+ * Era-relative text back to a raw file date. Null when no year can be read or
+ * the year doesn't fit the raw 0–9999 range (e.g. a "before" year beyond the
+ * epoch) — callers should drop the edit rather than store something misread.
+ */
+export function fromCalendarInput(
+  text: string,
+  era: CalendarEra,
+  calendar: CalendarConfig
+): string | null {
+  const m = LEADING_YEAR_RE.exec(text.trim())
+  if (!m) return null
+  const year = Number(m[1])
+  const raw = era === 'before' ? calendar.epochYear - year : calendar.epochYear + year - 1
+  if (raw < 0 || raw > 9999) return null
+  return `${raw}${m[2]}`
+}

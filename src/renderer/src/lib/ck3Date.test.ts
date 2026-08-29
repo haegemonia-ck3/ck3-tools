@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatCalendarDate, formatCalendarYear, isValidCK3Date } from './ck3Date'
+import {
+  formatCalendarDate,
+  formatCalendarYear,
+  fromCalendarInput,
+  isValidCK3Date,
+  toCalendarInput
+} from './ck3Date'
 import type { CalendarConfig } from '@shared/types'
 
 describe('isValidCK3Date', () => {
@@ -92,5 +98,39 @@ describe('formatCalendarDate', () => {
     expect(formatCalendarDate(null, bcAd)).toBeNull()
     expect(formatCalendarDate('', bcAd)).toBeNull()
     expect(formatCalendarDate('abc', bcAd)).toBeNull()
+  })
+})
+
+describe('toCalendarInput / fromCalendarInput', () => {
+  it('rewrites the year era-relative, keeping the rest of the date verbatim', () => {
+    expect(toCalendarInput('3220.1.1', bcAd)).toEqual({ text: '780.1.1', era: 'before' })
+    expect(toCalendarInput('4779.6.3', bcAd)).toEqual({ text: '780.6.3', era: 'after' })
+    // typo forms round-trip untouched past the year
+    expect(toCalendarInput('3220.1.1.', bcAd)).toEqual({ text: '780.1.1.', era: 'before' })
+    expect(toCalendarInput('3212.1', bcAd)).toEqual({ text: '788.1', era: 'before' })
+  })
+
+  it('converts era-relative text back to raw file dates', () => {
+    expect(fromCalendarInput('780.1.1', 'before', bcAd)).toBe('3220.1.1')
+    expect(fromCalendarInput('780.1.1', 'after', bcAd)).toBe('4779.1.1')
+    expect(fromCalendarInput('1.1.1', 'before', bcAd)).toBe('3999.1.1')
+    expect(fromCalendarInput('1.1.1', 'after', bcAd)).toBe('4000.1.1')
+  })
+
+  it('round-trips through both directions', () => {
+    for (const raw of ['3220.1.1', '3999.12.31', '4000.1.1', '4780.2.2', '3220.1.1.', '3212.1']) {
+      const converted = toCalendarInput(raw, bcAd)!
+      expect(fromCalendarInput(converted.text, converted.era, bcAd)).toBe(raw)
+    }
+  })
+
+  it('rejects input it cannot faithfully represent', () => {
+    expect(toCalendarInput('abc', bcAd)).toBeNull()
+    expect(fromCalendarInput('abc', 'before', bcAd)).toBeNull()
+    expect(fromCalendarInput('', 'before', bcAd)).toBeNull()
+    // a "before" year past the epoch would need a negative raw year
+    expect(fromCalendarInput('4001.1.1', 'before', bcAd)).toBeNull()
+    // and an "after" year past 9999 - epoch overflows the 4-digit raw year
+    expect(fromCalendarInput('6001.1.1', 'after', bcAd)).toBeNull()
   })
 })

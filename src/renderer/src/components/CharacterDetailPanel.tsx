@@ -18,8 +18,22 @@ import { Card } from '@/components/ui/card'
 import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { formatCalendarDate, isValidCK3Date } from '@/lib/ck3Date'
+import {
+  formatCalendarDate,
+  fromCalendarInput,
+  isValidCK3Date,
+  toCalendarInput
+} from '@/lib/ck3Date'
+import type { CalendarEra } from '@/lib/ck3Date'
 
 /** Dropdown row for the trait picker; fetches its own icon (module-level cached) */
 function TraitOption({ trait, iconCtx }: { trait: string; iconCtx: IconContext }): React.JSX.Element {
@@ -83,6 +97,8 @@ export default function CharacterDetailPanel({
   const [savedFlash, setSavedFlash] = useState(false)
   /** The file changed on disk while this draft was dormant (external edit) */
   const [stale, setStale] = useState(false)
+  /** Show file years instead of the mod calendar's era years in the date inputs */
+  const [showRawDates, setShowRawDates] = useState(false)
 
   /** Debounced draft persist waiting to fire; flushed before switching characters */
   const pendingPersist = useRef<(() => void) | null>(null)
@@ -212,6 +228,66 @@ export default function CharacterDetailPanel({
     </div>
   )
 
+  /**
+   * Birth/death input. With a mod calendar in era mode, the input edits the
+   * era-relative year ("780.1.1" plus a BC/AD select) while the draft keeps
+   * storing the raw file date — both directions are pure conversions, so the
+   * dirty/persist/validation machinery works on raw values as before.
+   */
+  const dateField = (
+    label: string,
+    value: string | null,
+    onChange: (v: string | null) => void,
+    opts: { invalid?: boolean; placeholder?: string }
+  ): React.JSX.Element => {
+    if (!calendar || showRawDates) {
+      return textField(label, value, onChange, {
+        ...opts,
+        hint: formatCalendarDate(value, calendar)
+      })
+    }
+    const converted = value === null ? null : toCalendarInput(value, calendar)
+    const era: CalendarEra = converted?.era ?? 'before'
+    const change = (text: string, nextEra: CalendarEra): void => {
+      if (text === '') {
+        onChange(null)
+        return
+      }
+      // A misread edit (no year, or one outside the raw 0–9999 range) is
+      // dropped rather than stored as something it doesn't mean.
+      const raw = fromCalendarInput(text, nextEra, calendar)
+      if (raw !== null) onChange(raw)
+    }
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
+        <div className="flex gap-1.5">
+          <Input
+            type="text"
+            className="min-w-0 flex-1"
+            value={converted?.text ?? value ?? ''}
+            placeholder={opts.placeholder}
+            aria-invalid={opts.invalid || undefined}
+            onChange={(e) => change(e.target.value, era)}
+          />
+          <Select
+            value={era}
+            onValueChange={(v) => converted && change(converted.text, v as CalendarEra)}
+          >
+            <SelectTrigger aria-label="Era" className="shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="before">{calendar.beforeLabel}</SelectItem>
+              <SelectItem value="after">{calendar.afterLabel}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {value !== null && <p className="text-xs text-muted-foreground">{value}</p>}
+      </div>
+    )
+  }
+
   const refField = (
     label: string,
     kind: RefKind,
@@ -278,17 +354,33 @@ export default function CharacterDetailPanel({
         </FieldSet>
 
         <FieldSet className="gap-3.5">
-          <FieldLegend variant="label" className="mb-0">Life &amp; lineage</FieldLegend>
+          <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
+            Life &amp; lineage
+            {calendar && (
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={0}
+                value={showRawDates ? 'raw' : 'era'}
+                onValueChange={(v) => v && setShowRawDates(v === 'raw')}
+                aria-label="Date display mode"
+              >
+                <ToggleGroupItem value="era">
+                  {calendar.beforeLabel}/{calendar.afterLabel}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="raw">File</ToggleGroupItem>
+              </ToggleGroup>
+            )}
+          </FieldLegend>
           <div className="flex gap-2.5 *:flex-1">
-            {textField('Birth', draft.birth, (v) => set({ birth: v }), {
+            {dateField('Birth', draft.birth, (v) => set({ birth: v }), {
               invalid: badBirth,
-              placeholder: 'Y.M.D',
-              hint: formatCalendarDate(draft.birth, calendar)
+              placeholder: 'Y.M.D'
             })}
-            {textField('Death', draft.death, (v) => set({ death: v }), {
+            {dateField('Death', draft.death, (v) => set({ death: v }), {
               invalid: badDeath,
-              placeholder: 'alive',
-              hint: formatCalendarDate(draft.death, calendar)
+              placeholder: 'alive'
             })}
           </div>
           {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}
