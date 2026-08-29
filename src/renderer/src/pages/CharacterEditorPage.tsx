@@ -13,9 +13,22 @@ import {
   useTable
 } from '@tanstack/react-table'
 import type { Row, SortFn } from '@tanstack/react-table'
+import { Star } from 'lucide-react'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 import type { AppSettings, CharacterRef, CharacterSummary, ReferenceData } from '@shared/types'
 
 const RECENTS_CAP = 10
@@ -55,25 +68,25 @@ const columns = columnHelper.columns([
   columnHelper.accessor('id', {
     header: 'ID',
     sortFn: bySortableString,
-    cell: (info) => <span className="col-id">{info.getValue()}</span>
+    cell: (info) => <span className="font-mono">{info.getValue()}</span>
   }),
   columnHelper.accessor('name', {
     header: 'Name',
-    cell: (info) => info.getValue() ?? <em className="dim">unnamed</em>
+    cell: (info) => info.getValue() ?? <em className="text-muted-foreground">unnamed</em>
   }),
   columnHelper.accessor('dynasty', {
     header: 'Dynasty',
     sortFn: bySortableString,
-    cell: (info) => info.getValue() ?? <em className="dim">—</em>
+    cell: (info) => info.getValue() ?? <em className="text-muted-foreground">—</em>
   }),
   columnHelper.accessor('birth', {
     header: 'Birth',
     sortFn: bySortableString,
-    cell: (info) => info.getValue() ?? <em className="dim">—</em>
+    cell: (info) => info.getValue() ?? <em className="text-muted-foreground">—</em>
   }),
   columnHelper.accessor('file', {
     header: 'File',
-    cell: (info) => <span className="col-file">{info.getValue()}</span>
+    cell: (info) => <span className="font-mono text-muted-foreground">{info.getValue()}</span>
   })
 ])
 
@@ -174,9 +187,9 @@ export default function CharacterEditorPage(): React.JSX.Element {
 
   if (!selectedMod) {
     return (
-      <div className="page">
-        <header className="page-header">
-          <h1>Character Editor</h1>
+      <div className="max-w-4xl space-y-5 p-7">
+        <header>
+          <h1 className="text-2xl font-semibold">Character Editor</h1>
         </header>
         <ModPicker />
       </div>
@@ -198,56 +211,60 @@ export default function CharacterEditorPage(): React.JSX.Element {
 
   const chip = (ref: CharacterRef): React.JSX.Element => {
     const label = byKey.get(`${ref.file}:${ref.id}`)?.name ?? ref.name ?? ref.id
+    const active = selected !== null && sameChar(ref, selected)
     return (
-      <button
+      <Button
         key={`${ref.file}:${ref.id}`}
-        className={`char-chip${selected && sameChar(ref, selected) ? ' active' : ''}`}
+        variant="outline"
+        size="xs"
+        className={cn('max-w-56 rounded-full', active && 'border-primary/50 bg-muted')}
         title={`${ref.id} — ${ref.file}`}
         onClick={() => openCharacter(ref)}
       >
-        {isFavorite(ref) && <span className="chip-star">★</span>}
-        {label}
-      </button>
+        {isFavorite(ref) && <Star className="fill-current text-amber-500" />}
+        <span className="truncate">{label}</span>
+      </Button>
     )
   }
 
   return (
-    <div className="page page-wide">
-      <header className="page-header">
-        <h1>Character Editor</h1>
-        <div className="header-tools">
-          <input
-            className="search-input"
+    <div className="flex h-full flex-col gap-3 p-7 pt-6">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Character Editor</h1>
+        <div className="flex items-center gap-3">
+          <Input
+            className="w-72"
             type="search"
             placeholder="Filter by id, name, dynasty, or file…"
             value={(table.state.globalFilter as string | undefined) ?? ''}
             onChange={(e) => table.setGlobalFilter(e.target.value)}
           />
-          <span className="hint hint-inline">
+          <span className="text-xs whitespace-nowrap text-muted-foreground">
             {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
           </span>
         </div>
       </header>
 
       {(shownFavorites.length > 0 || shownRecents.length > 0) && (
-        <div className="quick-access">
+        <div className="space-y-1.5">
           {shownFavorites.length > 0 && (
-            <div className="quick-row">
-              <span className="quick-label">Favorites</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                Favorites
+              </span>
               {shownFavorites.map(chip)}
             </div>
           )}
           {shownRecents.length > 0 && (
-            <div className="quick-row">
-              <span className="quick-label">Recent</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="w-16 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                Recent
+              </span>
               {visibleRecents.map(chip)}
               {shownRecents.length > RECENTS_COLLAPSED && (
-                <button
-                  className="quick-toggle"
-                  onClick={() => setShowAllRecents((v) => !v)}
-                >
+                <Button variant="ghost" size="xs" onClick={() => setShowAllRecents((v) => !v)}>
                   {showAllRecents ? 'Show less' : `Show more (${shownRecents.length - RECENTS_COLLAPSED})`}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -255,96 +272,104 @@ export default function CharacterEditorPage(): React.JSX.Element {
       )}
 
       {!loading && characters.length === 0 && (
-        <section className="card">
-          <p className="hint">
-            No characters found in {selectedMod.name}'s <code>history/characters</code> folder.
-          </p>
-        </section>
+        <Card>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              No characters found in {selectedMod.name}&apos;s{' '}
+              <code className="font-mono">history/characters</code> folder.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="editor-split">
-      {characters.length > 0 && (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id}>
-                  <th className="col-star" aria-label="Favorite" />
-                  {hg.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className={header.column.id === 'id' ? 'col-id' : ''}
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      <span className="th-label">
+      <div className="flex min-h-0 flex-1 gap-4">
+        {characters.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((hg) => (
+                  <TableRow key={hg.id} className="hover:bg-transparent">
+                    <TableHead className="sticky top-0 z-10 w-9 bg-card" aria-label="Favorite" />
+                    {hg.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className="sticky top-0 z-10 cursor-pointer bg-card select-none hover:text-primary"
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className={
-                    selected && `${selected.file}:${selected.id}` === row.id ? 'selected' : ''
-                  }
-                  onClick={() =>
-                    openCharacter({
-                      file: row.original.file,
-                      id: row.original.id,
-                      name: row.original.name
-                    })
-                  }
-                >
-                  <td className="col-star">
-                    <button
-                      className={`star-btn${isFavorite(row.original) ? ' favorited' : ''}`}
-                      title={isFavorite(row.original) ? 'Remove from favorites' : 'Add to favorites'}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleFavorite({
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const isSelected = selected !== null && `${selected.file}:${selected.id}` === row.id
+                  return (
+                    <TableRow
+                      key={row.id}
+                      className="group cursor-pointer"
+                      data-state={isSelected ? 'selected' : undefined}
+                      onClick={() =>
+                        openCharacter({
                           file: row.original.file,
                           id: row.original.id,
                           name: row.original.name
                         })
-                      }}
+                      }
                     >
-                      {isFavorite(row.original) ? '★' : '☆'}
-                    </button>
-                  </td>
-                  {row.getAllCells().map((cell) => (
-                    <td key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {selected && modPath && (
-        <CharacterDetailPanel
-          modPath={modPath}
-          file={selected.file}
-          id={selected.id}
-          gameDir={settings?.gameDir ?? null}
-          replacePaths={selectedMod?.replacePaths ?? []}
-          refData={refData}
-          onSaved={(file, newId) => {
-            if (selected) {
-              remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
-            }
-            setSelected({ file, id: newId })
-            reload()
-          }}
-          onClose={() => setSelected(null)}
-        />
-      )}
+                      <TableCell className="w-9 py-0 pr-0 pl-2">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className={cn(
+                            'text-muted-foreground opacity-40 group-hover:opacity-100 hover:text-amber-500',
+                            isFavorite(row.original) && 'text-amber-500 opacity-100'
+                          )}
+                          title={isFavorite(row.original) ? 'Remove from favorites' : 'Add to favorites'}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleFavorite({
+                              file: row.original.file,
+                              id: row.original.id,
+                              name: row.original.name
+                            })
+                          }}
+                        >
+                          <Star className={cn(isFavorite(row.original) && 'fill-current')} />
+                        </Button>
+                      </TableCell>
+                      {row.getAllCells().map((cell) => (
+                        <TableCell key={cell.id} className="max-w-70 truncate">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {selected && modPath && (
+          <CharacterDetailPanel
+            modPath={modPath}
+            file={selected.file}
+            id={selected.id}
+            gameDir={settings?.gameDir ?? null}
+            replacePaths={selectedMod?.replacePaths ?? []}
+            refData={refData}
+            onSaved={(file, newId) => {
+              if (selected) {
+                remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+              }
+              setSelected({ file, id: newId })
+              reload()
+            }}
+            onClose={() => setSelected(null)}
+          />
+        )}
       </div>
     </div>
   )

@@ -1,5 +1,12 @@
 {
   "files": [],
+  "compilerOptions": {
+    // Not used by tsc (solution file) — lets tools like the shadcn CLI resolve aliases
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@/*": ["./src/renderer/src/*"]
+    }
+  },
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "./tsconfig.web.json" }

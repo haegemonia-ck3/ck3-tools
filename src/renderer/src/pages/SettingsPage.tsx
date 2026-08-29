@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import type { DirValidation } from '@shared/types'
 
 function PathRow({
@@ -14,19 +18,27 @@ function PathRow({
   validation: DirValidation | null
   onBrowse: () => void
 }): React.JSX.Element {
+  const invalid = validation !== null && !validation.valid
   return (
-    <div className="path-row">
-      <div className="path-label">{label}</div>
-      <div className="path-controls">
-        <div className={`path-value ${validation && !validation.valid ? 'invalid' : ''}`}>
-          {value ?? <em>not set</em>}
-          {validation?.valid && <span className="check">✓</span>}
+    <div className="space-y-1.5">
+      <div className="text-sm text-muted-foreground">{label}</div>
+      <div className="flex gap-2">
+        <div
+          className={cn(
+            'flex min-w-0 flex-1 select-text items-center gap-2 overflow-hidden rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs whitespace-nowrap',
+            invalid && 'border-destructive'
+          )}
+        >
+          <span className="truncate">
+            {value ?? <em className="text-muted-foreground">not set</em>}
+          </span>
+          {validation?.valid && <Check className="ml-auto size-3.5 shrink-0 text-green-600 dark:text-green-500" />}
         </div>
-        <button className="btn" onClick={onBrowse}>
+        <Button variant="outline" onClick={onBrowse}>
           Browse…
-        </button>
+        </Button>
       </div>
-      {validation && !validation.valid && <div className="path-error">{validation.reason}</div>}
+      {invalid && <p className="text-xs text-destructive">{validation.reason}</p>}
     </div>
   )
 }
@@ -79,29 +91,33 @@ export default function SettingsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="page">
-      <header className="page-header">
-        <h1>Settings</h1>
-        <button className="btn" onClick={redetect} disabled={detecting}>
+    <div className="max-w-4xl space-y-5 p-7">
+      <header className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Settings</h1>
+        <Button variant="outline" onClick={redetect} disabled={detecting}>
           {detecting ? 'Detecting…' : 'Auto-detect paths'}
-        </button>
+        </Button>
       </header>
 
-      <section className="card">
-        <h2>Directories</h2>
-        <PathRow
-          label="CK3 game directory"
-          value={settings.gameDir}
-          validation={gameValidation}
-          onBrowse={browseGame}
-        />
-        <PathRow
-          label="Mod directory"
-          value={settings.modDir}
-          validation={modValidation}
-          onBrowse={browseMod}
-        />
-      </section>
+      <Card>
+        <CardHeader>
+          <CardTitle>Directories</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <PathRow
+            label="CK3 game directory"
+            value={settings.gameDir}
+            validation={gameValidation}
+            onBrowse={browseGame}
+          />
+          <PathRow
+            label="Mod directory"
+            value={settings.modDir}
+            validation={modValidation}
+            onBrowse={browseMod}
+          />
+        </CardContent>
+      </Card>
 
       <ModPicker />
     </div>

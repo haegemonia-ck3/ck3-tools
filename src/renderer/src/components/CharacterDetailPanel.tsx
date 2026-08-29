@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import type { CharacterDetail, ReferenceData } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
 import TraitPicker from './TraitPicker'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 interface Props {
   modPath: string
@@ -50,15 +58,17 @@ export default function CharacterDetailPanel({
 
   if (!draft || !original) {
     return (
-      <aside className="detail-panel">
-        <div className="detail-header">
-          <h2>Character</h2>
-          <button className="btn btn-small" onClick={onClose}>
-            ✕
-          </button>
+      <Card className="flex w-100 shrink-0 flex-col gap-0 py-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <h2 className="font-semibold">Character</h2>
+          <Button variant="ghost" size="icon-sm" onClick={onClose}>
+            <X />
+          </Button>
         </div>
-        <p className="hint">{original === null ? 'Loading…' : 'Character not found.'}</p>
-      </aside>
+        <p className="p-4 text-sm text-muted-foreground">
+          {original === null ? 'Loading…' : 'Character not found.'}
+        </p>
+      </Card>
     )
   }
 
@@ -107,36 +117,38 @@ export default function CharacterDetailPanel({
     onChange: (v: string | null) => void,
     opts: { listId?: string; invalid?: boolean; placeholder?: string } = {}
   ): React.JSX.Element => (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      <input
-        className={`field-input ${opts.invalid ? 'invalid' : ''}`}
+    <div className="space-y-1.5">
+      <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
+      <Input
         type="text"
         list={opts.listId}
         value={value ?? ''}
         placeholder={opts.placeholder}
+        aria-invalid={opts.invalid || undefined}
         onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
       />
-    </label>
+    </div>
   )
 
   return (
-    <aside className="detail-panel">
-      <div className="detail-header">
-        <h2>
-          {original.name ?? original.id}
-          {dirty && <span className="dirty-dot" title="Unsaved changes" />}
+    <Card className="flex min-h-0 w-100 shrink-0 flex-col gap-0 py-0">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <h2 className="flex items-center gap-2 font-semibold text-primary">
+        {original.name ?? original.id}
+          {dirty && (
+            <span className="size-2 rounded-full bg-primary" title="Unsaved changes" />
+          )}
         </h2>
-        <button className="btn btn-small" onClick={onClose}>
-          ✕
-        </button>
+        <Button variant="ghost" size="icon-sm" onClick={onClose}>
+          <X />
+        </Button>
       </div>
 
-      <div className="detail-body">
+      <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-4">
         {textField('ID', draft.id, (v) => set({ id: v ?? '' }))}
         {textField('Name', draft.name, (v) => set({ name: v }))}
         {textField('Dynasty', draft.dynasty, (v) => set({ dynasty: v }))}
-        <div className="field-row">
+        <div className="flex gap-2.5 *:flex-1">
           {textField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
             placeholder: 'Y.M.D'
@@ -149,26 +161,28 @@ export default function CharacterDetailPanel({
         {textField('Culture', draft.culture, (v) => set({ culture: v }), { listId: 'dl-cultures' })}
         {textField('Faith', draft.faith, (v) => set({ faith: v }), { listId: 'dl-faiths' })}
 
-        <div className="field">
-          <span className="field-label">Traits</span>
-          <div className="trait-chips">
+        <div className="space-y-1.5">
+          <Label className="text-xs tracking-wide text-muted-foreground uppercase">Traits</Label>
+          <div className="flex min-h-6 flex-wrap gap-1.5">
             {draft.traits.map((t) => {
               const icon = iconFor(t)
               return (
-                <span key={t} className="chip">
-                  {icon && <img className="trait-icon" src={icon} alt="" />}
+                <Badge key={t} variant="secondary" className="gap-1 pr-1">
+                  {icon && <img className="-ml-1 size-5 object-contain" src={icon} alt="" />}
                   {t}
-                  <button
-                    className="chip-x"
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="size-4 text-muted-foreground hover:text-destructive"
                     title={`Remove ${t}`}
                     onClick={() => set({ traits: draft.traits.filter((x) => x !== t) })}
                   >
-                    ×
-                  </button>
-                </span>
+                    <X />
+                  </Button>
+                </Badge>
               )
             })}
-            {draft.traits.length === 0 && <span className="dim">none</span>}
+            {draft.traits.length === 0 && <span className="text-sm text-muted-foreground">none</span>}
           </div>
           <TraitPicker
             available={refData?.traits ?? []}
@@ -178,14 +192,13 @@ export default function CharacterDetailPanel({
           />
         </div>
 
-        <div className="field">
-          <span className="field-label">Stats</span>
-          <div className="stats-grid">
+        <div className="space-y-1.5">
+          <Label className="text-xs tracking-wide text-muted-foreground uppercase">Stats</Label>
+          <div className="grid grid-cols-3 gap-2">
             {STAT_LABELS.map(([key, label]) => (
-              <label key={key} className="stat-field">
+              <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
                 <span>{label}</span>
-                <input
-                  className="field-input"
+                <Input
                   type="number"
                   value={draft.stats[key] ?? ''}
                   placeholder="—"
@@ -203,13 +216,24 @@ export default function CharacterDetailPanel({
           </div>
         </div>
 
-        {error && <div className="save-error">{error}</div>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
       </div>
 
-      <div className="detail-footer">
-        {savedFlash && !dirty && <span className="saved-note">Saved ✓</span>}
-        <button
-          className="btn"
+      <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+        <span
+          className={cn(
+            'mr-auto text-sm text-green-600 dark:text-green-500',
+            !(savedFlash && !dirty) && 'invisible'
+          )}
+        >
+          Saved ✓
+        </span>
+        <Button
+          variant="outline"
           disabled={!dirty || saving}
           onClick={() => {
             setDraft(structuredClone(original))
@@ -217,14 +241,13 @@ export default function CharacterDetailPanel({
           }}
         >
           Revert
-        </button>
-        <button
-          className="btn btn-primary"
+        </Button>
+        <Button
           disabled={!dirty || saving || badBirth || badDeath || !draft.id.trim()}
           onClick={save}
         >
           {saving ? 'Saving…' : 'Save'}
-        </button>
+        </Button>
       </div>
 
       {refData && (
@@ -241,6 +264,6 @@ export default function CharacterDetailPanel({
           </datalist>
         </>
       )}
-    </aside>
+    </Card>
   )
 }

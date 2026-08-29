@@ -5,7 +5,8 @@ Electron-based suite of editing tools for Crusader Kings III. Planned tools: Cha
 ## Stack
 
 - Electron + electron-vite + React 19 + TypeScript (strict)
-- No router/state library yet — navigation is a `useState<PageId>` in `App.tsx`, shared state via `AppContext.tsx`
+- TanStack Router (code-based routes in `src/renderer/src/router.tsx`, hash history for `file://` compat); shared state via `AppContext.tsx`
+- Tailwind CSS v4 + shadcn/ui (all components installed under `src/renderer/src/components/ui/`, themed via a shadcn preset in `styles.css`)
 
 ## Commands
 
@@ -17,8 +18,15 @@ Electron-based suite of editing tools for Crusader Kings III. Planned tools: Cha
 
 - `src/main/` — main process. `ck3.ts` has install/mod detection (Steam via registry + libraryfolders.vdf, `.mod` descriptor parsing). `pdx.ts` is the shared Paradox-script scanner: `scanBlocks` returns exact byte spans over RAW text (comment/quote-aware) so edits can splice blocks while leaving the rest of a file byte-identical — `saveCharacter` in `characters.ts` relies on this; a no-op save must round-trip byte-for-byte. `refdata.ts` collects culture/faith/trait ids by layering mod files over game files (mod file with same relative path wins; `replace_path` folders exclude game files entirely). `settings.ts` persists JSON to `%APPDATA%/ck3-tools/settings.json`.
 - `src/preload/index.ts` — contextBridge API exposed as `window.ck3tools`; types in `index.d.ts` (kept self-contained so the web tsconfig can include it).
-- `src/renderer/src/` — React app. `AppContext.tsx` loads settings, auto-detects missing paths on first run, and holds the mod list. Pages live in `pages/`.
+- `src/renderer/src/` — React app. `AppContext.tsx` loads settings, auto-detects missing paths on first run, and holds the mod list. Routes in `router.tsx`, layout in `RootLayout.tsx`, pages in `pages/`, shadcn primitives in `components/ui/`.
+- `vite.config.ts` at the root is a stub so tooling (shadcn CLI) detects a Vite project — the real config is `electron.vite.config.ts`; make build changes there.
 - `src/shared/types.ts` — types shared across processes (aliased as `@shared`).
+
+## UI components (IMPORTANT)
+
+- ALWAYS build UI from the existing shadcn/ui components in `src/renderer/src/components/ui/` (composed with Tailwind utility classes) rather than hand-rolling your own markup, CSS, or lookalike components. Check what's there first — every shadcn component is already installed (button, input, card, table, dialog, popover, command, sidebar, field, …).
+- Do NOT create a new UI primitive or edit any file in `components/ui/` without asking the user for permission first. These files are managed by the shadcn CLI and themed by a preset; local edits can be clobbered and one-off primitives fragment the design system. App-specific composites (like `TraitPicker`) belong in `components/`, built on top of the `ui/` primitives.
+- Theme tokens (colors, radius, fonts) live in `src/renderer/src/styles.css` as CSS variables applied by the shadcn preset — use the semantic Tailwind classes (`bg-background`, `text-muted-foreground`, `border-input`, …), never hard-coded colors.
 
 ## Conventions
 

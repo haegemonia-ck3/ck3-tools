@@ -1,10 +1,14 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import App from './App'
+import { RouterProvider } from '@tanstack/react-router'
+import { AppProvider } from './AppContext'
+import { router } from './router'
 import './styles.css'
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <AppProvider>
+      <RouterProvider router={router} />
+    </AppProvider>
   </React.StrictMode>
 )

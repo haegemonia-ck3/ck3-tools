@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
+import { Input } from '@/components/ui/input'
 
 interface Props {
   available: string[]
@@ -32,10 +33,9 @@ export default function TraitPicker({ available, exclude, iconCtx, onAdd }: Prop
   }
 
   return (
-    <div className="trait-picker">
-      <input
+    <div className="relative mt-1.5">
+      <Input
         ref={inputRef}
-        className="field-input"
         type="text"
         placeholder="Add trait…"
         value={query}
@@ -55,20 +55,24 @@ export default function TraitPicker({ available, exclude, iconCtx, onAdd }: Prop
         }}
       />
       {open && filtered.length > 0 && (
-        <div className="trait-dropdown">
+        <div className="absolute inset-x-0 top-full z-10 mt-1 max-h-75 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-md">
           {filtered.map((t) => {
             const icon = iconFor(t)
             return (
               <button
                 key={t}
-                className="trait-option"
+                className="flex w-full items-center gap-2.5 px-2.5 py-1.5 text-left text-sm hover:bg-muted hover:text-primary"
                 // mousedown fires before the input's blur closes the dropdown
                 onMouseDown={(e) => {
                   e.preventDefault()
                   add(t)
                 }}
               >
-                {icon ? <img className="trait-icon" src={icon} alt="" /> : <span className="trait-icon trait-icon-empty" />}
+                {icon ? (
+                  <img className="size-6 shrink-0 object-contain" src={icon} alt="" />
+                ) : (
+                  <span className="inline-block size-6 shrink-0" />
+                )}
                 {t}
               </button>
             )
