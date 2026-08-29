@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { CharacterDetail, RefKind, ReferenceData } from '@shared/types'
+import type { CharacterDetail, CharacterDraft, RefKind, ReferenceData } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
@@ -40,6 +40,13 @@ interface Props {
   characterIds: string[]
   /** Switch the editor to another character in the mod (father/mother jump) */
   onNavigate: (id: string) => void
+  /** Persisted unsaved edits for this character, if any; read once per open */
+  storedDraft: CharacterDraft | null
+  /**
+   * Persist (or clear, with null) the draft for a character in this file.
+   * Must be referentially stable.
+   */
+  onDraftChange: (file: string, id: string, entry: CharacterDraft | null) => void
   /** Called after a successful save; newId may differ from the selected id */
   onSaved: (file: string, newId: string) => void
   onClose: () => void
@@ -54,6 +61,8 @@ export default function CharacterDetailPanel({
   refData,
   characterIds,
   onNavigate,
+  storedDraft,
+  onDraftChange,
   onSaved,
   onClose
 }: Props): React.JSX.Element {
@@ -62,19 +71,59 @@ export default function CharacterDetailPanel({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
+  /** The file changed on disk while this draft was dormant (external edit) */
+  const [stale, setStale] = useState(false)
+
+  /** Debounced draft persist waiting to fire; flushed before switching characters */
+  const pendingPersist = useRef<(() => void) | null>(null)
+  const flushPersist = (): void => {
+    pendingPersist.current?.()
+    pendingPersist.current = null
+  }
 
   useEffect(() => {
     setOriginal(null)
     setDraft(null)
     setError(null)
+    setStale(false)
     window.ck3tools.getCharacter(modPath, file, id).then((d) => {
       setOriginal(d)
-      setDraft(d ? structuredClone(d) : null)
+      if (!d) {
+        setDraft(null)
+        return
+      }
+      // Resume a persisted draft; `original` stays the file's CURRENT state so
+      // dirty/save/revert all work against what's really on disk.
+      if (storedDraft) {
+        setDraft(structuredClone(storedDraft.draft))
+        setStale(JSON.stringify(storedDraft.original) !== JSON.stringify(d))
+      } else {
+        setDraft(structuredClone(d))
+      }
     })
+    return flushPersist
+    // storedDraft is read once per open on purpose: our own persists update it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath, file, id])
 
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft?.traits ?? [])
+
+  // Computed before the early return below so the hook order stays stable
+  const dirty =
+    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
+
+  // Persist the draft as it changes (cleared when it matches the file again),
+  // debounced so typing doesn't write settings.json per keystroke.
+  useEffect(() => {
+    if (!draft || !original) return undefined
+    const entry = dirty ? { draft, original } : null
+    const originalId = original.id
+    pendingPersist.current = () => onDraftChange(file, originalId, entry)
+    const t = setTimeout(flushPersist, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, original])
 
   if (!draft || !original) {
     return (
@@ -92,7 +141,6 @@ export default function CharacterDetailPanel({
     )
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(original)
   const set = (patch: Partial<CharacterDetail>): void => {
     setDraft({ ...draft, ...patch })
     setSavedFlash(false)
@@ -122,9 +170,13 @@ export default function CharacterDetailPanel({
         setError(result.error)
         return
       }
+      // Cancel any in-flight persist and clear the stored draft immediately
+      pendingPersist.current = null
+      onDraftChange(file, original.id, null)
       setOriginal(structuredClone(toSave))
       setDraft(toSave)
       setSavedFlash(true)
+      setStale(false)
       onSaved(file, toSave.id)
     } finally {
       setSaving(false)
@@ -201,6 +253,14 @@ export default function CharacterDetailPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-4">
+        {stale && (
+          <Alert>
+            <AlertDescription>
+              This character changed on disk while your draft was unsaved. Revert discards the
+              draft and loads the file&apos;s version.
+            </AlertDescription>
+          </Alert>
+        )}
         {textField('ID', draft.id, (v) => set({ id: v ?? '' }))}
         {textField('Name', draft.name, (v) => set({ name: v }))}
         {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}
@@ -286,8 +346,11 @@ export default function CharacterDetailPanel({
           variant="outline"
           disabled={!dirty || saving}
           onClick={() => {
+            pendingPersist.current = null
+            onDraftChange(file, original.id, null)
             setDraft(structuredClone(original))
             setError(null)
+            setStale(false)
           }}
         >
           Revert

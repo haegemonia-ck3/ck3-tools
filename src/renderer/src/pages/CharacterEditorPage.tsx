@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   columnFacetingFeature,
   columnFilteringFeature,
@@ -34,7 +34,13 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import type { AppSettings, CharacterRef, CharacterSummary, ReferenceData } from '@shared/types'
+import type {
+  AppSettings,
+  CharacterDraft,
+  CharacterRef,
+  CharacterSummary,
+  ReferenceData
+} from '@shared/types'
 
 const RECENTS_CAP = 10
 const RECENTS_COLLAPSED = 5
@@ -194,6 +200,29 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const modKey = selectedMod?.file ?? null
   const recents = (modKey && settings?.recentCharacters?.[modKey]) || []
   const favorites = (modKey && settings?.favoriteCharacters?.[modKey]) || []
+  const drafts = (modKey && settings?.draftCharacters?.[modKey]) || {}
+
+  // Ref so persistDraft can stay referentially stable — the panel's persist
+  // effect depends on it, and a fresh closure per render would re-arm it.
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+
+  const persistDraft = useCallback(
+    (file: string, id: string, entry: CharacterDraft | null): void => {
+      if (!modKey) return
+      const all = settingsRef.current?.draftCharacters ?? {}
+      const forMod = { ...(all[modKey] ?? {}) }
+      const key = `${file}:${id}`
+      if (entry === null) {
+        if (!(key in forMod)) return
+        delete forMod[key]
+      } else {
+        forMod[key] = entry
+      }
+      void updateSettings({ draftCharacters: { ...all, [modKey]: forMod } })
+    },
+    [modKey, updateSettings]
+  )
 
   const saveList = (
     key: 'recentCharacters' | 'favoriteCharacters',
@@ -443,7 +472,13 @@ export default function CharacterEditorPage(): React.JSX.Element {
                         })
                       }
                     >
-                      <TableCell className="w-9 py-0 pr-0 pl-2">
+                      <TableCell className="relative w-9 py-0 pr-0 pl-2">
+                        {`${row.original.file}:${row.original.id}` in drafts && (
+                          <span
+                            className="absolute top-1/2 left-0.5 size-1.5 -translate-y-1/2 rounded-full bg-primary"
+                            title="Unsaved changes"
+                          />
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -493,6 +528,8 @@ export default function CharacterEditorPage(): React.JSX.Element {
               }
               openCharacter({ file: target.file, id: target.id, name: target.name })
             }}
+            storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
+            onDraftChange={persistDraft}
             onSaved={(file, newId) => {
               if (selected) {
                 remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)

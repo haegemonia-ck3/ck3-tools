@@ -9,6 +9,7 @@ const DEFAULTS: AppSettings = {
   selectedModFile: null,
   recentCharacters: {},
   favoriteCharacters: {},
+  draftCharacters: {},
   textEditorPath: null
 }
 
