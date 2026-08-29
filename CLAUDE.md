@@ -38,6 +38,17 @@ Electron-based suite of editing tools for Crusader Kings III. Planned tools: Cha
 - Mod profile: a mod may ship a declarative `ck3-tools.json` at its content root (read by `readModProfile` in `src/main/modProfile.ts`, carried on `ModInfo.profile`). Currently holds `calendar` — an offset-calendar display convention (`epochYear`, `beforeLabel`, `afterLabel`) for total conversions like Hegemonia where file year 3220 displays as "780 BC" (no year zero; `formatCalendarDate` in `ck3Date.ts`). Display-only: converted values are never written to mod files. Grow this schema for future mod-specific needs before considering executable plugins.
 - Backend smoke tests: copy mod files to the scratchpad and run the compiled parser against the copy — never write to the user's real mod directory in tests.
 
+## Landing changes (IMPORTANT)
+
+- This is a solo project with no code review. Do NOT open pull requests. When a session's work is done and verified, land it on `master` yourself — this is standing authorization, so don't ask each time:
+  1. `git fetch origin`
+  2. `git merge origin/master` into the session branch, resolving any conflicts
+  3. re-run `npm run typecheck` and `npm test`
+  4. `git push origin HEAD:master`
+- Push to `master` only with typecheck and tests green. If either fails and you can't fix it, leave the work on the branch, push the branch, and say so.
+- Worktree sessions stay: several run at once, so keep working on the session's own `claude/…` branch and land it at the end rather than committing on `master` directly.
+- This does not update the main checkout at `C:\kevin\js\ck3-tools` — it's a separate worktree with its own state. Never touch it; the user pulls there when they want it current.
+
 ## Running the app (IMPORTANT)
 
 - `npm run dev` / the `dev` preview config starts a Vite server for the renderer AND spawns a real Electron window on the user's desktop. `--rendererOnly` does not avoid this (it only skips rebuilding main/preload). Each concurrent session that starts one adds another window.
