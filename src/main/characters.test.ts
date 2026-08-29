@@ -79,3 +79,85 @@ describe('father/mother', () => {
     expect(text).toContain('\tmother = 217 # her\n')
   })
 })
+
+// Multi-line `death = { death_reason = … }` blocks, as vanilla history uses
+const MULTI_DEATH = [
+  '300 = {',
+  '\tname = "Symeon"',
+  '\t900.1.1 = {',
+  '\t\tbirth = yes',
+  '\t}',
+  '\t960.4.2 = {',
+  '\t\tdeath = {',
+  '\t\t\tdeath_reason = death_murder',
+  '\t\t}',
+  '\t}',
+  '}',
+  '',
+  '301 = {',
+  '\t950.1.1 = {',
+  '\t\tdeath = {',
+  '\t\t\tdeath_reason = death_battle',
+  '\t\t}',
+  '\t\teffect = {',
+  '\t\t\tadd_character_flag = hero',
+  '\t\t}',
+  '\t}',
+  '}',
+  ''
+].join('\n')
+
+describe('clearing a multi-line death block', () => {
+  const mdFile = 'multi_death.txt'
+  const mdPath = join(modPath, 'history', 'characters', mdFile)
+  beforeEach(() => writeFileSync(mdPath, MULTI_DEATH, 'utf-8'))
+
+  it('removes a death-only date block without orphaning braces', () => {
+    const detail = getCharacter(modPath, mdFile, '300')!
+    expect(detail.death).toBe('960.4.2')
+    expect(saveCharacter(modPath, mdFile, '300', { ...detail, death: null })).toEqual({ ok: true })
+    const text = readFileSync(mdPath, 'utf-8')
+    expect(text).not.toContain('960.4.2')
+    expect(text).not.toContain('death_murder')
+    expect(text).toContain('\t900.1.1 = {\n\t\tbirth = yes\n\t}\n}')
+    const reparsed = getCharacter(modPath, mdFile, '300')!
+    expect(reparsed.death).toBeNull()
+    expect(reparsed.birth).toBe('900.1.1')
+  })
+
+  it('cuts only the death block when the date block carries more', () => {
+    const detail = getCharacter(modPath, mdFile, '301')!
+    expect(saveCharacter(modPath, mdFile, '301', { ...detail, death: null })).toEqual({ ok: true })
+    const text = readFileSync(mdPath, 'utf-8')
+    expect(text).not.toContain('death_battle')
+    expect(text).toContain('\t950.1.1 = {\n\t\teffect = {\n\t\t\tadd_character_flag = hero\n\t\t}\n\t}')
+    // The neighboring character is untouched
+    expect(text).toContain('death_reason = death_murder')
+    expect(getCharacter(modPath, mdFile, '301')!.death).toBeNull()
+  })
+})
+
+describe('CRLF files', () => {
+  const crFile = 'crlf.txt'
+  const crPath = join(modPath, 'history', 'characters', crFile)
+  const CRLF_SOURCE = SOURCE.replace(/\n/g, '\r\n')
+  beforeEach(() => writeFileSync(crPath, CRLF_SOURCE, 'utf-8'))
+
+  it('round-trips byte-for-byte on a no-op save', () => {
+    const detail = getCharacter(modPath, crFile, '219')!
+    expect(saveCharacter(modPath, crFile, '219', detail)).toEqual({ ok: true })
+    expect(readFileSync(crPath, 'utf-8')).toBe(CRLF_SOURCE)
+  })
+
+  it('inserts new lines with CRLF endings', () => {
+    const detail = getCharacter(modPath, crFile, '218')!
+    expect(
+      saveCharacter(modPath, crFile, '218', { ...detail, father: '210', death: '1080.2.3' })
+    ).toEqual({ ok: true })
+    const text = readFileSync(crPath, 'utf-8')
+    expect(text).toContain('\r\n\tfather = 210\r\n\t1020.1.1 = {')
+    expect(text).toContain('\r\n\t1080.2.3 = {\r\n\t\tdeath = yes\r\n\t}')
+    // No LF-only lines snuck in
+    expect(text.replace(/\r\n/g, '')).not.toContain('\n')
+  })
+})

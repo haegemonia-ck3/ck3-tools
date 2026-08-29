@@ -61,11 +61,43 @@ export function membersOfHouse(data: DynastyData, houseId: string): DynastyChara
 const defDisplayName = (def: { localizedName: string | null; name: string | null }): string | null =>
   def.localizedName ?? def.name
 
-/** Every dynasty and house a mod defines or references, with member counts. */
+/**
+ * Every dynasty and house a mod defines or references, with member counts.
+ * Counts come from one pass over the characters (with the same OR semantics as
+ * membersOfDynasty — a character carrying both the dynasty and one of its
+ * houses counts once), so large total conversions don't pay defs × characters.
+ */
 export function buildRows(data: DynastyData): DynastyListRow[] {
   const rows: DynastyListRow[] = []
   const definedDynasties = new Set(data.dynasties.map((d) => normId(d.id)))
   const definedHouses = new Set(data.houses.map((h) => normId(h.id)))
+
+  // House → parent dynasty, from the definitions
+  const houseParent = new Map<string, string>()
+  for (const h of data.houses) {
+    if (h.dynasty !== null && !houseParent.has(normId(h.id))) {
+      houseParent.set(normId(h.id), normId(h.dynasty))
+    }
+  }
+
+  const dynastyCount = new Map<string, number>()
+  const houseCount = new Map<string, number>()
+  const dynastyRef = new Map<string, string>() // norm → first raw spelling
+  const houseRef = new Map<string, string>()
+  for (const c of data.characters) {
+    const cd = c.dynasty !== null ? normId(c.dynasty) : null
+    const ch = c.house !== null ? normId(c.house) : null
+    if (cd !== null && !dynastyRef.has(cd)) dynastyRef.set(cd, c.dynasty as string)
+    if (ch !== null) {
+      if (!houseRef.has(ch)) houseRef.set(ch, c.house as string)
+      houseCount.set(ch, (houseCount.get(ch) ?? 0) + 1)
+    }
+    const owners = new Set<string>()
+    if (cd !== null) owners.add(cd)
+    const parent = ch !== null ? houseParent.get(ch) : undefined
+    if (parent !== undefined) owners.add(parent)
+    for (const d of owners) dynastyCount.set(d, (dynastyCount.get(d) ?? 0) + 1)
+  }
 
   for (const d of data.dynasties) {
     rows.push({
@@ -74,7 +106,7 @@ export function buildRows(data: DynastyData): DynastyListRow[] {
       name: defDisplayName(d),
       culture: d.culture,
       parent: null,
-      members: membersOfDynasty(data, d.id, true).length,
+      members: dynastyCount.get(normId(d.id)) ?? 0,
       defined: true,
       inMod: d.inMod,
       file: d.file
@@ -87,44 +119,52 @@ export function buildRows(data: DynastyData): DynastyListRow[] {
       name: defDisplayName(h),
       culture: null,
       parent: h.dynasty,
-      members: membersOfHouse(data, h.id).length,
+      members: houseCount.get(normId(h.id)) ?? 0,
       defined: true,
       inMod: h.inMod,
       file: h.file
     })
   }
 
-  // Referenced-but-undefined ids still get rows so their members are reachable
-  const seenDangling = new Set<string>()
-  for (const c of data.characters) {
-    if (c.dynasty !== null && !definedDynasties.has(normId(c.dynasty)) && !seenDangling.has(`d:${normId(c.dynasty)}`)) {
-      seenDangling.add(`d:${normId(c.dynasty)}`)
-      rows.push({
-        kind: 'dynasty',
-        id: c.dynasty,
-        name: null,
-        culture: null,
-        parent: null,
-        members: membersOfDynasty(data, c.dynasty, true).length,
-        defined: false,
-        inMod: false,
-        file: null
-      })
+  // Referenced-but-undefined ids still get rows so their members are
+  // reachable; a dynasty referenced only as a house's parent counts too
+  const danglingDynasty = (id: string): void => {
+    rows.push({
+      kind: 'dynasty',
+      id,
+      name: null,
+      culture: null,
+      parent: null,
+      members: dynastyCount.get(normId(id)) ?? 0,
+      defined: false,
+      inMod: false,
+      file: null
+    })
+  }
+  for (const [n, raw] of dynastyRef) {
+    if (!definedDynasties.has(n)) danglingDynasty(raw)
+  }
+  for (const h of data.houses) {
+    if (h.dynasty === null) continue
+    const n = normId(h.dynasty)
+    if (!definedDynasties.has(n) && !dynastyRef.has(n)) {
+      dynastyRef.set(n, h.dynasty)
+      danglingDynasty(h.dynasty)
     }
-    if (c.house !== null && !definedHouses.has(normId(c.house)) && !seenDangling.has(`h:${normId(c.house)}`)) {
-      seenDangling.add(`h:${normId(c.house)}`)
-      rows.push({
-        kind: 'house',
-        id: c.house,
-        name: null,
-        culture: null,
-        parent: null,
-        members: membersOfHouse(data, c.house).length,
-        defined: false,
-        inMod: false,
-        file: null
-      })
-    }
+  }
+  for (const [n, raw] of houseRef) {
+    if (definedHouses.has(n)) continue
+    rows.push({
+      kind: 'house',
+      id: raw,
+      name: null,
+      culture: null,
+      parent: null,
+      members: houseCount.get(n) ?? 0,
+      defined: false,
+      inMod: false,
+      file: null
+    })
   }
   return rows
 }
@@ -154,8 +194,14 @@ export function buildTreeNodes(
   allCharacters: DynastyCharacter[],
   affiliationName: (c: DynastyCharacter) => string
 ): FamilyTreeNode[] {
-  const byId = new Map(allCharacters.map((c) => [c.id, c]))
-  const included = new Set(members.map((c) => c.id))
+  // Parent refs can differ in case from the character's own id — resolve them
+  // like the layout engine does (first occurrence wins), keeping the resolved
+  // raw spelling on the ghost so selection and deep links still match it
+  const byId = new Map<string, DynastyCharacter>()
+  for (const c of allCharacters) {
+    if (!byId.has(normId(c.id))) byId.set(normId(c.id), c)
+  }
+  const included = new Set(members.map((c) => normId(c.id)))
   const nodes: FamilyTreeNode[] = members.map((c) => ({
     id: c.id,
     name: c.name,
@@ -171,10 +217,12 @@ export function buildTreeNodes(
   const ghosts = new Map<string, FamilyTreeNode>()
   for (const c of members) {
     for (const pid of [c.father, c.mother]) {
-      if (pid === null || included.has(pid) || ghosts.has(pid)) continue
-      const p = byId.get(pid)
-      ghosts.set(pid, {
-        id: pid,
+      if (pid === null) continue
+      const key = normId(pid)
+      if (included.has(key) || ghosts.has(key)) continue
+      const p = byId.get(key)
+      ghosts.set(key, {
+        id: p?.id ?? pid,
         name: p?.name ?? null,
         birth: p?.birth ?? null,
         death: p?.death ?? null,

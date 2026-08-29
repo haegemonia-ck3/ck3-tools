@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { makeEditor, refresh, setScalar, SCALAR_LINE } from './lineEditor'
+import { endOfBodyIndex, eolSuffix, makeEditor, refresh, setScalar, SCALAR_LINE } from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
 import type { LineEditor } from './lineEditor'
 import type { CharacterDetail, CharacterStats, CharacterSummary, SaveResult } from '@shared/types'
@@ -125,6 +125,17 @@ function firstDateBlockLine(ed: LineEditor): number {
   return ed.lines.length
 }
 
+/**
+ * Terminate inserted lines with \r in CRLF bodies (join adds only the \n).
+ * A line appended at the very end gets none — nothing follows it.
+ */
+function withEol(ed: LineEditor, lines: string[], at: number): string[] {
+  const cr = eolSuffix(ed)
+  if (cr === '') return lines
+  const appendAtEnd = at >= ed.lines.length
+  return lines.map((l, i) => (appendAtEnd && i === lines.length - 1 ? l : l + cr))
+}
+
 function setTraits(ed: LineEditor, traits: string[]): void {
   // Remove existing depth-0 trait lines, remembering where the first one was
   let insertAt = -1
@@ -140,7 +151,7 @@ function setTraits(ed: LineEditor, traits: string[]): void {
   refresh(ed)
   if (traits.length === 0) return
   if (insertAt < 0) insertAt = firstDateBlockLine(ed)
-  ed.lines.splice(insertAt, 0, ...traits.map((t) => `${ed.indent}trait = ${t}`))
+  ed.lines.splice(insertAt, 0, ...withEol(ed, traits.map((t) => `${ed.indent}trait = ${t}`), insertAt))
   refresh(ed)
 }
 
@@ -155,16 +166,27 @@ function setDateBlock(ed: LineEditor, statement: 'birth' | 'death', date: string
         body.slice(0, block.start) + date + body.slice(block.start + block.key.length)
       ed.lines = next.split('\n')
     } else if (statement === 'death') {
-      // Remove the whole block if it only carries the death statement,
-      // otherwise leave the block and remove just the death line(s)
-      const subBody = body.slice(block.bodyStart, block.bodyEnd)
-      const meaningful = subBody
+      // Cut every death statement out of the date block: whole nested
+      // `death = { ... }` blocks first (they can span several lines — a
+      // per-line filter would orphan their bodies and closing braces),
+      // then scalar `death = yes` lines
+      let kept = body.slice(block.bodyStart, block.bodyEnd)
+      for (const db of scanBlocks(kept).filter((b) => b.key === 'death').reverse()) {
+        let from = db.start
+        while (from > 0 && (kept[from - 1] === ' ' || kept[from - 1] === '\t')) from--
+        let to = db.end
+        if (kept[to] === '\r') to++
+        if (kept[to] === '\n') to++
+        kept = kept.slice(0, from) + kept.slice(to)
+      }
+      kept = kept
         .split('\n')
-        .map((l) => l.split('#')[0].trim())
-        .filter((l) => l.length > 0)
-      const deathOnly = meaningful.every((l) => /^death\s*=/.test(l) || l === '{' || l === '}')
-      if (deathOnly) {
-        // Also consume the line's leading whitespace and trailing newline
+        .filter((l) => !/^\s*death\s*=/.test(l.split('#')[0]))
+        .join('\n')
+      const meaningful = kept.split('\n').some((l) => l.split('#')[0].trim().length > 0)
+      if (!meaningful) {
+        // Nothing but death in it — drop the whole date block, consuming
+        // the line's leading whitespace and trailing newline
         let from = block.start
         while (from > 0 && (body[from - 1] === ' ' || body[from - 1] === '\t')) from--
         let to = block.end
@@ -172,10 +194,6 @@ function setDateBlock(ed: LineEditor, statement: 'birth' | 'death', date: string
         if (body[to] === '\n') to++
         ed.lines = (body.slice(0, from) + body.slice(to)).split('\n')
       } else {
-        const kept = subBody
-          .split('\n')
-          .filter((l) => !/^\s*death\s*=/.test(l.split('#')[0]))
-          .join('\n')
         ed.lines = (body.slice(0, block.bodyStart) + kept + body.slice(block.bodyEnd)).split('\n')
       }
     }
@@ -183,9 +201,15 @@ function setDateBlock(ed: LineEditor, statement: 'birth' | 'death', date: string
     return
   }
   if (date === null) return
-  // No existing block — append one at the end of the body
+  // No existing block — append one at the end of the body (before the closing
+  // brace's own line, so the block isn't glued to the character's `}`)
   const inner = statement === 'birth' ? 'birth = yes' : 'death = yes'
-  ed.lines.push(`${ed.indent}${date} = {`, `${ed.indent}${ed.indent}${inner}`, `${ed.indent}}`)
+  const at = endOfBodyIndex(ed)
+  ed.lines.splice(
+    at,
+    0,
+    ...withEol(ed, [`${ed.indent}${date} = {`, `${ed.indent}${ed.indent}${inner}`, `${ed.indent}}`], at)
+  )
   refresh(ed)
 }
 

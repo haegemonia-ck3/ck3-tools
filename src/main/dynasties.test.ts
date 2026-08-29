@@ -401,3 +401,102 @@ describe('saving', () => {
     expect(saveDynasty(modPath, 'mod_dyn.txt', 'nope', patch).ok).toBe(false)
   })
 })
+
+// ---------- Regressions from the adversarial review ----------
+// Fully isolated fixtures so the shared beforeEach above can't interfere
+
+const root2 = mkdtempSync(join(tmpdir(), 'ck3-tools-dynasties-regr-'))
+const gameDir2 = join(root2, 'game')
+const modPath2 = join(root2, 'mod')
+
+afterAll(() => rmSync(root2, { recursive: true, force: true }))
+
+describe('review regressions', () => {
+  beforeEach(() => {
+    rmSync(modPath2, { recursive: true, force: true })
+    rmSync(gameDir2, { recursive: true, force: true })
+    writeFixture(
+      modPath2,
+      'history/characters/oneline.txt',
+      // A statement FOLLOWING an inline sub-block must not be swallowed as the
+      // block key's "value"
+      '900 = { 1000.1.1 = { birth = yes } Female=yes dynasty = phokas name = "Anna" }\n'
+    )
+    writeFixture(modPath2, 'history/characters/vanilla_graft.txt', [
+      '901 = {',
+      '\tname = "Grafted"',
+      '\tdynasty_house = house_GameChain',
+      '}',
+      ''
+    ].join('\n'))
+    writeFixture(modPath2, 'common/dynasties/regr_dyn.txt', [
+      'd_1 = { name = "A" motto = "B" }',
+      'd_2 = {',
+      '\tmotto = "A#B"',
+      '\tname = "x"',
+      '}',
+      ''
+    ].join('\n'))
+    writeFixture(gameDir2, 'common/dynasties/game_dyn.txt', [
+      'dynn_GameChain = {',
+      '\tname = "dynn_GameChain"',
+      '}',
+      ''
+    ].join('\n'))
+    writeFixture(gameDir2, 'common/dynasty_houses/game_houses.txt', [
+      'house_GameChain = {',
+      '\tname = "dynn_GameChain"',
+      '\tdynasty = dynn_GameChain',
+      '}',
+      ''
+    ].join('\n'))
+  })
+
+  const data2 = () => getDynastyData(gameDir2, modPath2, [])
+
+  it('keeps statements that follow an inline sub-block on one line', () => {
+    const c = data2().characters.find((x) => x.id === '900')!
+    expect(c.birth).toBe('1000.1.1')
+    expect(c.female).toBe(true)
+    expect(c.dynasty).toBe('phokas')
+    expect(c.name).toBe('Anna')
+  })
+
+  it('pulls in the game parent dynasty of a game house the mod grafts onto', () => {
+    const d = data2()
+    const house = d.houses.find((h) => h.id === 'house_GameChain')
+    expect(house).toBeDefined()
+    expect(house!.inMod).toBe(false)
+    const parent = d.dynasties.find((x) => x.id === 'dynn_GameChain')
+    expect(parent).toBeDefined()
+    expect(parent!.inMod).toBe(false)
+  })
+
+  it('edits multi-statement one-line defs without duplicating keys', () => {
+    const path2 = join(modPath2, 'common', 'dynasties', 'regr_dyn.txt')
+    const patch = { name: 'New', prefix: null, motto: 'B', culture: null }
+    expect(saveDynasty(modPath2, 'regr_dyn.txt', 'd_1', patch)).toEqual({ ok: true })
+    const afterFirst = readFileSync(path2, 'utf-8')
+    expect(afterFirst).toContain('d_1 = { name = "New" motto = "B" }')
+    // A second identical save must change nothing
+    expect(saveDynasty(modPath2, 'regr_dyn.txt', 'd_1', patch)).toEqual({ ok: true })
+    expect(readFileSync(path2, 'utf-8')).toBe(afterFirst)
+    expect(data2().dynasties.find((x) => x.id === 'd_1')!.name).toBe('New')
+  })
+
+  it('no-op save round-trips a quoted value containing #', () => {
+    const path2 = join(modPath2, 'common', 'dynasties', 'regr_dyn.txt')
+    const before = readFileSync(path2, 'utf-8')
+    const d = data2().dynasties.find((x) => x.id === 'd_2')!
+    expect(d.motto).toBe('A#B')
+    expect(
+      saveDynasty(modPath2, 'regr_dyn.txt', 'd_2', {
+        name: d.name,
+        prefix: d.prefix,
+        motto: d.motto,
+        culture: d.culture
+      })
+    ).toEqual({ ok: true })
+    expect(readFileSync(path2, 'utf-8')).toBe(before)
+  })
+})

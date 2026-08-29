@@ -50,7 +50,10 @@ function topLevelCode(line: string, startDepth: number): string {
     }
     if (c === '{') {
       depth++
-      if (depth === 1) out += ' '
+      // Elide the sub-block but leave `{}` so the dangling `key =` before it
+      // binds to an unmatchable token instead of swallowing the NEXT
+      // statement's key as its value
+      if (depth === 1) out += '{}'
       continue
     }
     if (c === '}') {
@@ -264,13 +267,16 @@ export function getDynastyData(
     modPath
   )
 
-  // Game definitions are only shown when mod content points at them
+  // Game definitions are only shown when mod content points at them. Houses
+  // layer first so that a game house pulled in by a mod character can in turn
+  // pull in its game parent dynasty.
   const referenced = new Set<string>()
   for (const c of characters) {
     if (c.dynasty !== null) referenced.add(norm(c.dynasty))
     if (c.house !== null) referenced.add(norm(c.house))
   }
-  for (const h of houseRaw.filter((d) => d.inMod)) {
+  const layeredHouses = layer(houseRaw, referenced)
+  for (const h of layeredHouses) {
     const parent = h.scalars.get('dynasty')
     if (parent !== undefined) referenced.add(norm(parent))
   }
@@ -289,7 +295,7 @@ export function getDynastyData(
     culture: d.scalars.get('culture') ?? null,
     localizedName: localized(d.scalars.get('name'))
   }))
-  const houses: HouseDef[] = layer(houseRaw, referenced).map((d) => ({
+  const houses: HouseDef[] = layeredHouses.map((d) => ({
     id: d.id,
     file: d.file,
     inMod: d.inMod,

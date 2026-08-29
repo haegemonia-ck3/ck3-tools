@@ -90,10 +90,10 @@ export interface FamilyTreeLayout {
   height: number
 }
 
-/** Leading year of a raw CK3 date ("3220.1.1." → 3220), or null. */
+/** Leading year of a raw CK3 date ("3220.1.1." → 3220), any digit count, or null. */
 export function yearOf(date: string | null): number | null {
   if (!date) return null
-  const m = /^(\d{1,4})(?:\.|$)/.exec(date.trim())
+  const m = /^(\d+)(?:\.|$)/.exec(date.trim())
   return m ? Number(m[1]) : null
 }
 
@@ -103,7 +103,7 @@ export function yearOf(date: string | null): number | null {
  * - Hierarchy edge per node: father if he's among `nodes`, else mother; when
  *   both are present the mother link becomes a `secondary` edge.
  * - Connected components (over both edge kinds) are laid out independently and
- *   stacked vertically, ordered by earliest birth year (undated islands last);
+ *   stacked vertically, ordered by earliest known year (undated islands last);
  *   gaps of at least `gapYearsThreshold` years produce labeled separators.
  * - Within a component, generation = depth along hierarchy edges from a root;
  *   subtrees are packed left-to-right with parents centered over children,
@@ -195,11 +195,13 @@ export function layoutFamilyForest(
   for (const members of componentsByRoot.values()) {
     components.push(layoutComponent(members, primaryParent, children, byKey, opts, byBirthThenId))
   }
+  // Chronological stacking by the earliest KNOWN year (death years count too,
+  // so an island whose members only have death dates isn't sorted as undated)
   components.sort((a, b) => {
-    if (a.minBirthYear !== b.minBirthYear) {
-      if (a.minBirthYear === null) return 1
-      if (b.minBirthYear === null) return -1
-      return a.minBirthYear - b.minBirthYear
+    if (a.firstYear !== b.firstYear) {
+      if (a.firstYear === null) return 1
+      if (b.firstYear === null) return -1
+      return a.firstYear - b.firstYear
     }
     return a.minId < b.minId ? -1 : a.minId > b.minId ? 1 : 0
   })
@@ -215,15 +217,15 @@ export function layoutFamilyForest(
     if (i > 0) {
       const above = components[i - 1]
       const gapYears =
-        comp.minBirthYear !== null && above.lastYear !== null
-          ? comp.minBirthYear - above.lastYear
+        comp.firstYear !== null && above.lastYear !== null
+          ? comp.firstYear - above.lastYear
           : null
       if (gapYears !== null && gapYears >= opts.gapYearsThreshold) {
         separators.push({
           y: y + opts.separatorGap / 2,
           gapYears,
           fromYear: above.lastYear,
-          toYear: comp.minBirthYear
+          toYear: comp.firstYear
         })
         y += opts.separatorGap
       } else {
@@ -311,7 +313,8 @@ interface LaidOutComponent {
   positions: Map<string, { x: number; y: number }>
   width: number
   height: number
-  minBirthYear: number | null
+  /** Min of all birth and death years — used for chronological ordering */
+  firstYear: number | null
   /** Max of all birth and death years — the island's "last seen" year */
   lastYear: number | null
   /** Smallest normalized id, for deterministic ordering of undated islands */
@@ -371,16 +374,17 @@ function layoutComponent(
     cursor += spanOf(root) + 2 * opts.hGap
   }
 
-  let minBirthYear: number | null = null
+  let firstYear: number | null = null
   let lastYear: number | null = null
   let minId = members[0]
   for (const key of members) {
     const node = byKey.get(key)!
     const birth = yearOf(node.birth)
     const death = yearOf(node.death)
-    if (birth !== null && (minBirthYear === null || birth < minBirthYear)) minBirthYear = birth
     for (const year of [birth, death]) {
-      if (year !== null && (lastYear === null || year > lastYear)) lastYear = year
+      if (year === null) continue
+      if (firstYear === null || year < firstYear) firstYear = year
+      if (lastYear === null || year > lastYear) lastYear = year
     }
     if (key < minId) minId = key
   }
@@ -389,7 +393,7 @@ function layoutComponent(
     positions,
     width: cursor - 2 * opts.hGap,
     height: (maxDepth + 1) * opts.nodeHeight + maxDepth * opts.vGap,
-    minBirthYear,
+    firstYear,
     lastYear,
     minId
   }

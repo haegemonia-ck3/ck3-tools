@@ -108,10 +108,15 @@ export default function DynastyDetailPanel({
   useEffect(() => {
     setDraft(original ? { ...original } : null)
     setError(null)
-    setSavedFlash(false)
     // Re-derived from data on purpose: a reload after save re-seeds the draft
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, id, data])
+
+  // The "Saved ✓" flash must survive the post-save data reload (which re-runs
+  // the reseed above), so it resets only when a different row is opened
+  useEffect(() => {
+    setSavedFlash(false)
+  }, [kind, id])
 
   const editable = def !== null && def.inMod
   const dirty =
@@ -208,7 +213,12 @@ export default function DynastyDetailPanel({
         .filter(Boolean)
         .join('\n')}
       onClick={() => onMemberClick(c.id)}
-      onKeyDown={(e) => e.key === 'Enter' && onMemberClick(c.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onMemberClick(c.id)
+        }
+      }}
     >
       <span className="min-w-0 flex-1 truncate">
         {c.name ?? <span className="font-mono text-muted-foreground">{c.id}</span>}
@@ -243,7 +253,9 @@ export default function DynastyDetailPanel({
     const groups = [...houseIds.entries()].map(([norm, raw]) => ({
       norm,
       raw,
-      def: houses.find((h) => normId(h.id) === norm) ?? null,
+      // Resolved against ALL houses: a member's house can be defined under
+      // another dynasty and still deserves its name, not an "undefined" badge
+      def: data.houses.find((h) => normId(h.id) === norm) ?? null,
       list: members.filter((c) => c.house !== null && normId(c.house) === norm)
     }))
     return (

@@ -38,13 +38,20 @@ import {
 } from '@/lib/dynastyView'
 import type { DynastyListRow } from '@/lib/dynastyView'
 
-const CHART_COLORS = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)'
-]
+/**
+ * Deterministic house id → color: an FNV-1a hash of the id picks a hue, spread
+ * by the golden angle so similarly named houses don't land on similar hues.
+ * Fixed OKLCH lightness/chroma keeps every hue legible in both themes.
+ */
+function houseColor(id: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  const hue = Math.round(((hash >>> 0) * 137.508) % 360)
+  return `oklch(0.62 0.16 ${hue})`
+}
 
 interface Selection {
   kind: 'dynasty' | 'house'
@@ -145,12 +152,8 @@ export default function DynastyEditorPage(): React.JSX.Element {
               .map((c) => normId(c.house!))
           ]
     const colors: Record<string, string> = {}
-    let i = 0
     for (const id of ids) {
-      if (!(id in colors)) {
-        colors[id] = CHART_COLORS[i % CHART_COLORS.length]
-        i++
-      }
+      if (!(id in colors)) colors[id] = houseColor(id)
     }
     return colors
   }, [data, selected])
@@ -177,7 +180,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
   }
 
   const openCharacter = (id: string): void => {
-    const target = data?.characters.find((c) => c.id === id)
+    const target = data?.characters.find((c) => normId(c.id) === normId(id))
     if (!target) {
       toast.error(`Character "${id}" isn't defined in ${selectedMod?.name ?? 'this mod'}`)
       return
@@ -249,6 +252,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
               groupColors={groupColors}
               focusId={focus.id}
               focusNonce={focus.nonce}
+              fitKey={`${selected.kind}:${normId(selected.id)}`}
             />
           </ResizablePanel>
           <ResizableHandle withHandle className="mx-2 bg-transparent hover:bg-border" />

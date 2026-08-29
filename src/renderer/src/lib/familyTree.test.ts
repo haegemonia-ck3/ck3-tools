@@ -258,3 +258,22 @@ describe('layoutFamilyForest', () => {
     expect(layout(nodes)).toEqual(layout(nodes))
   })
 })
+
+describe('review regressions', () => {
+  it('parses 5-digit years', () => {
+    expect(yearOf('10000.1.1')).toBe(10000)
+  })
+
+  it('orders an island with only death years by that year, not as undated', () => {
+    const result = layoutFamilyForest([
+      person('later', { birth: '2000.1.1' }),
+      person('deathonly', { death: '500.1.1' })
+    ])
+    const early = placedNode(result, 'deathonly')
+    const late = placedNode(result, 'later')
+    expect(early.y).toBeLessThan(late.y)
+    // The 1500-year hole between them earns a separator
+    expect(result.separators).toHaveLength(1)
+    expect(result.separators[0].gapYears).toBe(1500)
+  })
+})

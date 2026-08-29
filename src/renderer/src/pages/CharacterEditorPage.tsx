@@ -284,18 +284,6 @@ export default function CharacterEditorPage(): React.JSX.Element {
     else setOpen(false)
   }
 
-  // Deep link from another tool (e.g. a family-tree node): open the character,
-  // then strip the params so refresh/back don't re-trigger the jump.
-  const search = useSearch({ from: '/characters' })
-  const navigate = useNavigate()
-  useEffect(() => {
-    if (search.file && search.id) {
-      openCharacter({ file: search.file, id: search.id, name: null })
-      void navigate({ to: '/characters', search: {}, replace: true })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.file, search.id])
-
   /** Point recents/favorites at a character's new id after a save renames it. */
   const remapRefs = (file: string, oldId: string, newId: string, name: string | null): void => {
     if (oldId === newId) return
@@ -339,6 +327,20 @@ export default function CharacterEditorPage(): React.JSX.Element {
       .then(setRefData)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
+
+  // Deep link from another tool (e.g. a family-tree node): open the character,
+  // then strip the params so refresh/back don't re-trigger the jump. Declared
+  // AFTER the mod-reset effect above on purpose: on a fresh mount both fire in
+  // the same flush, and this one's selection must win over the reset's null.
+  const search = useSearch({ from: '/characters' })
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (search.file && search.id) {
+      openCharacter({ file: search.file, id: search.id, name: null })
+      void navigate({ to: '/characters', search: {}, replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.file, search.id])
 
   const table = useTable({
     features,

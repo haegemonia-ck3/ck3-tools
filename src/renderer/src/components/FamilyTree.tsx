@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Maximize, ZoomIn, ZoomOut } from 'lucide-react'
 import type { CalendarConfig } from '@shared/types'
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,12 @@ export interface FamilyTreeProps {
   /** When focusNonce changes and focusId is set, pan/zoom to center that node */
   focusId?: string | null
   focusNonce?: number
+  /**
+   * Identity of what's being drawn (e.g. the selected dynasty). Auto-fit runs
+   * only when it changes, so a data reload after a save keeps the viewport.
+   * Omitted: fit on every new layout.
+   */
+  fitKey?: string | number
   className?: string
 }
 
@@ -94,6 +100,138 @@ function curvePath(from: PlacedNode, to: PlacedNode, w: number, h: number): stri
   return `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 - bend}, ${x2} ${y2}`
 }
 
+interface TreeContentProps {
+  layout: FamilyTreeLayout
+  placedById: Map<string, PlacedNode>
+  calendar: CalendarConfig | null
+  selectedId: string | null
+  groupColors?: Record<string, string>
+  onSelect?: (id: string | null) => void
+  onOpenCharacter?: (id: string) => void
+}
+
+/**
+ * The node cards and edge paths — potentially over a thousand elements —
+ * behind memo so pan/zoom ticks re-render only the transformed wrapper.
+ */
+const TreeContent = memo(function TreeContent({
+  layout,
+  placedById,
+  calendar,
+  selectedId,
+  groupColors,
+  onSelect,
+  onOpenCharacter
+}: TreeContentProps): React.JSX.Element {
+  const { nodeWidth, nodeHeight } = DEFAULT_LAYOUT_OPTIONS
+  return (
+    <>
+      <svg
+        className="absolute top-0 left-0"
+        width={layout.width}
+        height={layout.height}
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+      >
+        {layout.edges.map((edge) => {
+          const from = placedById.get(edge.fromId)
+          const to = placedById.get(edge.toId)
+          if (!from || !to) return null
+          const key = `${edge.kind}:${edge.fromId}->${edge.toId}`
+          return edge.kind === 'primary' ? (
+            <path
+              key={key}
+              className="stroke-border"
+              fill="none"
+              strokeWidth={1.5}
+              d={elbowPath(from, to, nodeWidth, nodeHeight)}
+            />
+          ) : (
+            <path
+              key={key}
+              className="stroke-muted-foreground/40"
+              fill="none"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              d={curvePath(from, to, nodeWidth, nodeHeight)}
+            />
+          )
+        })}
+      </svg>
+
+      {layout.separators.map((sep) => {
+        const label = separatorLabel(sep, calendar)
+        return (
+          <div
+            key={sep.y}
+            className="absolute flex h-6 items-center justify-center"
+            style={{ top: sep.y, left: 0, width: layout.width, transform: 'translateY(-50%)' }}
+          >
+            <div className="absolute inset-x-0 top-1/2 border-t border-dashed" />
+            {label !== null && (
+              <span className="relative rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+                {label}
+              </span>
+            )}
+          </div>
+        )
+      })}
+
+      {layout.nodes.map(({ node, x, y }) => {
+        const stripe = node.group !== null ? groupColors?.[node.group] : undefined
+        return (
+          <button
+            key={node.id}
+            type="button"
+            title={`${node.name ?? node.id}\n${node.birth ?? '?'} – ${node.death ?? '?'}`}
+            className={cn(
+              'absolute flex cursor-pointer flex-col overflow-hidden rounded-md border bg-card px-2 py-1 text-left shadow-xs select-none',
+              node.ghost && 'border-dashed bg-muted/50 opacity-75',
+              selectedId === node.id && 'ring-2 ring-primary'
+            )}
+            style={{
+              left: x,
+              top: y,
+              width: nodeWidth,
+              height: nodeHeight,
+              ...(stripe !== undefined && {
+                borderLeftWidth: 3,
+                borderLeftColor: stripe,
+                // Soft house tint over the card color so it stays opaque and theme-aware
+                backgroundColor: `color-mix(in oklab, ${stripe} 10%, ${node.ghost ? 'var(--muted)' : 'var(--card)'})`
+              })
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onSelect?.(node.id)
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              onOpenCharacter?.(node.id)
+            }}
+          >
+            <span className="truncate text-xs font-medium">
+              {node.name ?? node.id}
+              {node.female ? ' ♀' : ''}
+            </span>
+            <span className="truncate font-mono text-[10px] text-muted-foreground">
+              {node.id}
+            </span>
+            <span className="truncate text-[10px] text-muted-foreground">
+              {lifespanLabel(node, calendar)}
+            </span>
+            {node.ghost && node.ghostNote !== null && (
+              <span className="truncate text-[10px] text-muted-foreground italic">
+                {node.ghostNote}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </>
+  )
+})
+
 export default function FamilyTree({
   nodes,
   calendar,
@@ -103,6 +241,7 @@ export default function FamilyTree({
   groupColors,
   focusId,
   focusNonce,
+  fitKey,
   className
 }: FamilyTreeProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -149,10 +288,16 @@ export default function FamilyTree({
     })
   }, [layout])
 
-  // Auto-fit once per layout identity (a newly selected dynasty/house)
+  // Auto-fit when what's being drawn changes (a newly selected dynasty or
+  // house, via fitKey). Without a fitKey, fit on every new layout — with one,
+  // a data reload after a save keeps the user's pan/zoom.
+  const lastFitKey = useRef<string | number | null>(null)
   useLayoutEffect(() => {
+    if (!layout) return
+    if (fitKey !== undefined && lastFitKey.current === fitKey) return
+    lastFitKey.current = fitKey ?? null
     fitToView()
-  }, [fitToView])
+  }, [fitKey, layout, fitToView])
 
   // React's onWheel can be passive, which would make preventDefault a no-op —
   // attach a non-passive listener so the page never scrolls under the canvas.
@@ -167,7 +312,17 @@ export default function FamilyTree({
       setView((v) => {
         const scale = clamp(v.scale * Math.exp(-e.deltaY * 0.0015), MIN_SCALE, MAX_SCALE)
         const k = scale / v.scale
-        return { scale, x: px - (px - v.x) * k, y: py - (py - v.y) * k }
+        const next = { scale, x: px - (px - v.x) * k, y: py - (py - v.y) * k }
+        // A zoom mid-drag rebases the drag so the next pointermove doesn't
+        // snap the viewport back to the pre-zoom translation
+        const drag = dragRef.current
+        if (drag) {
+          drag.originClientX = e.clientX
+          drag.originClientY = e.clientY
+          drag.originViewX = next.x
+          drag.originViewY = next.y
+        }
+        return next
       })
     }
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -241,7 +396,6 @@ export default function FamilyTree({
   }
 
   const showCanvas = nodes.length > 0 && layout !== null
-  const { nodeWidth, nodeHeight } = DEFAULT_LAYOUT_OPTIONS
 
   return (
     <div
@@ -282,103 +436,15 @@ export default function FamilyTree({
             transformOrigin: '0 0'
           }}
         >
-          <svg
-            className="absolute top-0 left-0"
-            width={layout.width}
-            height={layout.height}
-            viewBox={`0 0 ${layout.width} ${layout.height}`}
-          >
-            {layout.edges.map((edge) => {
-              const from = placedById.get(edge.fromId)
-              const to = placedById.get(edge.toId)
-              if (!from || !to) return null
-              const key = `${edge.kind}:${edge.fromId}->${edge.toId}`
-              return edge.kind === 'primary' ? (
-                <path
-                  key={key}
-                  className="stroke-border"
-                  fill="none"
-                  strokeWidth={1.5}
-                  d={elbowPath(from, to, nodeWidth, nodeHeight)}
-                />
-              ) : (
-                <path
-                  key={key}
-                  className="stroke-muted-foreground/40"
-                  fill="none"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  d={curvePath(from, to, nodeWidth, nodeHeight)}
-                />
-              )
-            })}
-          </svg>
-
-          {layout.separators.map((sep) => {
-            const label = separatorLabel(sep, calendar)
-            return (
-              <div
-                key={sep.y}
-                className="absolute flex h-6 items-center justify-center"
-                style={{ top: sep.y, left: 0, width: layout.width, transform: 'translateY(-50%)' }}
-              >
-                <div className="absolute inset-x-0 top-1/2 border-t border-dashed" />
-                {label !== null && (
-                  <span className="relative rounded-full border bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
-                    {label}
-                  </span>
-                )}
-              </div>
-            )
-          })}
-
-          {layout.nodes.map(({ node, x, y }) => {
-            const stripe = node.group !== null ? groupColors?.[node.group] : undefined
-            return (
-              <button
-                key={node.id}
-                type="button"
-                title={`${node.name ?? node.id}\n${node.birth ?? '?'} – ${node.death ?? '?'}`}
-                className={cn(
-                  'absolute flex cursor-pointer flex-col overflow-hidden rounded-md border bg-card px-2 py-1 text-left shadow-xs select-none',
-                  node.ghost && 'border-dashed bg-muted/50 opacity-75',
-                  selectedId === node.id && 'ring-2 ring-primary'
-                )}
-                style={{
-                  left: x,
-                  top: y,
-                  width: nodeWidth,
-                  height: nodeHeight,
-                  ...(stripe !== undefined && { borderLeftWidth: 3, borderLeftColor: stripe })
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSelect?.(node.id)
-                }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation()
-                  onOpenCharacter?.(node.id)
-                }}
-              >
-                <span className="truncate text-xs font-medium">
-                  {node.name ?? node.id}
-                  {node.female ? ' ♀' : ''}
-                </span>
-                <span className="truncate font-mono text-[10px] text-muted-foreground">
-                  {node.id}
-                </span>
-                <span className="truncate text-[10px] text-muted-foreground">
-                  {lifespanLabel(node, calendar)}
-                </span>
-                {node.ghost && node.ghostNote !== null && (
-                  <span className="truncate text-[10px] text-muted-foreground italic">
-                    {node.ghostNote}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+          <TreeContent
+            layout={layout}
+            placedById={placedById}
+            calendar={calendar}
+            selectedId={selectedId ?? null}
+            groupColors={groupColors}
+            onSelect={onSelect}
+            onOpenCharacter={onOpenCharacter}
+          />
         </div>
       )}
 
