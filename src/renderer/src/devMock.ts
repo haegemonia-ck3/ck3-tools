@@ -316,19 +316,22 @@ const mock: Ck3ToolsApi = {
   },
   getTraitIcons: async (_g, _m, _r, traits) =>
     Object.fromEntries(traits.map((t) => [t, null])),
-  // A quartered placeholder so browser-mode dev shows the layout; real
-  // rendering needs Electron (game files + main process)
+  // A quartered stand-in so browser-mode dev shows the layout; real rendering
+  // needs Electron (game files + main process). Only some ids get one, so the
+  // "no coat of arms" placeholder is reachable here too.
   getCoatsOfArms: async (_g, _m, _r, ids) =>
     Object.fromEntries(
       ids.map((id) => [
         id,
-        'data:image/svg+xml,' +
-          encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2">' +
-              '<rect width="2" height="2" fill="#883333"/>' +
-              '<rect width="1" height="1" fill="#ccc2a8"/>' +
-              '<rect x="1" y="1" width="1" height="1" fill="#ccc2a8"/></svg>'
-          )
+        !['mockidae', 'house_Alpha', 'dynn_Mock'].includes(id)
+          ? null
+          : 'data:image/svg+xml,' +
+            encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2">' +
+                '<rect width="2" height="2" fill="#883333"/>' +
+                '<rect width="1" height="1" fill="#ccc2a8"/>' +
+                '<rect x="1" y="1" width="1" height="1" fill="#ccc2a8"/></svg>'
+            )
       ])
     ),
   getReferenceData: async () => ({
