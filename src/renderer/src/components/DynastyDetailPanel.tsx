@@ -8,6 +8,7 @@ import type {
   SaveResult
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
+import CoatOfArms from './CoatOfArms'
 import Reference, { openReferenceTarget } from './Reference'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -377,6 +378,8 @@ export default function DynastyDetailPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+        {/* A house without its own CoA inherits its dynasty's, like in game */}
+        <CoatOfArms ids={kind === 'house' ? [id, house?.dynasty] : [id]} size={112} />
         {def === null && (
           <Alert>
             <AlertDescription>
