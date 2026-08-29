@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
   CharacterDetail,
   CharacterDraft,
+  CharacterSummary,
   RefKind,
   ReferenceData
 } from '@shared/types'
@@ -14,6 +15,7 @@ import type { IconContext } from '../useTraitIcons'
 import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
+import ReferenceDisplay from './ReferenceDisplay'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -91,6 +93,8 @@ interface Props {
   refData: ReferenceData | null
   /** Ids of every character in the mod, offered as father/mother options */
   characterIds: string[]
+  /** Characters in the mod naming this one as father or mother */
+  childCharacters: CharacterSummary[]
   /** Switch the editor to another character in the mod (father/mother jump) */
   onNavigate: (id: string) => void
   /** Open a lineage row in the Dynasty & House Editor */
@@ -116,6 +120,7 @@ export default function CharacterDetailPanel({
   calendar,
   refData,
   characterIds,
+  childCharacters,
   onNavigate,
   onOpenLineage,
   storedDraft,
@@ -392,6 +397,43 @@ export default function CharacterDetailPanel({
     </div>
   )
 
+  /**
+   * Children are derived from the other characters' father/mother keys, not
+   * stored on this one, so the list is read-only. Adding a child means
+   * creating that character — not wired up yet.
+   */
+  const childrenSection = (): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-xs tracking-wide text-muted-foreground uppercase">
+          Children · {childCharacters.length}
+        </Label>
+        <Button variant="outline" size="sm" disabled title="Not implemented yet">
+          <Plus />
+          Create new
+        </Button>
+      </div>
+      {childCharacters.length === 0 ? (
+        <p className="text-sm text-muted-foreground">none</p>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {childCharacters.map((c) => (
+            <div key={`${c.file}:${c.id}`} className="flex min-w-0 items-baseline gap-2 text-sm">
+              <ReferenceDisplay
+                value={c.name ?? c.id}
+                onNavigate={() => onNavigate(c.id)}
+                className={cn('truncate', c.name === null && 'font-mono')}
+              />
+              {c.name !== null && (
+                <span className="truncate font-mono text-xs text-muted-foreground">{c.id}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <Card className="flex h-full min-h-0 w-full min-w-0 flex-col gap-0 py-0">
       <div className="flex items-center justify-between border-b px-4 py-3">
@@ -477,6 +519,7 @@ export default function CharacterDetailPanel({
             {parentField('Father', draft.father, (v) => set({ father: v }))}
             {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
           </div>
+          {childrenSection()}
         </FieldSet>
 
         <FieldSet className="gap-3.5">

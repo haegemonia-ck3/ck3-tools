@@ -45,6 +45,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatCalendarDate, matchesDateRange } from '@/lib/ck3Date'
 import type { DateRangeFilter } from '@/lib/ck3Date'
+import { yearOf } from '@/lib/familyTree'
 import type {
   AppSettings,
   CalendarConfig,
@@ -411,6 +412,19 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const byKey = new Map(characters.map((c) => [`${c.file}:${c.id}`, c]))
   // Ids are unique across a mod's history files, so parent refs resolve by id alone
   const byId = new Map(characters.map((c) => [c.id, c]))
+  // Children are derived: whoever names the selected character as a parent,
+  // oldest first (undated last).
+  const childCharacters = selected
+    ? characters
+        .filter((c) => c.father === selected.id || c.mother === selected.id)
+        .sort((a, b) => {
+          const ya = yearOf(a.birth)
+          const yb = yearOf(b.birth)
+          if (ya !== yb) return ya === null ? 1 : yb === null ? -1 : ya - yb
+          return a.id.localeCompare(b.id)
+        })
+    : []
+
   // Hide refs to characters missing from the current scan without pruning them from settings
   const existing = (list: CharacterRef[]): CharacterRef[] =>
     loading || characters.length === 0
@@ -643,6 +657,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                 calendar={calendar}
                 refData={refData}
                 characterIds={characters.map((c) => c.id)}
+                childCharacters={childCharacters}
                 onNavigate={(id) => {
                   const target = byId.get(id)
                   if (!target) {
