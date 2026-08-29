@@ -9,6 +9,7 @@ import ReferenceBadge from './ReferenceBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -252,7 +253,7 @@ export default function CharacterDetailPanel({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-4">
+      <div className="@container min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         {stale && (
           <Alert>
             <AlertDescription>
@@ -261,70 +262,81 @@ export default function CharacterDetailPanel({
             </AlertDescription>
           </Alert>
         )}
-        {textField('ID', draft.id, (v) => set({ id: v ?? '' }))}
-        {textField('Name', draft.name, (v) => set({ name: v }))}
-        {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}
-        <div className="flex gap-2.5 *:flex-1">
-          {textField('Birth', draft.birth, (v) => set({ birth: v }), {
-            invalid: badBirth,
-            placeholder: 'Y.M.D'
-          })}
-          {textField('Death', draft.death, (v) => set({ death: v }), {
-            invalid: badDeath,
-            placeholder: 'alive'
-          })}
-        </div>
-        {refField('Culture', 'culture', draft.culture, (v) => set({ culture: v }), refData?.cultures ?? [])}
-        {refField('Faith', 'faith', draft.faith, (v) => set({ faith: v }), refData?.faiths ?? [])}
-        {parentField('Father', draft.father, (v) => set({ father: v }))}
-        {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
+        <FieldSet className="gap-3.5">
+          {textField('ID', draft.id, (v) => set({ id: v ?? '' }))}
+          {textField('Name', draft.name, (v) => set({ name: v }))}
+        </FieldSet>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs tracking-wide text-muted-foreground uppercase">Traits</Label>
-          <div className="flex min-h-6 flex-wrap gap-1.5">
-            {draft.traits.map((t) => (
-              <ReferenceBadge
-                key={t}
-                label={t}
-                icon={iconFor(t)}
-                locate={() => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'trait', t)}
-                onRemove={() => set({ traits: draft.traits.filter((x) => x !== t) })}
-              />
-            ))}
-            {draft.traits.length === 0 && <span className="text-sm text-muted-foreground">none</span>}
+        <FieldSet className="gap-3.5">
+          <FieldLegend variant="label" className="mb-0">Life &amp; lineage</FieldLegend>
+          <div className="flex gap-2.5 *:flex-1">
+            {textField('Birth', draft.birth, (v) => set({ birth: v }), {
+              invalid: badBirth,
+              placeholder: 'Y.M.D'
+            })}
+            {textField('Death', draft.death, (v) => set({ death: v }), {
+              invalid: badDeath,
+              placeholder: 'alive'
+            })}
           </div>
-          <Reference
-            options={(refData?.traits ?? []).filter((t) => !draft.traits.includes(t))}
-            placeholder="Add trait…"
-            onAdd={addTrait}
-            renderItem={(t) => <TraitOption trait={t} iconCtx={iconCtx} />}
-            limit={40}
-          />
-        </div>
+          {refField('Dynasty', 'dynasty', draft.dynasty, (v) => set({ dynasty: v }), refData?.dynasties ?? [])}
+          <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
+            {parentField('Father', draft.father, (v) => set({ father: v }))}
+            {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
+          </div>
+        </FieldSet>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs tracking-wide text-muted-foreground uppercase">Stats</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {STAT_LABELS.map(([key, label]) => (
-              <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
-                <span>{label}</span>
-                <Input
-                  type="number"
-                  value={draft.stats[key] ?? ''}
-                  placeholder="—"
-                  onChange={(e) =>
-                    set({
-                      stats: {
-                        ...draft.stats,
-                        [key]: e.target.value === '' ? null : Number(e.target.value)
-                      }
-                    })
-                  }
+        <FieldSet className="gap-3.5">
+          <FieldLegend variant="label" className="mb-0">Culture &amp; traits</FieldLegend>
+          {refField('Culture', 'culture', draft.culture, (v) => set({ culture: v }), refData?.cultures ?? [])}
+          {refField('Faith', 'faith', draft.faith, (v) => set({ faith: v }), refData?.faiths ?? [])}
+          <div className="space-y-1.5">
+            <Label className="text-xs tracking-wide text-muted-foreground uppercase">Traits</Label>
+            <div className="flex min-h-6 flex-wrap gap-1.5">
+              {draft.traits.map((t) => (
+                <ReferenceBadge
+                  key={t}
+                  label={t}
+                  icon={iconFor(t)}
+                  locate={() => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'trait', t)}
+                  onRemove={() => set({ traits: draft.traits.filter((x) => x !== t) })}
                 />
-              </label>
-            ))}
+              ))}
+              {draft.traits.length === 0 && <span className="text-sm text-muted-foreground">none</span>}
+            </div>
+            <Reference
+              options={(refData?.traits ?? []).filter((t) => !draft.traits.includes(t))}
+              placeholder="Add trait…"
+              onAdd={addTrait}
+              renderItem={(t) => <TraitOption trait={t} iconCtx={iconCtx} />}
+              limit={40}
+            />
           </div>
-        </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs tracking-wide text-muted-foreground uppercase">Stats</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {STAT_LABELS.map(([key, label]) => (
+                <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
+                  <span>{label}</span>
+                  <Input
+                    type="number"
+                    value={draft.stats[key] ?? ''}
+                    placeholder="—"
+                    onChange={(e) =>
+                      set({
+                        stats: {
+                          ...draft.stats,
+                          [key]: e.target.value === '' ? null : Number(e.target.value)
+                        }
+                      })
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        </FieldSet>
 
         {error && (
           <Alert variant="destructive">
