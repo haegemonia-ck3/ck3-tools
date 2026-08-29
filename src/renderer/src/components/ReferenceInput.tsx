@@ -60,7 +60,7 @@ interface Props {
   className?: string
 }
 
-export default function Reference({
+export default function ReferenceInput({
   value = null,
   onChange,
   onAdd,

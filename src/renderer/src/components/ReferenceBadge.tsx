@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowRight, ExternalLink, X } from 'lucide-react'
 import type { RefLocation } from '@shared/types'
-import { openReferenceTarget } from './Reference'
+import { openReferenceTarget } from './ReferenceInput'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
