@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { isValidCK3Date } from '@/lib/ck3Date'
 
 interface Props {
   modPath: string
@@ -24,8 +25,6 @@ interface Props {
   onSaved: (file: string, newId: string) => void
   onClose: () => void
 }
-
-const DATE_RE = /^\d+\.\d+(\.\d+)?$/
 
 export default function CharacterDetailPanel({
   modPath,
@@ -78,8 +77,8 @@ export default function CharacterDetailPanel({
     setSavedFlash(false)
   }
 
-  const badBirth = draft.birth !== null && draft.birth !== '' && !DATE_RE.test(draft.birth)
-  const badDeath = draft.death !== null && draft.death !== '' && !DATE_RE.test(draft.death)
+  const badBirth = draft.birth !== null && draft.birth !== '' && !isValidCK3Date(draft.birth)
+  const badDeath = draft.death !== null && draft.death !== '' && !isValidCK3Date(draft.death)
 
   const addTrait = (value: string): void => {
     const t = value.trim()
