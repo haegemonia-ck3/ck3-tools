@@ -9,6 +9,7 @@ import type {
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import CoatOfArms from './CoatOfArms'
+import ReferenceDisplay from './ReferenceDisplay'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -254,24 +255,16 @@ export default function DynastyDetailPanel({
       }}
     >
       <span className="min-w-0 flex-1 truncate">
-        {c.name ?? <span className="font-mono text-muted-foreground">{c.id}</span>}
+        <ReferenceDisplay
+          value={c.name ?? c.id}
+          onNavigate={() => onOpenCharacter(c.id)}
+          className={c.name === null ? 'font-mono' : undefined}
+        />
         {c.female && <span className="ml-1 text-muted-foreground">♀</span>}
       </span>
       <span className="text-xs whitespace-nowrap text-muted-foreground">
         {lifespanLabel(c, calendar)}
       </span>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="opacity-0 group-hover:opacity-100"
-        title="Open in Character Editor"
-        onClick={(e) => {
-          e.stopPropagation()
-          onOpenCharacter(c.id)
-        }}
-      >
-        <ArrowRight />
-      </Button>
     </div>
   )
 
