@@ -550,24 +550,6 @@ export default function DynastyEditorPage(): React.JSX.Element {
     <div className="flex h-full flex-col gap-3 p-7 pt-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dynasty &amp; House Editor</h1>
-        <div className="flex items-center gap-3">
-          <DebouncedInput
-            className="w-72"
-            type="search"
-            placeholder="Filter by id, name, culture, or parent…"
-            value={globalFilter}
-            onChange={(v) => table.setGlobalFilter(v)}
-          />
-          {filtered && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <FilterX />
-              Clear
-            </Button>
-          )}
-          <span className="text-xs whitespace-nowrap text-muted-foreground">
-            {loading ? 'Loading…' : `${visibleRows.length} / ${rows.length}`}
-          </span>
-        </div>
       </header>
 
       {!loading && rows.length === 0 && (
@@ -583,9 +565,28 @@ export default function DynastyEditorPage(): React.JSX.Element {
       )}
 
       {rows.length > 0 && (
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
-          <Table>
-            <TableHeader>
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
+          <div className="flex items-center justify-end gap-3">
+            <DebouncedInput
+              className="w-72"
+              type="search"
+              placeholder="Filter by id, name, culture, or parent…"
+              value={globalFilter}
+              onChange={(v) => table.setGlobalFilter(v)}
+            />
+            {filtered && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                <FilterX />
+                Clear
+              </Button>
+            )}
+            <span className="text-xs whitespace-nowrap text-muted-foreground">
+              {loading ? 'Loading…' : `${visibleRows.length} / ${rows.length}`}
+            </span>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
+            <Table>
+              <TableHeader>
               {table.getHeaderGroups().map((hg) => (
                 <TableRow key={hg.id} className="hover:bg-transparent">
                   {hg.headers.map((header) => (
@@ -647,7 +648,8 @@ export default function DynastyEditorPage(): React.JSX.Element {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
         </div>
       )}
     </div>
