@@ -454,24 +454,6 @@ export default function CharacterEditorPage(): React.JSX.Element {
     <div className="flex h-full flex-col gap-3 p-7 pt-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Character Editor</h1>
-        <div className="flex items-center gap-3">
-          <DebouncedInput
-            className="w-72"
-            type="search"
-            placeholder="Filter by id, name, dynasty, or file…"
-            value={globalFilter}
-            onChange={(v) => table.setGlobalFilter(v)}
-          />
-          {filtered && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <FilterX />
-              Clear
-            </Button>
-          )}
-          <span className="text-xs whitespace-nowrap text-muted-foreground">
-            {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
-          </span>
-        </div>
       </header>
 
       {(shownFavorites.length > 0 || shownRecents.length > 0 || shownDrafts.length > 0) && (
@@ -526,7 +508,25 @@ export default function CharacterEditorPage(): React.JSX.Element {
         onLayoutChanged={onLayoutChanged}
       >
         {characters.length > 0 && (
-          <ResizablePanel id="list" minSize={320} className="flex min-h-0 flex-col">
+          <ResizablePanel id="list" minSize={320} className="flex min-h-0 flex-col gap-2">
+            <div className="flex items-center justify-end gap-3">
+              <DebouncedInput
+                className="w-72"
+                type="search"
+                placeholder="Filter by id, name, dynasty, or file…"
+                value={globalFilter}
+                onChange={(v) => table.setGlobalFilter(v)}
+              />
+              {filtered && (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  <FilterX />
+                  Clear
+                </Button>
+              )}
+              <span className="text-xs whitespace-nowrap text-muted-foreground">
+                {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
+              </span>
+            </div>
             <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
               <Table>
                 <TableHeader>
