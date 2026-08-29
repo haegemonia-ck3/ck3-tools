@@ -1,6 +1,18 @@
+import { useState } from 'react'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
-import { Church, Crown, Landmark, PanelLeft, Settings } from 'lucide-react'
+import { ChevronsUpDown, Church, Crown, Landmark, PanelLeft, Settings } from 'lucide-react'
 import { useApp } from './AppContext'
+import ModPicker from './components/ModPicker'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '@/components/ui/dialog'
 import {
   Sidebar,
   SidebarContent,
@@ -39,8 +51,9 @@ function CollapseButton(): React.JSX.Element {
 }
 
 export default function RootLayout(): React.JSX.Element {
-  const { settings, selectedMod } = useApp()
+  const { settings, selectedMod, refreshMods } = useApp()
   const { pathname } = useLocation()
+  const [modDialogOpen, setModDialogOpen] = useState(false)
 
   if (!settings) {
     return <div className="flex h-full items-center justify-center text-muted-foreground">Loading…</div>
@@ -57,11 +70,31 @@ export default function RootLayout(): React.JSX.Element {
               <span className="block text-lg font-semibold tracking-wide text-sidebar-primary">
                 CK3 Tools
               </span>
-              {selectedMod && (
-                <span className="block truncate text-xs text-muted-foreground" title={selectedMod.file}>
-                  {selectedMod.name}
-                </span>
-              )}
+              <Dialog open={modDialogOpen} onOpenChange={setModDialogOpen}>
+                <DialogTrigger asChild>
+                  <button
+                    className="mt-0.5 flex w-full cursor-pointer items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground"
+                    title={selectedMod?.file}
+                  >
+                    <span className="truncate">{selectedMod ? selectedMod.name : 'Select a mod…'}</span>
+                    <ChevronsUpDown className="size-3 shrink-0" />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Active mod</DialogTitle>
+                    <DialogDescription>
+                      The tools will read from the game directory and read/write to the selected mod.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ModPicker plain onSelect={() => setModDialogOpen(false)} />
+                  <DialogFooter className="sm:justify-start">
+                    <Button variant="outline" size="sm" onClick={refreshMods}>
+                      Refresh
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </SidebarHeader>
           <SidebarContent>
