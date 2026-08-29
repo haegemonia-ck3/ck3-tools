@@ -12,6 +12,7 @@ import {
   ComboboxItem,
   ComboboxList
 } from '@/components/ui/combobox'
+import { cn } from '@/lib/utils'
 
 interface Props {
   value: string | null
@@ -28,6 +29,9 @@ interface Props {
    * user's text editor. Ignored when onNavigate is provided.
    */
   locate?: (value: string) => Promise<RefLocation | null>
+  /** Tooltip for the follow button; defaults to wording for a definition site. */
+  followTitle?: string
+  className?: string
 }
 
 /** Cap the dropdown; mod lists (dynasties especially) can run to thousands of ids. */
@@ -39,7 +43,9 @@ export default function Reference({
   options,
   placeholder,
   onNavigate,
-  locate
+  locate,
+  followTitle,
+  className
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
 
@@ -73,7 +79,7 @@ export default function Reference({
   const canFollow = Boolean(value) && Boolean(onNavigate ?? locate)
 
   return (
-    <ButtonGroup className="w-full">
+    <ButtonGroup className={cn('w-full', className)}>
       <Combobox items={items} limit={LIMIT} value={value} onValueChange={onChange}>
         <ComboboxInput className="flex-1" placeholder={placeholder} showClear />
         <ComboboxContent>
@@ -91,7 +97,7 @@ export default function Reference({
         variant="outline"
         size="icon"
         disabled={!canFollow || opening}
-        title={onNavigate ? 'Go to this entry' : 'Open definition in text editor'}
+        title={followTitle ?? (onNavigate ? 'Go to this entry' : 'Open definition in text editor')}
         onClick={follow}
       >
         {onNavigate ? <ArrowRight /> : <ExternalLink />}
