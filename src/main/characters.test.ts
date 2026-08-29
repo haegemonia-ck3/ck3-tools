@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { getCharacter, saveCharacter } from './characters'
+import { createCharacter, getCharacter, listCharacterFiles, saveCharacter } from './characters'
+import type { CharacterDetail } from '@shared/types'
 
 // Synthetic mod layout in a temp dir — never touches real CK3 files
 const modPath = mkdtempSync(join(tmpdir(), 'ck3-tools-characters-'))
@@ -235,5 +236,182 @@ describe('dynasty and house', () => {
     const added = getCharacter(modPath, lineageFile, '1')!
     expect(saveCharacter(modPath, lineageFile, '1', { ...added, house: null })).toEqual({ ok: true })
     expect(readFileSync(lineagePath, 'utf-8')).toBe(before)
+  })
+})
+
+// `female` is kept raw: an explicit `female = no` must round-trip untouched
+describe('female', () => {
+  const fFile = 'female.txt'
+  const fPath = join(modPath, 'history', 'characters', fFile)
+  const F_SOURCE = [
+    '400 = {',
+    '\tname = "Anna"',
+    '\tfemale = yes',
+    '\t900.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '}',
+    '',
+    '401 = {',
+    '\tname = "Basil"',
+    '\tfemale = no',
+    '\t900.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '}',
+    ''
+  ].join('\n')
+  beforeEach(() => writeFileSync(fPath, F_SOURCE, 'utf-8'))
+
+  it('reads the raw value, null when absent', () => {
+    expect(getCharacter(modPath, fFile, '400')!.female).toBe('yes')
+    expect(getCharacter(modPath, fFile, '401')!.female).toBe('no')
+    expect(getCharacter(modPath, file, '219')!.female).toBeNull()
+  })
+
+  it('round-trips byte-for-byte on no-op saves, `female = no` included', () => {
+    for (const id of ['400', '401']) {
+      const detail = getCharacter(modPath, fFile, id)!
+      expect(saveCharacter(modPath, fFile, id, detail)).toEqual({ ok: true })
+    }
+    expect(readFileSync(fPath, 'utf-8')).toBe(F_SOURCE)
+  })
+
+  it('adds and removes the line', () => {
+    const detail = getCharacter(modPath, file, '218')!
+    expect(saveCharacter(modPath, file, '218', { ...detail, female: 'yes' })).toEqual({ ok: true })
+    expect(readFileSync(path, 'utf-8')).toContain('\tfemale = yes\n\t1020.1.1 = {')
+    const set = getCharacter(modPath, file, '218')!
+    expect(set.female).toBe('yes')
+    expect(saveCharacter(modPath, file, '218', { ...set, female: null })).toEqual({ ok: true })
+    expect(readFileSync(path, 'utf-8')).toBe(SOURCE)
+  })
+})
+
+describe('createCharacter', () => {
+  const newDetail = (over: Partial<CharacterDetail> = {}): CharacterDetail => ({
+    id: '9000',
+    file: '',
+    name: 'Nikephoros',
+    dynasty: null,
+    house: null,
+    birth: '1000.1.1',
+    death: null,
+    culture: 'greek',
+    faith: 'orthodox',
+    father: null,
+    mother: null,
+    traits: [],
+    stats: {
+      diplomacy: null,
+      martial: null,
+      stewardship: null,
+      intrigue: null,
+      learning: null,
+      prowess: null
+    },
+    female: null,
+    ...over
+  })
+
+  it('appends to an existing file, preserving the current content byte-for-byte', () => {
+    expect(
+      createCharacter(modPath, file, newDetail({ father: '219', traits: ['brave'] }))
+    ).toEqual({ ok: true })
+    const text = readFileSync(path, 'utf-8')
+    expect(text.startsWith(SOURCE)).toBe(true)
+    expect(text).toContain(
+      [
+        '9000 = {',
+        '\tname = "Nikephoros"',
+        '\tculture = greek',
+        '\tfaith = orthodox',
+        '\tfather = 219',
+        '\ttrait = brave',
+        '\t1000.1.1 = {',
+        '\t\tbirth = yes',
+        '\t}',
+        '}'
+      ].join('\n')
+    )
+    const created = getCharacter(modPath, file, '9000')!
+    expect(created.name).toBe('Nikephoros')
+    expect(created.father).toBe('219')
+    expect(created.birth).toBe('1000.1.1')
+  })
+
+  it('creates a missing file, with every optional field written', () => {
+    const detail = newDetail({
+      id: '9001',
+      house: 'house_B',
+      death: '1060.2.3',
+      mother: '217',
+      female: 'yes',
+      stats: {
+        diplomacy: 4,
+        martial: null,
+        stewardship: 7,
+        intrigue: null,
+        learning: null,
+        prowess: null
+      }
+    })
+    expect(createCharacter(modPath, 'created.txt', detail)).toEqual({ ok: true })
+    const text = readFileSync(join(modPath, 'history', 'characters', 'created.txt'), 'utf-8')
+    expect(text).toBe(
+      [
+        '9001 = {',
+        '\tname = "Nikephoros"',
+        '\tfemale = yes',
+        '\tdynasty_house = house_B',
+        '\tculture = greek',
+        '\tfaith = orthodox',
+        '\tmother = 217',
+        '\tdiplomacy = 4',
+        '\tstewardship = 7',
+        '\t1000.1.1 = {',
+        '\t\tbirth = yes',
+        '\t}',
+        '\t1060.2.3 = {',
+        '\t\tdeath = yes',
+        '\t}',
+        '}',
+        ''
+      ].join('\n')
+    )
+    expect(listCharacterFiles(modPath)).toContain('created.txt')
+  })
+
+  it('matches an existing CRLF file with CRLF lines', () => {
+    const crPath = join(modPath, 'history', 'characters', 'crlf_create.txt')
+    writeFileSync(crPath, SOURCE.replace(/\n/g, '\r\n'), 'utf-8')
+    expect(createCharacter(modPath, 'crlf_create.txt', newDetail({ id: '9002' }))).toEqual({
+      ok: true
+    })
+    const text = readFileSync(crPath, 'utf-8')
+    expect(text).toContain('\r\n9002 = {\r\n\tname = "Nikephoros"\r\n')
+    expect(text.replace(/\r\n/g, '')).not.toContain('\n')
+  })
+
+  it('rejects a duplicate id anywhere in the mod', () => {
+    const result = createCharacter(modPath, 'other.txt', newDetail({ id: '219' }))
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toMatch(/already exists in .*\.txt/)
+  })
+
+  it('rejects missing mandatory fields', () => {
+    expect(createCharacter(modPath, file, newDetail({ name: null })).ok).toBe(false)
+    expect(createCharacter(modPath, file, newDetail({ culture: null })).ok).toBe(false)
+    expect(createCharacter(modPath, file, newDetail({ faith: null })).ok).toBe(false)
+    expect(createCharacter(modPath, file, newDetail({ birth: null })).ok).toBe(false)
+    expect(createCharacter(modPath, file, newDetail({ id: '  ' })).ok).toBe(false)
+    expect(createCharacter(modPath, file, newDetail({ birth: 'not-a-date' })).ok).toBe(false)
+    expect(createCharacter(modPath, file, newDetail({ id: 'has space' })).ok).toBe(false)
+  })
+
+  it('rejects bad file names', () => {
+    expect(createCharacter(modPath, 'notes.md', newDetail()).ok).toBe(false)
+    expect(createCharacter(modPath, '.txt', newDetail()).ok).toBe(false)
+    expect(createCharacter(modPath, 'sub\\dir.txt', newDetail()).ok).toBe(false)
   })
 })

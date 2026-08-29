@@ -11,10 +11,25 @@ import CharacterEditorPage from './pages/CharacterEditorPage'
 import DynastyEditorPage from './pages/DynastyEditorPage'
 import ToolPlaceholder from './pages/ToolPlaceholder'
 
-/** Deep-link target for the character editor (e.g. from a family-tree node) */
+/**
+ * Deep-link target for the character editor (e.g. from a family-tree node).
+ * With `create` set, the page opens the new-character panel instead of a
+ * character, and the remaining fields act as prefills — so "Add child" can
+ * pass the parent, or "Add member" the dynasty. `file` doubles as the
+ * pre-selected target file in create mode.
+ */
 export interface CharacterSearch {
   file?: string
   id?: string
+  create?: boolean
+  name?: string
+  birth?: string
+  culture?: string
+  faith?: string
+  father?: string
+  mother?: string
+  dynasty?: string
+  house?: string
 }
 
 /**
@@ -50,10 +65,22 @@ const charactersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/characters',
   component: CharacterEditorPage,
-  validateSearch: (search: Record<string, unknown>): CharacterSearch => ({
-    file: typeof search.file === 'string' ? search.file : undefined,
-    id: typeof search.id === 'string' ? search.id : undefined
-  })
+  validateSearch: (search: Record<string, unknown>): CharacterSearch => {
+    const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+    return {
+      file: str(search.file),
+      id: str(search.id),
+      create: search.create === true || search.create === 'true' ? true : undefined,
+      name: str(search.name),
+      birth: str(search.birth),
+      culture: str(search.culture),
+      faith: str(search.faith),
+      father: str(search.father),
+      mother: str(search.mother),
+      dynasty: str(search.dynasty),
+      house: str(search.house)
+    }
+  }
 })
 
 const dynastiesRoute = createRoute({

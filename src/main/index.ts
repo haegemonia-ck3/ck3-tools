@@ -9,7 +9,13 @@ import {
   validateGameDir,
   validateModDir
 } from './ck3'
-import { getCharacter, listCharacters, saveCharacter } from './characters'
+import {
+  createCharacter,
+  getCharacter,
+  listCharacterFiles,
+  listCharacters,
+  saveCharacter
+} from './characters'
 import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
@@ -80,6 +86,12 @@ function registerIpc(): void {
     'ck3:saveCharacter',
     (_e, modPath: string, file: string, originalId: string, detail: CharacterDetail) =>
       saveCharacter(modPath, file, originalId, detail)
+  )
+  ipcMain.handle('ck3:listCharacterFiles', (_e, modPath: string) => listCharacterFiles(modPath))
+  ipcMain.handle(
+    'ck3:createCharacter',
+    (_e, modPath: string, file: string, detail: CharacterDetail) =>
+      createCharacter(modPath, file, detail)
   )
   ipcMain.handle(
     'ck3:getDynastyData',

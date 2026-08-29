@@ -44,7 +44,8 @@ const characters: CharacterDetail[] = [
       intrigue: 5,
       learning: 2,
       prowess: 6
-    }
+    },
+    female: null
   },
   {
     id: '218',
@@ -66,7 +67,8 @@ const characters: CharacterDetail[] = [
       intrigue: 2,
       learning: 4,
       prowess: 3
-    }
+    },
+    female: null
   },
   {
     id: '1002',
@@ -88,7 +90,8 @@ const characters: CharacterDetail[] = [
       intrigue: 3,
       learning: 5,
       prowess: 1
-    }
+    },
+    female: 'yes'
   },
   {
     id: '77',
@@ -110,7 +113,8 @@ const characters: CharacterDetail[] = [
       intrigue: null,
       learning: null,
       prowess: null
-    }
+    },
+    female: null
   },
   {
     id: '3410',
@@ -132,7 +136,8 @@ const characters: CharacterDetail[] = [
       intrigue: 4,
       learning: 1,
       prowess: 8
-    }
+    },
+    female: null
   },
   {
     id: '3411',
@@ -155,7 +160,8 @@ const characters: CharacterDetail[] = [
       intrigue: 8,
       learning: 4,
       prowess: 2
-    }
+    },
+    female: 'yes'
   }
 ]
 
@@ -311,6 +317,14 @@ const mock: Ck3ToolsApi = {
   saveCharacter: async (_modPath, file, originalId, detail) => {
     const i = characters.findIndex((c) => c.file === file && c.id === originalId)
     if (i >= 0) characters[i] = structuredClone(detail)
+    return { ok: true }
+  },
+  listCharacterFiles: async () => [...new Set(characters.map((c) => c.file))].sort(),
+  createCharacter: async (_modPath, file, detail) => {
+    if (characters.some((c) => c.id === detail.id)) {
+      return { ok: false, error: `ID ${detail.id} already exists in the mod` }
+    }
+    characters.push(structuredClone({ ...detail, file }))
     return { ok: true }
   },
   getDynastyData: async () => ({

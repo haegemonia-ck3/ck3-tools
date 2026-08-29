@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, ChevronRight, ExternalLink } from 'lucide-react'
+import { ArrowRight, ChevronRight, ExternalLink, Plus } from 'lucide-react'
 import type {
   CalendarConfig,
   DynastyCharacter,
@@ -66,6 +66,8 @@ interface Props {
   onMemberClick: (id: string) => void
   /** Jump to the character editor */
   onOpenCharacter: (id: string) => void
+  /** Open the character editor's create panel with this dynasty/house prefilled */
+  onAddMember: () => void
   /** Switch the editor to another dynasty/house row */
   onOpenRow: (kind: 'dynasty' | 'house', id: string) => void
   /** Called after a successful save so the page can reload definitions */
@@ -95,6 +97,7 @@ export default function DynastyDetailPanel({
   selectedMemberId,
   onMemberClick,
   onOpenCharacter,
+  onAddMember,
   onOpenRow,
   onSaved,
   onClose
@@ -462,20 +465,31 @@ export default function DynastyDetailPanel({
         <FieldSet className="gap-3.5">
           <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
             Members · {members.length}
-            {kind === 'dynasty' && (
-              <ToggleGroup
-                type="single"
+            <span className="flex items-center gap-1.5">
+              <Button
                 variant="outline"
-                size="sm"
-                spacing={0}
-                value={grouped ? 'grouped' : 'flat'}
-                onValueChange={(v) => v && setGrouped(v === 'grouped')}
-                aria-label="Member list mode"
+                size="xs"
+                title={`Create a new character in this ${kind}`}
+                onClick={onAddMember}
               >
-                <ToggleGroupItem value="grouped">By house</ToggleGroupItem>
-                <ToggleGroupItem value="flat">Flat</ToggleGroupItem>
-              </ToggleGroup>
-            )}
+                <Plus />
+                Add
+              </Button>
+              {kind === 'dynasty' && (
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  spacing={0}
+                  value={grouped ? 'grouped' : 'flat'}
+                  onValueChange={(v) => v && setGrouped(v === 'grouped')}
+                  aria-label="Member list mode"
+                >
+                  <ToggleGroupItem value="grouped">By house</ToggleGroupItem>
+                  <ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+                </ToggleGroup>
+              )}
+            </span>
           </FieldLegend>
           {members.length === 0 ? (
             <p className="text-sm text-muted-foreground">

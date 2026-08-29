@@ -17,11 +17,12 @@ import {
 } from '@tanstack/react-table'
 import type { Column, FilterFn, Row, SortFn } from '@tanstack/react-table'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { FilterX, Star } from 'lucide-react'
+import { FilterX, Plus, Star } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
+import CharacterCreatePanel from '../components/CharacterCreatePanel'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
 import DateRangeFilterField from '../components/DateRangeFilterField'
 import DebouncedInput from '../components/DebouncedInput'
@@ -49,11 +50,13 @@ import { yearOf } from '@/lib/familyTree'
 import type {
   AppSettings,
   CalendarConfig,
+  CharacterDetail,
   CharacterDraft,
   CharacterRef,
   CharacterSummary,
   ReferenceData
 } from '@shared/types'
+import type { CharacterSearch } from '../router'
 
 const RECENTS_CAP = 10
 const RECENTS_COLLAPSED = 5
@@ -239,13 +242,18 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
+  /** Existing .txt files under history/characters; null until scanned */
+  const [characterFiles, setCharacterFiles] = useState<string[] | null>(null)
   const [showAllRecents, setShowAllRecents] = useState(false)
   // Which character is open lives in the URL, not in state, so opening one
   // pushes a history entry and the mouse "back" button returns to the list.
+  // `create` opens the new-character panel instead, with the other search
+  // fields as prefills (so e.g. "Add child" deep-links with the parent set).
   const search = useSearch({ from: '/characters' })
   const navigate = useNavigate()
+  const creating = search.create === true
   const selected: { file: string; id: string } | null =
-    search.file && search.id ? { file: search.file, id: search.id } : null
+    !creating && search.file && search.id ? { file: search.file, id: search.id } : null
   // Remembers the character list / detail split across sessions (localStorage)
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'character-editor-detail',
@@ -312,6 +320,12 @@ export default function CharacterEditorPage(): React.JSX.Element {
     else setOpen(false)
   }
 
+  const openCreate = (prefill: CharacterSearch = {}): void => {
+    void navigate({ to: '/characters', search: { ...prefill, create: true } })
+    if (isMobile) setOpenMobile(false)
+    else setOpen(false)
+  }
+
   // Closing replaces rather than pushes, so "back" from the list doesn't drop
   // straight back into the character that was just closed.
   const closeCharacter = (): void => {
@@ -337,6 +351,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const reload = (): void => {
     if (!modPath) {
       setCharacters([])
+      setCharacterFiles(null)
       return
     }
     setLoading(true)
@@ -344,6 +359,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
       .listCharacters(modPath)
       .then(setCharacters)
       .finally(() => setLoading(false))
+    window.ck3tools.listCharacterFiles(modPath).then(setCharacterFiles)
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,6 +440,20 @@ export default function CharacterEditorPage(): React.JSX.Element {
           return a.id.localeCompare(b.id)
         })
     : []
+
+  // Field values the create panel starts from, seeded by the URL (only keys
+  // actually present — an undefined would clobber the panel's empty defaults)
+  const createPrefill: Partial<CharacterDetail> = {}
+  if (creating) {
+    if (search.name) createPrefill.name = search.name
+    if (search.birth) createPrefill.birth = search.birth
+    if (search.culture) createPrefill.culture = search.culture
+    if (search.faith) createPrefill.faith = search.faith
+    if (search.father) createPrefill.father = search.father
+    if (search.mother) createPrefill.mother = search.mother
+    if (search.dynasty) createPrefill.dynasty = search.dynasty
+    if (search.house) createPrefill.house = search.house
+  }
 
   // Hide refs to characters missing from the current scan without pruning them from settings
   const existing = (list: CharacterRef[]): CharacterRef[] =>
@@ -506,11 +536,15 @@ export default function CharacterEditorPage(): React.JSX.Element {
 
       {!loading && characters.length === 0 && (
         <Card>
-          <CardContent>
+          <CardContent className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
               No characters found in {selectedMod.name}&apos;s{' '}
               <code className="font-mono">history/characters</code> folder.
             </p>
+            <Button size="sm" onClick={() => openCreate()}>
+              <Plus />
+              New character
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -523,23 +557,29 @@ export default function CharacterEditorPage(): React.JSX.Element {
       >
         {characters.length > 0 && (
           <ResizablePanel id="list" minSize={320} className="flex min-h-0 flex-col gap-2">
-            <div className="flex items-center justify-end gap-3">
-              <DebouncedInput
-                className="w-72"
-                type="search"
-                placeholder="Filter by id, name, dynasty, or file…"
-                value={globalFilter}
-                onChange={(v) => table.setGlobalFilter(v)}
-              />
-              {filtered && (
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  <FilterX />
-                  Clear
-                </Button>
-              )}
-              <span className="text-xs whitespace-nowrap text-muted-foreground">
-                {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
-              </span>
+            <div className="flex items-center gap-3">
+              <Button size="sm" onClick={() => openCreate()}>
+                <Plus />
+                New
+              </Button>
+              <div className="ml-auto flex items-center gap-3">
+                <DebouncedInput
+                  className="w-72"
+                  type="search"
+                  placeholder="Filter by id, name, dynasty, or file…"
+                  value={globalFilter}
+                  onChange={(v) => table.setGlobalFilter(v)}
+                />
+                {filtered && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <FilterX />
+                    Clear
+                  </Button>
+                )}
+                <span className="text-xs whitespace-nowrap text-muted-foreground">
+                  {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
+                </span>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
               <Table>
@@ -633,7 +673,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
             </div>
           </ResizablePanel>
         )}
-        {selected && modPath && (
+        {(selected || (creating && characterFiles !== null)) && modPath && (
           <>
             {characters.length > 0 && (
               <ResizableHandle
@@ -648,38 +688,72 @@ export default function CharacterEditorPage(): React.JSX.Element {
               maxSize={720}
               className="flex min-h-0 flex-col"
             >
-              <CharacterDetailPanel
-                modPath={modPath}
-                file={selected.file}
-                id={selected.id}
-                gameDir={settings?.gameDir ?? null}
-                replacePaths={selectedMod?.replacePaths ?? []}
-                calendar={calendar}
-                refData={refData}
-                characterIds={characters.map((c) => c.id)}
-                childCharacters={childCharacters}
-                onNavigate={(id) => {
-                  const target = byId.get(id)
-                  if (!target) {
-                    toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
-                    return
+              {selected ? (
+                <CharacterDetailPanel
+                  modPath={modPath}
+                  file={selected.file}
+                  id={selected.id}
+                  gameDir={settings?.gameDir ?? null}
+                  replacePaths={selectedMod?.replacePaths ?? []}
+                  calendar={calendar}
+                  refData={refData}
+                  characterIds={characters.map((c) => c.id)}
+                  childCharacters={childCharacters}
+                  onNavigate={(id) => {
+                    const target = byId.get(id)
+                    if (!target) {
+                      toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
+                      return
+                    }
+                    openCharacter({ file: target.file, id: target.id, name: target.name })
+                  }}
+                  onOpenLineage={(kind, id) =>
+                    void navigate({ to: '/dynasties', search: { id, kind } })
                   }
-                  openCharacter({ file: target.file, id: target.id, name: target.name })
-                }}
-                onOpenLineage={(kind, id) =>
-                  void navigate({ to: '/dynasties', search: { id, kind } })
-                }
-                storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
-                onDraftChange={persistDraft}
-                onSaved={(file, newId) => {
-                  if (selected) {
-                    remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+                  onCreateChild={openCreate}
+                  storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
+                  onDraftChange={persistDraft}
+                  onSaved={(file, newId) => {
+                    if (selected) {
+                      remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+                    }
+                    void navigate({ to: '/characters', search: { file, id: newId }, replace: true })
+                    reload()
+                  }}
+                  onClose={closeCharacter}
+                />
+              ) : (
+                <CharacterCreatePanel
+                  // Remount when the prefills change, so a fresh deep link
+                  // (e.g. Add child from another character) reseeds the form
+                  key={JSON.stringify(search)}
+                  modPath={modPath}
+                  gameDir={settings?.gameDir ?? null}
+                  replacePaths={selectedMod?.replacePaths ?? []}
+                  calendar={calendar}
+                  refData={refData}
+                  characterIds={characters.map((c) => c.id)}
+                  characterFiles={characterFiles ?? []}
+                  prefill={createPrefill}
+                  initialFile={search.file ?? null}
+                  onNavigate={(id) => {
+                    const target = byId.get(id)
+                    if (!target) {
+                      toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
+                      return
+                    }
+                    openCharacter({ file: target.file, id: target.id, name: target.name })
+                  }}
+                  onOpenLineage={(kind, id) =>
+                    void navigate({ to: '/dynasties', search: { id, kind } })
                   }
-                  void navigate({ to: '/characters', search: { file, id: newId }, replace: true })
-                  reload()
-                }}
-                onClose={closeCharacter}
-              />
+                  onCreated={(file, id) => {
+                    void navigate({ to: '/characters', search: { file, id }, replace: true })
+                    reload()
+                  }}
+                  onClose={closeCharacter}
+                />
+              )}
             </ResizablePanel>
           </>
         )}

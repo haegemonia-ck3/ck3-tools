@@ -47,6 +47,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import type { DynastyData, ReferenceData } from '@shared/types'
+import type { CharacterSearch } from '../router'
 import {
   buildRows,
   buildTreeNodes,
@@ -554,6 +555,12 @@ export default function DynastyEditorPage(): React.JSX.Element {
               selectedMemberId={treeSelected}
               onMemberClick={focusMember}
               onOpenCharacter={openCharacter}
+              onAddMember={() => {
+                const search: CharacterSearch = { create: true }
+                if (selected.kind === 'house') search.house = selected.id
+                else search.dynasty = selected.id
+                void navigate({ to: '/characters', search })
+              }}
               onOpenRow={openRow}
               onSaved={reload}
               onClose={closeRow}

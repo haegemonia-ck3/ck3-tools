@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { endOfBodyIndex, eolSuffix, makeEditor, refresh, setScalar, SCALAR_LINE } from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
@@ -64,7 +64,8 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     father: scalars.get('father') ?? null,
     mother: scalars.get('mother') ?? null,
     traits: scanRepeatedScalar(body, 'trait'),
-    stats
+    stats,
+    female: scalars.get('female') ?? null
   }
 }
 
@@ -253,6 +254,7 @@ export function saveCharacter(
     const set = (keys: string[], value: string | null, quoteNew = false): void =>
       setScalar(ed, keys, value, { quoteNew, insertAt: firstDateBlockLine(ed) })
     set(['name'], detail.name, true)
+    set(['female'], detail.female)
     set(['dynasty'], detail.dynasty)
     set(['dynasty_house'], detail.house)
     set(['culture'], detail.culture)
@@ -275,6 +277,99 @@ export function saveCharacter(
       newBody +
       text.slice(block.bodyEnd)
     writeFileSync(path, updated, 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// ---------- Creating ----------
+
+/** Same charset the block scanner and line editor accept for keys. */
+const ID_CHARS = /^[A-Za-z0-9_.\-']+$/
+
+export function listCharacterFiles(modPath: string): string[] {
+  const dir = charactersDir(modPath)
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.txt'))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Append a brand-new character block to a history file (created if missing).
+ * Existing file content is preserved byte-for-byte; the block is added after a
+ * separating blank line, matching the file's line-ending style.
+ */
+export function createCharacter(
+  modPath: string,
+  file: string,
+  detail: CharacterDetail
+): SaveResult {
+  try {
+    const id = detail.id.trim()
+    if (!id) return { ok: false, error: 'ID must not be empty' }
+    if (!ID_CHARS.test(id)) {
+      return { ok: false, error: `Invalid ID "${id}" (letters, digits, _ . - ' only)` }
+    }
+    if (
+      !file.toLowerCase().endsWith('.txt') ||
+      file.length <= 4 ||
+      !/^[^\\/:*?"<>|]+$/.test(file)
+    ) {
+      return { ok: false, error: `Invalid file name "${file}" (expected a .txt file name)` }
+    }
+    const required: [string, string | null][] = [
+      ['Name', detail.name],
+      ['Culture', detail.culture],
+      ['Faith', detail.faith],
+      ['Birth date', detail.birth]
+    ]
+    for (const [label, value] of required) {
+      if (!value?.trim()) return { ok: false, error: `${label} is required` }
+    }
+    for (const date of [detail.birth, detail.death]) {
+      if (date !== null && !DATE_KEY.test(date)) {
+        return { ok: false, error: `Invalid date "${date}" (expected Y.M.D)` }
+      }
+    }
+    const clash = listCharacters(modPath).find((c) => c.id === id)
+    if (clash) return { ok: false, error: `ID ${id} already exists in ${clash.file}` }
+
+    const dir = charactersDir(modPath)
+    const path = join(dir, file)
+    const existing = existsSync(path) ? readFileSync(path, 'utf-8') : null
+    const eol = existing !== null && existing.includes('\r\n') ? '\r\n' : '\n'
+
+    const t = '\t'
+    const lines: string[] = [`${id} = {`]
+    const push = (key: string, value: string | null, quote = false): void => {
+      if (value === null || value === '') return
+      lines.push(`${t}${key} = ${quote ? `"${value}"` : value}`)
+    }
+    push('name', detail.name, true)
+    push('female', detail.female)
+    push('dynasty', detail.dynasty)
+    push('dynasty_house', detail.house)
+    push('culture', detail.culture)
+    push('faith', detail.faith)
+    push('father', detail.father)
+    push('mother', detail.mother)
+    for (const trait of detail.traits) push('trait', trait)
+    for (const key of STAT_KEYS) {
+      const v = detail.stats[key]
+      if (v !== null) push(key, String(v))
+    }
+    lines.push(`${t}${detail.birth} = {`, `${t}${t}birth = yes`, `${t}}`)
+    if (detail.death) lines.push(`${t}${detail.death} = {`, `${t}${t}death = yes`, `${t}}`)
+    lines.push('}')
+    const block = lines.join(eol) + eol
+
+    let prefix = existing ?? ''
+    if (prefix !== '' && !prefix.endsWith('\n')) prefix += eol
+    if (prefix !== '' && !/(\r?\n){2}$/.test(prefix)) prefix += eol
+    if (existing === null) mkdirSync(dir, { recursive: true })
+    writeFileSync(path, prefix + block, 'utf-8')
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

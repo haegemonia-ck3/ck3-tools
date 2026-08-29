@@ -28,6 +28,8 @@ export interface Ck3ToolsApi {
     originalId: string,
     detail: CharacterDetail
   ) => Promise<SaveResult>
+  listCharacterFiles: (modPath: string) => Promise<string[]>
+  createCharacter: (modPath: string, file: string, detail: CharacterDetail) => Promise<SaveResult>
   getDynastyData: (
     gameDir: string | null,
     modPath: string | null,

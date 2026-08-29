@@ -126,6 +126,11 @@ export interface CharacterDetail {
   mother: string | null
   traits: string[]
   stats: CharacterStats
+  /**
+   * Raw `female =` value ("yes"/"no"; absent means male). Kept raw so an
+   * explicit `female = no` in a file round-trips untouched.
+   */
+  female: string | null
 }
 
 /**

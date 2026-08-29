@@ -33,6 +33,10 @@ const api = {
     originalId: string,
     detail: CharacterDetail
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveCharacter', modPath, file, originalId, detail),
+  listCharacterFiles: (modPath: string): Promise<string[]> =>
+    ipcRenderer.invoke('ck3:listCharacterFiles', modPath),
+  createCharacter: (modPath: string, file: string, detail: CharacterDetail): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createCharacter', modPath, file, detail),
   getDynastyData: (
     gameDir: string | null,
     modPath: string | null,
