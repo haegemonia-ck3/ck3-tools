@@ -1,0 +1,19 @@
+appId: com.kevinsherman.ck3-tools
+productName: CK3 Tools
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+win:
+  target:
+    - nsis
+    - zip
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}
+publish:
+  provider: github
+  owner: haegemonia-ck3
+  repo: ck3-tools
