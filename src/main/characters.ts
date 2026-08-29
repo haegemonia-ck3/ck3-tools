@@ -1,11 +1,13 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { makeEditor, refresh, setScalar, SCALAR_LINE } from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
+import type { LineEditor } from './lineEditor'
 import type { CharacterDetail, CharacterStats, CharacterSummary, SaveResult } from '@shared/types'
 
 // Tolerates typos that appear in real mod files: a trailing dot ("3220.1.1.")
 // and a missing day part ("3212.1")
-const DATE_KEY = /^\d+\.\d+(\.\d+)?\.?$/
+export const DATE_KEY = /^\d+\.\d+(\.\d+)?\.?$/
 
 export const STAT_KEYS = [
   'diplomacy',
@@ -112,47 +114,6 @@ export function getCharacter(modPath: string, file: string, id: string): Charact
  * the file are preserved byte-for-byte.
  */
 
-const SCALAR_LINE = /^(\s*)([A-Za-z0-9_.\-']+)(\s*=\s*)("([^"]*)"|[^\s{}"]+)(\s*)$/
-
-interface LineEditor {
-  lines: string[]
-  depths: number[]
-  indent: string
-}
-
-function makeEditor(body: string): LineEditor {
-  const annotated = annotateLines(body)
-  const lines = annotated.map((l) => l.text)
-  const depths = annotated.map((l) => l.depth)
-  // Detect the block's indentation from its first scalar line
-  let indent = '\t'
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(/^(\s+)\S/)
-    if (depths[i] === 0 && m) {
-      indent = m[1]
-      break
-    }
-  }
-  return { lines, depths, indent }
-}
-
-/** Recompute depths after a structural change. */
-function refresh(ed: LineEditor): void {
-  const annotated = annotateLines(ed.lines.join('\n'))
-  ed.lines = annotated.map((l) => l.text)
-  ed.depths = annotated.map((l) => l.depth)
-}
-
-function findScalarLine(ed: LineEditor, keys: string[]): number {
-  for (let i = 0; i < ed.lines.length; i++) {
-    if (ed.depths[i] !== 0) continue
-    const code = ed.lines[i].split('#')[0]
-    const m = code.match(SCALAR_LINE)
-    if (m && keys.includes(m[2])) return i
-  }
-  return -1
-}
-
 /** Index of the first date-block opener line, used as the insertion anchor for scalars. */
 function firstDateBlockLine(ed: LineEditor): number {
   for (let i = 0; i < ed.lines.length; i++) {
@@ -162,33 +123,6 @@ function firstDateBlockLine(ed: LineEditor): number {
     if (m && DATE_KEY.test(m[1])) return i
   }
   return ed.lines.length
-}
-
-/**
- * Set/replace/remove a scalar. `keys` lists accepted existing spellings
- * (e.g. ['faith', 'religion']); when inserting, `keys[0]` is written.
- * Quote style of an existing line is preserved; `quoteNew` controls inserts.
- */
-function setScalar(ed: LineEditor, keys: string[], value: string | null, quoteNew = false): void {
-  const idx = findScalarLine(ed, keys)
-  if (value === null || value === '') {
-    if (idx >= 0) {
-      ed.lines.splice(idx, 1)
-      refresh(ed)
-    }
-    return
-  }
-  if (idx >= 0) {
-    const code = ed.lines[idx].split('#')[0]
-    const comment = ed.lines[idx].slice(code.length)
-    const m = code.match(SCALAR_LINE)!
-    const wasQuoted = m[4].startsWith('"')
-    ed.lines[idx] = `${m[1]}${m[2]}${m[3]}${wasQuoted ? `"${value}"` : value}${m[6]}${comment}`
-  } else {
-    const at = firstDateBlockLine(ed)
-    ed.lines.splice(at, 0, `${ed.indent}${keys[0]} = ${quoteNew ? `"${value}"` : value}`)
-    refresh(ed)
-  }
 }
 
 function setTraits(ed: LineEditor, traits: string[]): void {
@@ -287,15 +221,18 @@ export function saveCharacter(
     }
 
     const ed = makeEditor(text.slice(block.bodyStart, block.bodyEnd))
-    setScalar(ed, ['name'], detail.name, true)
-    setScalar(ed, ['dynasty', 'dynasty_house'], detail.dynasty)
-    setScalar(ed, ['culture'], detail.culture)
-    setScalar(ed, ['faith', 'religion'], detail.faith)
-    setScalar(ed, ['father'], detail.father)
-    setScalar(ed, ['mother'], detail.mother)
+    // New scalar lines go above the first date block
+    const set = (keys: string[], value: string | null, quoteNew = false): void =>
+      setScalar(ed, keys, value, { quoteNew, insertAt: firstDateBlockLine(ed) })
+    set(['name'], detail.name, true)
+    set(['dynasty', 'dynasty_house'], detail.dynasty)
+    set(['culture'], detail.culture)
+    set(['faith', 'religion'], detail.faith)
+    set(['father'], detail.father)
+    set(['mother'], detail.mother)
     for (const key of STAT_KEYS) {
       const v = detail.stats[key]
-      setScalar(ed, [key], v === null ? null : String(v))
+      set([key], v === null ? null : String(v))
     }
     setTraits(ed, detail.traits)
     setDateBlock(ed, 'birth', detail.birth)

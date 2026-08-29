@@ -8,7 +8,14 @@ import {
 import RootLayout from './RootLayout'
 import SettingsPage from './pages/SettingsPage'
 import CharacterEditorPage from './pages/CharacterEditorPage'
+import DynastyEditorPage from './pages/DynastyEditorPage'
 import ToolPlaceholder from './pages/ToolPlaceholder'
+
+/** Deep-link target for the character editor (e.g. from a family-tree node) */
+export interface CharacterSearch {
+  file?: string
+  id?: string
+}
 
 const rootRoute = createRootRoute({
   component: RootLayout
@@ -31,7 +38,17 @@ const settingsRoute = createRoute({
 const charactersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/characters',
-  component: CharacterEditorPage
+  component: CharacterEditorPage,
+  validateSearch: (search: Record<string, unknown>): CharacterSearch => ({
+    file: typeof search.file === 'string' ? search.file : undefined,
+    id: typeof search.id === 'string' ? search.id : undefined
+  })
+})
+
+const dynastiesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/dynasties',
+  component: DynastyEditorPage
 })
 
 const faithsRoute = createRoute({
@@ -50,6 +67,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   settingsRoute,
   charactersRoute,
+  dynastiesRoute,
   faithsRoute,
   culturesRoute
 ])

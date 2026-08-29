@@ -4,7 +4,10 @@ import type {
   CharacterSummary,
   DetectionResult,
   DirValidation,
+  DynastyData,
+  DynastyPatch,
   EditorInfo,
+  HousePatch,
   ModInfo,
   RefKind,
   RefLocation,
@@ -25,6 +28,18 @@ export interface Ck3ToolsApi {
     originalId: string,
     detail: CharacterDetail
   ) => Promise<SaveResult>
+  getDynastyData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<DynastyData>
+  saveDynasty: (
+    modPath: string,
+    file: string,
+    id: string,
+    patch: DynastyPatch
+  ) => Promise<SaveResult>
+  saveHouse: (modPath: string, file: string, id: string, patch: HousePatch) => Promise<SaveResult>
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

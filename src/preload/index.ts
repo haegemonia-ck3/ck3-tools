@@ -5,7 +5,10 @@ import type {
   CharacterSummary,
   DetectionResult,
   DirValidation,
+  DynastyData,
+  DynastyPatch,
   EditorInfo,
+  HousePatch,
   ModInfo,
   RefKind,
   RefLocation,
@@ -30,6 +33,19 @@ const api = {
     originalId: string,
     detail: CharacterDetail
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveCharacter', modPath, file, originalId, detail),
+  getDynastyData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<DynastyData> => ipcRenderer.invoke('ck3:getDynastyData', gameDir, modPath, replacePaths),
+  saveDynasty: (
+    modPath: string,
+    file: string,
+    id: string,
+    patch: DynastyPatch
+  ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveDynasty', modPath, file, id, patch),
+  saveHouse: (modPath: string, file: string, id: string, patch: HousePatch): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:saveHouse', modPath, file, id, patch),
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

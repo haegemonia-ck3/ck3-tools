@@ -5,7 +5,13 @@
  * `window.ck3tools` before any renderer code executes.
  */
 import type { Ck3ToolsApi } from '../../preload/index.d'
-import type { AppSettings, CharacterDetail } from '@shared/types'
+import type {
+  AppSettings,
+  CharacterDetail,
+  DynastyCharacter,
+  DynastyDef,
+  HouseDef
+} from '@shared/types'
 
 const settings: AppSettings = {
   gameDir: 'C:\\Mock\\Crusader Kings III\\game',
@@ -146,6 +152,118 @@ const characters: CharacterDetail[] = [
   }
 ]
 
+// Synthetic dynasty data shaped like real mod files: disconnected islands
+// centuries apart, cadet houses, a case-mismatched parent ref, a dangling
+// house, external (ghost) parents, and a game-defined dynasty in use.
+const dynasties: DynastyDef[] = [
+  {
+    id: 'mockidae',
+    file: '00_dynasties.txt',
+    inMod: true,
+    name: 'dynn_Mockidae',
+    prefix: null,
+    motto: 'dynn_Mockidae_motto',
+    culture: 'greek',
+    localizedName: 'Mockidai'
+  },
+  {
+    id: '7',
+    file: '00_dynasties.txt',
+    inMod: true,
+    name: 'dynn_Heraclid',
+    prefix: 'dynnp_of',
+    motto: null,
+    culture: 'greek',
+    localizedName: 'Heraclids'
+  },
+  {
+    id: 'vanity_game',
+    file: '01_vanity_dynasties.txt',
+    inMod: false,
+    name: 'dynn_Gamefolk',
+    prefix: null,
+    motto: null,
+    culture: 'saxon',
+    localizedName: 'Gamefolk'
+  }
+]
+
+const houses: HouseDef[] = [
+  {
+    id: 'house_Alpha',
+    file: '00_dynasty_houses.txt',
+    inMod: true,
+    name: 'dynn_Alpha',
+    prefix: null,
+    motto: 'dynn_Alpha_motto',
+    dynasty: 'mockidae',
+    localizedName: 'Alphaids'
+  },
+  {
+    id: 'house_Beta',
+    file: '00_dynasty_houses.txt',
+    inMod: true,
+    name: 'dynn_Beta',
+    prefix: null,
+    motto: null,
+    // Case mismatch on purpose — real mods reference `Phokus` as `phokus`
+    dynasty: 'Mockidae',
+    localizedName: null
+  }
+]
+
+const dc = (partial: Partial<DynastyCharacter> & { id: string }): DynastyCharacter => ({
+  file: 'mock_dynasty.txt',
+  name: null,
+  birth: null,
+  death: null,
+  father: null,
+  mother: null,
+  female: false,
+  dynasty: null,
+  house: null,
+  spouses: [],
+  ...partial
+})
+
+const dynastyCharacters: DynastyCharacter[] = [
+  // Island 1: the founder era
+  dc({ id: 'M1', name: 'Mockos', dynasty: 'mockidae', birth: '2669.1.1', death: '2716.1.1' }),
+  dc({
+    id: 'M2',
+    name: 'Nestor',
+    dynasty: 'mockidae',
+    father: 'M1',
+    birth: '2691.1.1',
+    death: '2779.1.1',
+    spouses: ['E1']
+  }),
+  dc({ id: 'M3', name: 'Antilochus', dynasty: 'mockidae', father: 'M2', birth: '2728.1.1.', death: '2757.1.1' }),
+  dc({ id: 'M4', name: 'Thrasymedes', dynasty: 'mockidae', father: 'M2', birth: '2735.1', death: '2807.1.1' }),
+  dc({ id: 'M5', name: 'Peryclemus', dynasty: 'mockidae', father: 'M2', birth: '2739.1.1', death: '2788.1.1' }),
+  dc({ id: 'M6', name: 'Polycaste', dynasty: 'mockidae', father: 'M2', female: true, birth: '2741.1.1' }),
+  // Island 2: 257+ years later, no parent chain back to island 1
+  dc({ id: 'M10', name: 'Neomockos', dynasty: 'mockidae', birth: '3040.1.1', death: '3101.1.1' }),
+  dc({ id: 'M11', name: 'Alphaion', house: 'house_Alpha', father: 'M10', birth: '3067.1.1', death: '3130.1.1' }),
+  dc({
+    id: 'M12',
+    name: 'Alphaides',
+    house: 'house_Alpha',
+    father: 'M11',
+    mother: 'O1',
+    birth: '3095.1.1'
+  }),
+  dc({ id: 'B1', name: 'Betaion', house: 'house_Beta', father: 'X7', birth: '3070.1.1', death: '3141.1.1' }),
+  dc({ id: 'B2', name: 'Betaides', house: 'house_Beta', father: 'B1', birth: '3103.1.1' }),
+  // Members of a house that is defined nowhere (dangling ref)
+  dc({ id: 'G1', name: 'Ghostly', house: 'house_ghostly', birth: '3075.1.1', death: '3129.1.1' }),
+  // External context characters (ghost parents / spouses)
+  dc({ id: 'X7', name: 'Herakles', dynasty: '7', birth: '3041.1.1', death: '3099.1.1' }),
+  dc({ id: 'O1', name: 'Omphale', dynasty: '7', female: true, birth: '3072.1.1' }),
+  dc({ id: 'E1', name: 'Eurydike', dynasty: 'vanity_game', female: true, birth: '2695.1.1', death: '2760.1.1' }),
+  dc({ id: 'L1', name: 'Lowborn Larry', birth: '3050.1.1' })
+]
+
 const mock: Ck3ToolsApi = {
   getSettings: async () => structuredClone(settings),
   setSettings: async (patch) => Object.assign(settings, patch) && structuredClone(settings),
@@ -170,6 +288,23 @@ const mock: Ck3ToolsApi = {
   saveCharacter: async (_modPath, file, originalId, detail) => {
     const i = characters.findIndex((c) => c.file === file && c.id === originalId)
     if (i >= 0) characters[i] = structuredClone(detail)
+    return { ok: true }
+  },
+  getDynastyData: async () => ({
+    dynasties: structuredClone(dynasties),
+    houses: structuredClone(houses),
+    characters: structuredClone(dynastyCharacters)
+  }),
+  saveDynasty: async (_modPath, file, id, patch) => {
+    const d = dynasties.find((x) => x.file === file && x.id === id)
+    if (!d) return { ok: false, error: `Dynasty ${id} not found in ${file}` }
+    Object.assign(d, patch)
+    return { ok: true }
+  },
+  saveHouse: async (_modPath, file, id, patch) => {
+    const h = houses.find((x) => x.file === file && x.id === id)
+    if (!h) return { ok: false, error: `House ${id} not found in ${file}` }
+    Object.assign(h, patch)
     return { ok: true }
   },
   getTraitIcons: async (_g, _m, _r, traits) =>

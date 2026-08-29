@@ -1,0 +1,458 @@
+import { useEffect, useState } from 'react'
+import { ArrowRight, ExternalLink } from 'lucide-react'
+import type {
+  CalendarConfig,
+  DynastyCharacter,
+  DynastyData,
+  ReferenceData,
+  SaveResult
+} from '@shared/types'
+import Reference, { openReferenceTarget } from './Reference'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { FieldLegend, FieldSet } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { cn } from '@/lib/utils'
+import { formatCalendarYear } from '@/lib/ck3Date'
+import { yearOf } from '@/lib/familyTree'
+import {
+  housesOfDynasty,
+  membersOfDynasty,
+  membersOfHouse,
+  normId,
+  sortMembers
+} from '@/lib/dynastyView'
+
+/** The editable fields of either entity; house uses `dynasty`, dynasty `culture`. */
+interface DefDraft {
+  name: string | null
+  prefix: string | null
+  motto: string | null
+  culture: string | null
+  dynasty: string | null
+}
+
+interface Props {
+  kind: 'dynasty' | 'house'
+  id: string
+  data: DynastyData
+  modPath: string
+  gameDir: string | null
+  replacePaths: string[]
+  calendar: CalendarConfig | null
+  refData: ReferenceData | null
+  /** house group id (normalized) → CSS color, matching the tree's stripes */
+  groupColors: Record<string, string>
+  selectedMemberId: string | null
+  /** Focus this member's node in the tree */
+  onMemberClick: (id: string) => void
+  /** Jump to the character editor */
+  onOpenCharacter: (id: string) => void
+  /** Switch the editor to another dynasty/house row */
+  onOpenRow: (kind: 'dynasty' | 'house', id: string) => void
+  /** Called after a successful save so the page can reload definitions */
+  onSaved: () => void
+}
+
+function lifespanLabel(c: DynastyCharacter, calendar: CalendarConfig | null): string {
+  const b = yearOf(c.birth)
+  const d = yearOf(c.death)
+  const show = (y: number): string => (calendar ? formatCalendarYear(y, calendar) : String(y))
+  if (b === null && d === null) return ''
+  return `${b === null ? '?' : show(b)} – ${d === null ? '' : show(d)}`
+}
+
+export default function DynastyDetailPanel({
+  kind,
+  id,
+  data,
+  modPath,
+  gameDir,
+  replacePaths,
+  calendar,
+  refData,
+  groupColors,
+  selectedMemberId,
+  onMemberClick,
+  onOpenCharacter,
+  onOpenRow,
+  onSaved
+}: Props): React.JSX.Element {
+  const def =
+    kind === 'dynasty'
+      ? (data.dynasties.find((d) => normId(d.id) === normId(id)) ?? null)
+      : (data.houses.find((h) => normId(h.id) === normId(id)) ?? null)
+  const house = kind === 'house' ? (def as (typeof data.houses)[number] | null) : null
+  const dynasty = kind === 'dynasty' ? (def as (typeof data.dynasties)[number] | null) : null
+
+  const original: DefDraft | null = def
+    ? {
+        name: def.name,
+        prefix: def.prefix,
+        motto: def.motto,
+        culture: dynasty?.culture ?? null,
+        dynasty: house?.dynasty ?? null
+      }
+    : null
+
+  const [draft, setDraft] = useState<DefDraft | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [savedFlash, setSavedFlash] = useState(false)
+  const [grouped, setGrouped] = useState(true)
+
+  useEffect(() => {
+    setDraft(original ? { ...original } : null)
+    setError(null)
+    setSavedFlash(false)
+    // Re-derived from data on purpose: a reload after save re-seeds the draft
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, id, data])
+
+  const editable = def !== null && def.inMod
+  const dirty =
+    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
+
+  const members = sortMembers(
+    kind === 'dynasty' ? membersOfDynasty(data, id, true) : membersOfHouse(data, id)
+  )
+  const houses = kind === 'dynasty' ? housesOfDynasty(data, id) : []
+
+  const set = (patch: Partial<DefDraft>): void => {
+    if (!draft) return
+    setDraft({ ...draft, ...patch })
+    setSavedFlash(false)
+  }
+
+  const save = async (): Promise<void> => {
+    if (!def || !draft) return
+    setSaving(true)
+    setError(null)
+    try {
+      let result: SaveResult
+      if (kind === 'dynasty') {
+        result = await window.ck3tools.saveDynasty(modPath, def.file, def.id, {
+          name: draft.name,
+          prefix: draft.prefix,
+          motto: draft.motto,
+          culture: draft.culture
+        })
+      } else {
+        result = await window.ck3tools.saveHouse(modPath, def.file, def.id, {
+          name: draft.name,
+          prefix: draft.prefix,
+          motto: draft.motto,
+          dynasty: draft.dynasty
+        })
+      }
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setSavedFlash(true)
+      onSaved()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const textField = (
+    label: string,
+    value: string | null,
+    onChange: (v: string | null) => void,
+    hint?: React.ReactNode
+  ): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <Label className="text-xs tracking-wide text-muted-foreground uppercase">{label}</Label>
+      <Input
+        type="text"
+        value={value ?? ''}
+        placeholder="none"
+        disabled={!editable}
+        onChange={(e) => onChange(e.target.value === '' ? null : e.target.value)}
+      />
+      {hint}
+    </div>
+  )
+
+  /** The resolved display form, hung under a field on a rounded elbow. */
+  const hintRow = (label: string, value: string): React.JSX.Element => (
+    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+      <span
+        aria-hidden
+        className="mt-1 ml-1 size-1.5 shrink-0 rounded-bl-[3px] border-b border-l border-current opacity-60"
+      />
+      <span className="min-w-0 truncate">
+        <span className="font-medium">{label}:</span> {value}
+      </span>
+    </p>
+  )
+
+  const memberRow = (c: DynastyCharacter): React.JSX.Element => (
+    <div
+      key={c.id}
+      role="button"
+      tabIndex={0}
+      className={cn(
+        'group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted',
+        selectedMemberId === c.id && 'bg-muted'
+      )}
+      title={[
+        `${c.id} — ${c.file}`,
+        c.spouses.length > 0 ? `Spouses: ${c.spouses.join(', ')}` : null
+      ]
+        .filter(Boolean)
+        .join('\n')}
+      onClick={() => onMemberClick(c.id)}
+      onKeyDown={(e) => e.key === 'Enter' && onMemberClick(c.id)}
+    >
+      <span className="min-w-0 flex-1 truncate">
+        {c.name ?? <span className="font-mono text-muted-foreground">{c.id}</span>}
+        {c.female && <span className="ml-1 text-muted-foreground">♀</span>}
+      </span>
+      <span className="text-xs whitespace-nowrap text-muted-foreground">
+        {lifespanLabel(c, calendar)}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        className="opacity-0 group-hover:opacity-100"
+        title="Open in Character Editor"
+        onClick={(e) => {
+          e.stopPropagation()
+          onOpenCharacter(c.id)
+        }}
+      >
+        <ArrowRight />
+      </Button>
+    </div>
+  )
+
+  /** Dynasty members grouped: no-house first (the dynasty acts as their house). */
+  const groupedMembers = (): React.JSX.Element => {
+    const noHouse = members.filter((c) => c.house === null)
+    const houseIds = new Map<string, string>() // norm id → raw spelling
+    for (const h of houses) houseIds.set(normId(h.id), h.id)
+    for (const c of members) {
+      if (c.house !== null && !houseIds.has(normId(c.house))) houseIds.set(normId(c.house), c.house)
+    }
+    const groups = [...houseIds.entries()].map(([norm, raw]) => ({
+      norm,
+      raw,
+      def: houses.find((h) => normId(h.id) === norm) ?? null,
+      list: members.filter((c) => c.house !== null && normId(c.house) === norm)
+    }))
+    return (
+      <div className="space-y-3">
+        {noHouse.length > 0 && (
+          <div>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+              Dynasty (no house) · {noHouse.length}
+            </div>
+            {noHouse.map(memberRow)}
+          </div>
+        )}
+        {groups.map((g) => (
+          <div key={g.norm}>
+            <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: groupColors[g.norm] }}
+              />
+              <span className="truncate">
+                {g.def ? (g.def.localizedName ?? g.def.name ?? g.raw) : g.raw}
+              </span>
+              · {g.list.length}
+              {g.def === null && (
+                <Badge variant="outline" className="text-[10px]">
+                  undefined
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="ml-auto"
+                title="Open this house"
+                onClick={() => onOpenRow('house', g.raw)}
+              >
+                <ArrowRight />
+              </Button>
+            </div>
+            {g.list.length > 0 ? (
+              g.list.map(memberRow)
+            ) : (
+              <p className="px-2 text-xs text-muted-foreground">no members</p>
+            )}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <Card className="flex h-full min-h-0 w-full min-w-0 flex-col gap-0 py-0">
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+        <h2 className="flex min-w-0 items-center gap-2 font-semibold text-primary">
+          <span className="truncate">
+            {def ? (def.localizedName ?? def.name ?? def.id) : id}
+          </span>
+          {dirty && <span className="size-2 shrink-0 rounded-full bg-primary" title="Unsaved changes" />}
+        </h2>
+        <div className="flex shrink-0 items-center gap-1">
+          <Badge variant="secondary">{kind}</Badge>
+          {def && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              title="Open definition in text editor"
+              onClick={() =>
+                void openReferenceTarget(
+                  () => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'dynasty', def.id),
+                  def.id
+                )
+              }
+            >
+              <ExternalLink />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+        {def === null && (
+          <Alert>
+            <AlertDescription>
+              No definition found for <code className="font-mono">{id}</code> in the mod (or the
+              game files it loads). {members.length} character{members.length === 1 ? '' : 's'}{' '}
+              reference it; its metadata can&apos;t be edited until it&apos;s defined.
+            </AlertDescription>
+          </Alert>
+        )}
+        {def !== null && !def.inMod && (
+          <Alert>
+            <AlertDescription>
+              Defined in the base game (<code className="font-mono">{def.file}</code>). Editing
+              game files isn&apos;t supported — copy the definition into the mod to change it.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {draft && def && (
+          <FieldSet className="gap-3.5">
+            <FieldLegend variant="label" className="mb-0">
+              Details
+            </FieldLegend>
+            <div className="space-y-1.5">
+              <Label className="text-xs tracking-wide text-muted-foreground uppercase">ID</Label>
+              <Input type="text" value={def.id} disabled readOnly className="font-mono" />
+            </div>
+            {textField(
+              'Name',
+              draft.name,
+              (v) => set({ name: v }),
+              def.localizedName !== null ? hintRow('Display', def.localizedName) : undefined
+            )}
+            {textField('Prefix', draft.prefix, (v) => set({ prefix: v }))}
+            {textField('Motto', draft.motto, (v) => set({ motto: v }))}
+            {kind === 'dynasty' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-wide text-muted-foreground uppercase">
+                  Culture
+                </Label>
+                <Reference
+                  value={draft.culture}
+                  onChange={(v) => set({ culture: v })}
+                  options={refData?.cultures ?? []}
+                  placeholder="none"
+                  locate={(v) =>
+                    window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'culture', v)
+                  }
+                />
+              </div>
+            )}
+            {kind === 'house' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs tracking-wide text-muted-foreground uppercase">
+                  Dynasty
+                </Label>
+                <Reference
+                  value={draft.dynasty}
+                  onChange={(v) => set({ dynasty: v })}
+                  options={data.dynasties.map((d) => d.id)}
+                  placeholder="none"
+                  followTitle="Go to this dynasty"
+                  onNavigate={(v) => onOpenRow('dynasty', v)}
+                />
+              </div>
+            )}
+          </FieldSet>
+        )}
+
+        <FieldSet className="gap-3.5">
+          <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
+            Members · {members.length}
+            {kind === 'dynasty' && (
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                spacing={0}
+                value={grouped ? 'grouped' : 'flat'}
+                onValueChange={(v) => v && setGrouped(v === 'grouped')}
+                aria-label="Member list mode"
+              >
+                <ToggleGroupItem value="grouped">By house</ToggleGroupItem>
+                <ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+              </ToggleGroup>
+            )}
+          </FieldLegend>
+          {members.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No characters belong to this {kind}.
+            </p>
+          ) : kind === 'dynasty' && grouped ? (
+            groupedMembers()
+          ) : (
+            <div>{members.map(memberRow)}</div>
+          )}
+        </FieldSet>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </div>
+
+      {editable && (
+        <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
+          <span
+            className={cn(
+              'mr-auto text-sm text-green-600 dark:text-green-500',
+              !(savedFlash && !dirty) && 'invisible'
+            )}
+          >
+            Saved ✓
+          </span>
+          <Button
+            variant="outline"
+            disabled={!dirty || saving}
+            onClick={() => {
+              setDraft(original ? { ...original } : null)
+              setError(null)
+            }}
+          >
+            Revert
+          </Button>
+          <Button disabled={!dirty || saving} onClick={save}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      )}
+    </Card>
+  )
+}

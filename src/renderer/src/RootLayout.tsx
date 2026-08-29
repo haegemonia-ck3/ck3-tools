@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
-import { ChevronsUpDown, Church, Crown, Landmark, PanelLeft, Settings } from 'lucide-react'
+import {
+  ChevronsUpDown,
+  Church,
+  Crown,
+  Landmark,
+  PanelLeft,
+  Settings,
+  Shield
+} from 'lucide-react'
 import { useApp } from './AppContext'
 import ModPicker from './components/ModPicker'
 import { Button } from '@/components/ui/button'
@@ -34,6 +42,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 
 const TOOLS = [
   { to: '/characters', label: 'Character Editor', icon: Crown },
+  { to: '/dynasties', label: 'Dynasty & House Editor', icon: Shield },
   { to: '/faiths', label: 'Faith Editor', icon: Church },
   { to: '/cultures', label: 'Culture Editor', icon: Landmark }
 ] as const

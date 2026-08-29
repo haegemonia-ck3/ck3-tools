@@ -16,6 +16,7 @@ import {
   useTable
 } from '@tanstack/react-table'
 import type { Column, Row, SortFn } from '@tanstack/react-table'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { FilterX, Star } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
@@ -282,6 +283,18 @@ export default function CharacterEditorPage(): React.JSX.Element {
     if (isMobile) setOpenMobile(false)
     else setOpen(false)
   }
+
+  // Deep link from another tool (e.g. a family-tree node): open the character,
+  // then strip the params so refresh/back don't re-trigger the jump.
+  const search = useSearch({ from: '/characters' })
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (search.file && search.id) {
+      openCharacter({ file: search.file, id: search.id, name: null })
+      void navigate({ to: '/characters', search: {}, replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.file, search.id])
 
   /** Point recents/favorites at a character's new id after a save renames it. */
   const remapRefs = (file: string, oldId: string, newId: string, name: string | null): void => {

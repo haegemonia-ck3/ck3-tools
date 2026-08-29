@@ -117,6 +117,85 @@ export interface CharacterDetail {
   stats: CharacterStats
 }
 
+/**
+ * A dynasty definition block from `common/dynasties`. Field values are raw —
+ * `name`/`prefix`/`motto` are usually `dynn_*` localization keys, with
+ * `localizedName` resolved from localization files for display only.
+ */
+export interface DynastyDef {
+  id: string
+  /** File name within common/dynasties */
+  file: string
+  /** Whether the definition lives in the mod (editable) vs. the base game */
+  inMod: boolean
+  name: string | null
+  prefix: string | null
+  motto: string | null
+  culture: string | null
+  localizedName: string | null
+}
+
+/** A house definition block from `common/dynasty_houses`. */
+export interface HouseDef {
+  id: string
+  /** File name within common/dynasty_houses */
+  file: string
+  inMod: boolean
+  name: string | null
+  prefix: string | null
+  motto: string | null
+  /** Parent dynasty id as written (numeric or string; may not resolve) */
+  dynasty: string | null
+  localizedName: string | null
+}
+
+/**
+ * A character as needed for dynasty membership and family trees. Unlike
+ * CharacterDetail this keeps `dynasty` and `dynasty_house` separate — a
+ * character with only a dynasty behaves as if that dynasty were their house.
+ */
+export interface DynastyCharacter {
+  id: string
+  /** File name within history/characters */
+  file: string
+  name: string | null
+  birth: string | null
+  death: string | null
+  father: string | null
+  mother: string | null
+  female: boolean
+  /** Raw `dynasty =` value, if present */
+  dynasty: string | null
+  /** Raw `dynasty_house =` value, if present */
+  house: string | null
+  /** Spouse character ids from dated add_spouse/add_matrilineal_spouse lines */
+  spouses: string[]
+}
+
+export interface DynastyData {
+  /** Mod definitions, plus game definitions referenced by mod content */
+  dynasties: DynastyDef[]
+  houses: HouseDef[]
+  /** Every character in the mod's history (ghost parents may be dynasty-less) */
+  characters: DynastyCharacter[]
+}
+
+/** Editable dynasty fields; null clears the line */
+export interface DynastyPatch {
+  name: string | null
+  prefix: string | null
+  motto: string | null
+  culture: string | null
+}
+
+/** Editable house fields; null clears the line */
+export interface HousePatch {
+  name: string | null
+  prefix: string | null
+  motto: string | null
+  dynasty: string | null
+}
+
 export interface ReferenceData {
   cultures: string[]
   faiths: string[]

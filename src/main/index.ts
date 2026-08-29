@@ -10,10 +10,11 @@ import {
   validateModDir
 } from './ck3'
 import { getCharacter, listCharacters, saveCharacter } from './characters'
+import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
 import { detectEditors, openInEditor } from './editor'
-import type { AppSettings, CharacterDetail, RefKind } from '@shared/types'
+import type { AppSettings, CharacterDetail, DynastyPatch, HousePatch, RefKind } from '@shared/types'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -78,6 +79,21 @@ function registerIpc(): void {
     'ck3:saveCharacter',
     (_e, modPath: string, file: string, originalId: string, detail: CharacterDetail) =>
       saveCharacter(modPath, file, originalId, detail)
+  )
+  ipcMain.handle(
+    'ck3:getDynastyData',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[]) =>
+      getDynastyData(gameDir, modPath, replacePaths)
+  )
+  ipcMain.handle(
+    'ck3:saveDynasty',
+    (_e, modPath: string, file: string, id: string, patch: DynastyPatch) =>
+      saveDynasty(modPath, file, id, patch)
+  )
+  ipcMain.handle(
+    'ck3:saveHouse',
+    (_e, modPath: string, file: string, id: string, patch: HousePatch) =>
+      saveHouse(modPath, file, id, patch)
   )
   ipcMain.handle(
     'ck3:getTraitIcons',
