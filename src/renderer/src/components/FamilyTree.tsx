@@ -82,14 +82,42 @@ function separatorLabel(sep: GapSeparator, calendar: CalendarConfig | null): str
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
-/** Parent bottom-center, down to the row midpoint, across, down to child top-center. */
-function elbowPath(from: PlacedNode, to: PlacedNode, w: number, h: number): string {
-  const x1 = from.x + w / 2
-  const y1 = from.y + h
+/**
+ * Parent bottom-center (or the union point on a couple's marriage bar), down
+ * to the row midpoint, across, down to child top-center. The horizontal run
+ * always sits at the row midpoint so sibling edges comb together.
+ */
+function elbowPath(
+  from: PlacedNode,
+  to: PlacedNode,
+  w: number,
+  h: number,
+  fromX?: number,
+  fromY?: number
+): string {
+  const x1 = fromX ?? from.x + w / 2
+  const y1 = fromY ?? from.y + h
   const x2 = to.x + w / 2
   const y2 = to.y
-  const midY = (y1 + y2) / 2
+  const midY = (from.y + h + y2) / 2
   return `M ${x1} ${y1} V ${midY} H ${x2} V ${y2}`
+}
+
+/** Solid marriage bar between the facing edges of a joined couple's cards. */
+function marriageBarPath(a: PlacedNode, b: PlacedNode, w: number, h: number): string {
+  const [left, right] = a.x <= b.x ? [a, b] : [b, a]
+  const y = left.y + h / 2
+  return `M ${left.x + w} ${y} H ${right.x}`
+}
+
+/** Distant marriage: a dashed bow between the bottom centers of the two cards. */
+function marriageCurvePath(a: PlacedNode, b: PlacedNode, w: number, h: number): string {
+  const x1 = a.x + w / 2
+  const y1 = a.y + h
+  const x2 = b.x + w / 2
+  const y2 = b.y + h
+  const bend = 28
+  return `M ${x1} ${y1} C ${x1} ${y1 + bend}, ${x2} ${y2 + bend}, ${x2} ${y2}`
 }
 
 function curvePath(from: PlacedNode, to: PlacedNode, w: number, h: number): string {
@@ -139,13 +167,33 @@ const TreeContent = memo(function TreeContent({
           const to = placedById.get(edge.toId)
           if (!from || !to) return null
           const key = `${edge.kind}:${edge.fromId}->${edge.toId}`
+          if (edge.kind === 'spouse') {
+            return edge.joined === true ? (
+              <path
+                key={key}
+                className="stroke-border"
+                fill="none"
+                strokeWidth={2}
+                d={marriageBarPath(from, to, nodeWidth, nodeHeight)}
+              />
+            ) : (
+              <path
+                key={key}
+                className="stroke-muted-foreground/40"
+                fill="none"
+                strokeWidth={1.5}
+                strokeDasharray="2 3"
+                d={marriageCurvePath(from, to, nodeWidth, nodeHeight)}
+              />
+            )
+          }
           return edge.kind === 'primary' ? (
             <path
               key={key}
               className="stroke-border"
               fill="none"
               strokeWidth={1.5}
-              d={elbowPath(from, to, nodeWidth, nodeHeight)}
+              d={elbowPath(from, to, nodeWidth, nodeHeight, edge.fromX, edge.fromY)}
             />
           ) : (
             <path

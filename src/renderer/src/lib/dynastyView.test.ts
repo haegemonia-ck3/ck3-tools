@@ -115,4 +115,22 @@ describe('buildTreeNodes', () => {
     expect(ghost.id).toBe('nobody')
     expect(ghost.ghostNote).toBe('not defined')
   })
+
+  it('adds one-hop ghost spouses, keeping their marriages but not their parents', () => {
+    const wife = char('E1', {
+      name: 'Eurydike',
+      female: true,
+      father: 'far-away',
+      dynasty: 'other',
+      spouses: ['m1']
+    })
+    const member = char('m1', { spouses: ['E1'] })
+    const nodes = buildTreeNodes([member], [member, wife], makeAffiliationName(data))
+    expect(nodes.find((n) => n.id === 'm1')!.spouses).toEqual(['E1'])
+    const ghost = nodes.find((n) => n.ghost)!
+    expect(ghost.id).toBe('E1')
+    expect(ghost.ghostNote).toBe('Otherfolk')
+    expect(ghost.spouses).toEqual(['m1'])
+    expect(ghost.father).toBeNull()
+  })
 })

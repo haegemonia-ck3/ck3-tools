@@ -185,9 +185,9 @@ export function makeAffiliationName(data: DynastyData): (c: DynastyCharacter) =>
 
 /**
  * Tree nodes for a member set: the members themselves plus one-hop ghost
- * parents (external or even undefined characters), so cadet founders keep
- * their real parentage visible and islands sharing an external parent stay
- * connected.
+ * parents and spouses (external or even undefined characters), so cadet
+ * founders keep their real parentage visible, married-in partners appear
+ * beside their spouse, and islands sharing an external parent stay connected.
  */
 export function buildTreeNodes(
   members: DynastyCharacter[],
@@ -209,6 +209,7 @@ export function buildTreeNodes(
     death: c.death,
     father: c.father,
     mother: c.mother,
+    spouses: c.spouses,
     female: c.female,
     group: c.house !== null ? normId(c.house) : null,
     ghost: false,
@@ -216,7 +217,7 @@ export function buildTreeNodes(
   }))
   const ghosts = new Map<string, FamilyTreeNode>()
   for (const c of members) {
-    for (const pid of [c.father, c.mother]) {
+    for (const pid of [c.father, c.mother, ...c.spouses]) {
       if (pid === null) continue
       const key = normId(pid)
       if (included.has(key) || ghosts.has(key)) continue
@@ -226,9 +227,11 @@ export function buildTreeNodes(
         name: p?.name ?? null,
         birth: p?.birth ?? null,
         death: p?.death ?? null,
-        // A ghost's own parents are not followed — one hop of context only
+        // A ghost's own parents are not followed — one hop of context only.
+        // Marriages are kept so two ghost parents of a member sit joined.
         father: null,
         mother: null,
+        spouses: p?.spouses ?? [],
         female: p?.female ?? false,
         group: null,
         ghost: true,

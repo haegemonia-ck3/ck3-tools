@@ -251,7 +251,15 @@ const dynastyCharacters: DynastyCharacter[] = [
   dc({ id: 'M6', name: 'Polycaste', dynasty: 'mockidae', father: 'M2', female: true, birth: '2741.1.1' }),
   // Island 2: 257+ years later, no parent chain back to island 1
   dc({ id: 'M10', name: 'Neomockos', dynasty: 'mockidae', birth: '3040.1.1', death: '3101.1.1' }),
-  dc({ id: 'M11', name: 'Alphaion', house: 'house_Alpha', father: 'M10', birth: '3067.1.1', death: '3130.1.1' }),
+  dc({
+    id: 'M11',
+    name: 'Alphaion',
+    house: 'house_Alpha',
+    father: 'M10',
+    birth: '3067.1.1',
+    death: '3130.1.1',
+    spouses: ['O1']
+  }),
   dc({
     id: 'M12',
     name: 'Alphaides',

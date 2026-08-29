@@ -7,6 +7,12 @@
  * The layout stacks those islands chronologically and reports the time gaps
  * between them so the renderer can draw dotted "N years pass" separators.
  *
+ * Spouses: a spouse with no parents among the nodes is ATTACHED — placed on
+ * the same row right beside their partner and joined by a marriage bar — and
+ * children of the couple drop from the bar instead of from either card. A
+ * spouse whose own ancestry is in the tree keeps their place in it; that
+ * marriage is drawn as a distant link instead.
+ *
  * No React, no DOM — unit-testable in node.
  */
 
@@ -19,6 +25,8 @@ export interface FamilyTreeNode {
   /** Parent character ids; edges are only drawn between provided nodes */
   father: string | null
   mother: string | null
+  /** Spouse character ids; links are only drawn between provided nodes */
+  spouses: string[]
   female: boolean
   /** Grouping id used for coloring (house id); null = no house */
   group: string | null
@@ -31,7 +39,7 @@ export interface FamilyTreeNode {
 export interface FamilyTreeLayoutOptions {
   nodeWidth: number
   nodeHeight: number
-  /** Horizontal gap between sibling subtrees */
+  /** Horizontal gap between sibling subtrees and between joined spouse cards */
   hGap: number
   /** Vertical gap between generation rows */
   vGap: number
@@ -64,10 +72,23 @@ export interface FamilyTreeEdge {
   fromId: string
   toId: string
   /**
-   * The hierarchy edge (father when both parents are present) vs. the extra
-   * link to the other parent, drawn differently by the renderer.
+   * primary: the hierarchy edge (father when both parents are present).
+   * secondary: the extra link to the other parent, drawn as a dashed curve.
+   * spouse: a marriage link (see `joined`).
    */
-  kind: 'primary' | 'secondary'
+  kind: 'primary' | 'secondary' | 'spouse'
+  /**
+   * Primary edges of a joined couple's child: the union point on the marriage
+   * bar the edge drops from (layout coords), instead of the parent card.
+   */
+  fromX?: number
+  fromY?: number
+  /**
+   * Spouse edges: true when the couple shares a row side by side (drawn as a
+   * solid marriage bar), false when they are placed apart by their own
+   * ancestries (drawn as a distant dashed link).
+   */
+  joined?: boolean
 }
 
 /** A dotted horizontal separator between chronologically distant islands. */
@@ -102,13 +123,19 @@ export function yearOf(date: string | null): number | null {
  *
  * - Hierarchy edge per node: father if he's among `nodes`, else mother; when
  *   both are present the mother link becomes a `secondary` edge.
- * - Connected components (over both edge kinds) are laid out independently and
+ * - Spouses (matched symmetrically from either side's list) with no primary
+ *   parent are attached beside their partner: the couple occupies one row
+ *   slot, gets a `joined` spouse edge, and children of the couple drop from
+ *   the bar (`fromX`/`fromY` on their primary edge, secondary suppressed).
+ *   Spouse pairs where both are placed by their own parents get a non-joined
+ *   spouse edge instead.
+ * - Connected components (over all edge kinds) are laid out independently and
  *   stacked vertically, ordered by earliest known year (undated islands last);
  *   gaps of at least `gapYearsThreshold` years produce labeled separators.
  * - Within a component, generation = depth along hierarchy edges from a root;
- *   subtrees are packed left-to-right with parents centered over children,
- *   children ordered by birth year. Parent cycles (bad data) are broken rather
- *   than looping forever. Duplicate ids: first occurrence wins.
+ *   subtrees are packed left-to-right with couples centered over children,
+ *   children ordered by union then birth year. Parent cycles (bad data) are
+ *   broken rather than looping forever. Duplicate ids: first occurrence wins.
  */
 export function layoutFamilyForest(
   nodes: FamilyTreeNode[],
@@ -145,9 +172,64 @@ export function layoutFamilyForest(
     }
   }
 
-  breakParentCycles(order, primaryParent)
+  // Marriages, symmetric: either side's spouse list links both ways.
+  const spousesOf = new Map<string, string[]>()
+  const addSpouse = (a: string, b: string): void => {
+    const list = spousesOf.get(a)
+    if (list) {
+      if (!list.includes(b)) list.push(b)
+    } else {
+      spousesOf.set(a, [b])
+    }
+  }
+  for (const key of order) {
+    for (const ref of byKey.get(key)!.spouses) {
+      const sk = normalizeId(ref)
+      if (sk !== key && byKey.has(sk)) {
+        addSpouse(key, sk)
+        addSpouse(sk, key)
+      }
+    }
+  }
 
-  // Connected components via union over both edge kinds. Dropping a cycle
+  // Attach parentless spouses beside a partner. A node with a primary parent
+  // is placed by its own ancestry and can't be attached; an anchor keeps its
+  // spouses in list order, and a spouse attaches to at most one anchor
+  // (further marriages stay distant links).
+  const attachedTo = new Map<string, string>()
+  const attachments = new Map<string, string[]>()
+  for (const key of order) {
+    if (attachedTo.has(key)) continue
+    for (const sk of spousesOf.get(key) ?? []) {
+      if (attachedTo.has(sk) || attachments.has(sk) || primaryParent.has(sk)) continue
+      const list = attachments.get(key)
+      if (list) list.push(sk)
+      else attachments.set(key, [sk])
+      attachedTo.set(sk, key)
+    }
+  }
+  const anchorOf = (key: string): string => attachedTo.get(key) ?? key
+  // Index of an attached spouse within its couple row (anchor itself = 0)
+  const slotIn = new Map<string, number>()
+  for (const list of attachments.values()) {
+    list.forEach((sk, i) => slotIn.set(sk, i + 1))
+  }
+
+  // The hierarchy is over couple clusters: a child hangs under the cluster of
+  // its primary parent (who may be an attached spouse). Cycle-break at this
+  // level — attachment contraction can close loops plain parent links can't.
+  const clusterParent = new Map<string, string>()
+  for (const [child, parent] of primaryParent) {
+    const parentAnchor = anchorOf(parent)
+    if (parentAnchor !== child) clusterParent.set(child, parentAnchor)
+  }
+  breakParentCycles(order, clusterParent)
+  // Person-level edges follow the cluster decision so no dropped link renders
+  for (const key of order) {
+    if (primaryParent.has(key) && !clusterParent.has(key)) primaryParent.delete(key)
+  }
+
+  // Connected components via union over every link kind. Dropping a cycle
   // edge never disconnects anything (a cycle minus one edge stays connected).
   const uf = new Map<string, string>()
   const find = (key: string): string => {
@@ -164,6 +246,9 @@ export function layoutFamilyForest(
   for (const key of order) uf.set(key, key)
   for (const [child, parent] of primaryParent) uf.set(find(child), find(parent))
   for (const [child, parent] of secondaryParent) uf.set(find(child), find(parent))
+  for (const [a, list] of spousesOf) {
+    for (const b of list) uf.set(find(a), find(b))
+  }
 
   const componentsByRoot = new Map<string, string[]>()
   for (const key of order) {
@@ -174,10 +259,10 @@ export function layoutFamilyForest(
   }
 
   const children = new Map<string, string[]>()
-  for (const [child, parent] of primaryParent) {
-    const kids = children.get(parent)
+  for (const [child, parentAnchor] of clusterParent) {
+    const kids = children.get(parentAnchor)
     if (kids) kids.push(child)
-    else children.set(parent, [child])
+    else children.set(parentAnchor, [child])
   }
   const byBirthThenId = (a: string, b: string): number => {
     const ya = yearOf(byKey.get(a)!.birth)
@@ -189,11 +274,26 @@ export function layoutFamilyForest(
     }
     return a < b ? -1 : a > b ? 1 : 0
   }
-  for (const kids of children.values()) kids.sort(byBirthThenId)
+  // Which couple-row slot a child's edge drops under: the attached parent's
+  // card (or the attached other-parent's bar segment), else the anchor's.
+  const slotOf = (child: string): number => {
+    const p1 = primaryParent.get(child)
+    if (p1 === undefined) return 0
+    const s1 = slotIn.get(p1)
+    if (s1 !== undefined) return s1
+    const p2 = secondaryParent.get(child)
+    if (p2 !== undefined && attachedTo.get(p2) === p1) return slotIn.get(p2)!
+    return 0
+  }
+  const byUnionThenBirth = (a: string, b: string): number =>
+    slotOf(a) - slotOf(b) || byBirthThenId(a, b)
+  for (const kids of children.values()) kids.sort(byUnionThenBirth)
 
   const components: LaidOutComponent[] = []
   for (const members of componentsByRoot.values()) {
-    components.push(layoutComponent(members, primaryParent, children, byKey, opts, byBirthThenId))
+    components.push(
+      layoutComponent(members, clusterParent, children, attachedTo, attachments, byKey, opts, byBirthThenId)
+    )
   }
   // Chronological stacking by the earliest KNOWN year (death years count too,
   // so an island whose members only have death dates isn't sorted as undated)
@@ -245,15 +345,55 @@ export function layoutFamilyForest(
     }
   }
 
+  // The attached parent a child's edge should drop beside, when the child's
+  // two parents are exactly a joined couple (anchor + one attached spouse).
+  const unionPartnerOf = (child: string): string | null => {
+    const p1 = primaryParent.get(child)
+    const p2 = secondaryParent.get(child)
+    if (p1 === undefined || p2 === undefined) return null
+    if (!slotIn.has(p1) && attachedTo.get(p2) === p1) return p2
+    if (slotIn.has(p1) && attachedTo.get(p1) === p2) return p1
+    return null
+  }
+
   const edges: FamilyTreeEdge[] = []
   for (const key of order) {
     const primary = primaryParent.get(key)
+    const partner = primary !== undefined ? unionPartnerOf(key) : null
     if (primary !== undefined) {
-      edges.push({ fromId: byKey.get(primary)!.id, toId: byKey.get(key)!.id, kind: 'primary' })
+      const edge: FamilyTreeEdge = {
+        fromId: byKey.get(primary)!.id,
+        toId: byKey.get(key)!.id,
+        kind: 'primary'
+      }
+      if (partner !== null) {
+        // Drop from the bar segment in the gap just left of the attached
+        // parent's card (the bar to a non-adjacent spouse passes through it)
+        const attached = slotIn.has(primary) ? primary : partner
+        edge.fromX = placed.get(attached)!.x - opts.hGap / 2
+        edge.fromY = placed.get(primary)!.y + opts.nodeHeight / 2
+      }
+      edges.push(edge)
     }
     const secondary = secondaryParent.get(key)
-    if (secondary !== undefined) {
+    if (secondary !== undefined && partner === null) {
       edges.push({ fromId: byKey.get(secondary)!.id, toId: byKey.get(key)!.id, kind: 'secondary' })
+    }
+  }
+  // Joined couples: one bar per attachment, anchor (left) → spouse (right)
+  for (const key of order) {
+    const list = attachments.get(key)
+    if (list === undefined) continue
+    for (const sk of list) {
+      edges.push({ fromId: byKey.get(key)!.id, toId: byKey.get(sk)!.id, kind: 'spouse', joined: true })
+    }
+  }
+  // Distant marriages: both partners placed by their own ancestries
+  for (const key of order) {
+    for (const sk of spousesOf.get(key) ?? []) {
+      if (key >= sk) continue // each pair once, deterministically
+      if (attachedTo.get(key) === sk || attachedTo.get(sk) === key) continue
+      edges.push({ fromId: byKey.get(key)!.id, toId: byKey.get(sk)!.id, kind: 'spouse', joined: false })
     }
   }
 
@@ -282,11 +422,11 @@ function parentKeyOf(
 }
 
 /**
- * Walks every primary-parent chain; when a chain revisits a node the revisited
- * link's child loses its primary edge and becomes a root, so bad data like
- * "A father of B, B father of A" terminates instead of looping.
+ * Walks every parent chain; when a chain revisits a node the revisited link's
+ * child loses its edge and becomes a root, so bad data like "A father of B,
+ * B father of A" terminates instead of looping forever.
  */
-function breakParentCycles(order: string[], primaryParent: Map<string, string>): void {
+function breakParentCycles(order: string[], parent: Map<string, string>): void {
   const settled = new Set<string>()
   for (const start of order) {
     if (settled.has(start)) continue
@@ -295,14 +435,14 @@ function breakParentCycles(order: string[], primaryParent: Map<string, string>):
     let cur = start
     while (!settled.has(cur)) {
       if (onPath.has(cur)) {
-        primaryParent.delete(path[path.length - 1])
+        parent.delete(path[path.length - 1])
         break
       }
       onPath.add(cur)
       path.push(cur)
-      const parent = primaryParent.get(cur)
-      if (parent === undefined) break
-      cur = parent
+      const next = parent.get(cur)
+      if (next === undefined) break
+      cur = next
     }
     for (const key of path) settled.add(key)
   }
@@ -323,22 +463,32 @@ interface LaidOutComponent {
 
 function layoutComponent(
   members: string[],
-  primaryParent: Map<string, string>,
+  clusterParent: Map<string, string>,
   children: Map<string, string[]>,
+  attachedTo: Map<string, string>,
+  attachments: Map<string, string[]>,
   byKey: Map<string, FamilyTreeNode>,
   opts: FamilyTreeLayoutOptions,
   byBirthThenId: (a: string, b: string) => number
 ): LaidOutComponent {
-  const roots = members.filter((key) => !primaryParent.has(key)).sort(byBirthThenId)
+  const anchors = members.filter((key) => !attachedTo.has(key))
+  const roots = anchors.filter((key) => !clusterParent.has(key)).sort(byBirthThenId)
 
-  // Subtree span = max(nodeWidth, packed width of the children row); child
+  // A couple cluster occupies one row slot: anchor card plus its attached
+  // spouses' cards to the right, hGap between them (where the bar is drawn)
+  const clusterWidthOf = (anchor: string): number => {
+    const cards = 1 + (attachments.get(anchor)?.length ?? 0)
+    return cards * opts.nodeWidth + (cards - 1) * opts.hGap
+  }
+
+  // Subtree span = max(cluster width, packed width of the children row); child
   // spans are disjoint by construction, which is what makes overlap impossible.
   const spans = new Map<string, number>()
   const spanOf = (key: string): number => {
     const cached = spans.get(key)
     if (cached !== undefined) return cached
     const kids = children.get(key)
-    let span = opts.nodeWidth
+    let span = clusterWidthOf(key)
     if (kids && kids.length > 0) {
       let total = opts.hGap * (kids.length - 1)
       for (const kid of kids) total += spanOf(kid)
@@ -350,22 +500,37 @@ function layoutComponent(
 
   const positions = new Map<string, { x: number; y: number }>()
   let maxDepth = 0
-  const place = (key: string, left: number, depth: number): void => {
+  const placeCluster = (anchor: string, x: number, y: number): void => {
+    positions.set(anchor, { x, y })
+    const spouses = attachments.get(anchor)
+    if (spouses) {
+      spouses.forEach((sk, i) => {
+        positions.set(sk, { x: x + (i + 1) * (opts.nodeWidth + opts.hGap), y })
+      })
+    }
+  }
+  const place = (anchor: string, left: number, depth: number): void => {
     maxDepth = Math.max(maxDepth, depth)
     const y = depth * (opts.nodeHeight + opts.vGap)
-    const kids = children.get(key)
+    const clusterWidth = clusterWidthOf(anchor)
+    const kids = children.get(anchor)
     if (!kids || kids.length === 0) {
-      positions.set(key, { x: left, y })
+      placeCluster(anchor, left, y)
       return
     }
-    let cursor = left
+    // A children row narrower than the couple row is centered under it
+    let kidsWidth = opts.hGap * (kids.length - 1)
+    for (const kid of kids) kidsWidth += spanOf(kid)
+    let cursor = left + Math.max(0, (clusterWidth - kidsWidth) / 2)
     for (const kid of kids) {
       place(kid, cursor, depth + 1)
       cursor += spanOf(kid) + opts.hGap
     }
     const first = positions.get(kids[0])!.x + opts.nodeWidth / 2
     const last = positions.get(kids[kids.length - 1])!.x + opts.nodeWidth / 2
-    positions.set(key, { x: (first + last) / 2 - opts.nodeWidth / 2, y })
+    const centered = (first + last) / 2 - clusterWidth / 2
+    // Clamped into the subtree span so a wide couple row can't overhang a sibling
+    placeCluster(anchor, Math.min(Math.max(centered, left), left + spanOf(anchor) - clusterWidth), y)
   }
 
   let cursor = 0

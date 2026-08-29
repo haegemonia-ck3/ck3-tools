@@ -18,6 +18,7 @@ function person(id: string, over: Partial<FamilyTreeNode> = {}): FamilyTreeNode 
     death: null,
     father: null,
     mother: null,
+    spouses: [],
     female: false,
     group: null,
     ghost: false,
@@ -247,7 +248,7 @@ describe('layoutFamilyForest', () => {
     const nodes = [
       person('late', { birth: '1500.1.1' }),
       person('kid', { father: 'dad', mother: 'mom', birth: '820.1.1' }),
-      person('dad', { birth: '800.1.1', death: '850.1.1' }),
+      person('dad', { birth: '800.1.1', death: '850.1.1', spouses: ['mom'] }),
       person('mom', { female: true, birth: '801.1.1' }),
       person('loop1', { father: 'loop2' }),
       person('loop2', { father: 'loop1' }),
@@ -256,6 +257,124 @@ describe('layoutFamilyForest', () => {
       person('ghost', { ghost: true, birth: '3212.1' })
     ]
     expect(layout(nodes)).toEqual(layout(nodes))
+  })
+})
+
+describe('spouses', () => {
+  it('attaches a parentless spouse on the same row beside their partner', () => {
+    const result = layout([person('h', { spouses: ['w'] }), person('w', { female: true })])
+    const h = placedNode(result, 'h')
+    const w = placedNode(result, 'w')
+    expect(w.y).toBe(h.y)
+    expect(w.x).toBe(h.x + nodeWidth + hGap)
+    expect(result.edges).toEqual([{ fromId: 'h', toId: 'w', kind: 'spouse', joined: true }])
+    // the marriage alone joins the two into one island
+    expect(result.separators).toEqual([])
+    expect(result.width).toBe(2 * nodeWidth + hGap)
+  })
+
+  it('matches spouse references symmetrically and case-insensitively', () => {
+    const result = layout([person('H'), person('w', { female: true, spouses: ['h'] })])
+    expect(result.edges).toEqual([{ fromId: 'H', toId: 'w', kind: 'spouse', joined: true }])
+  })
+
+  it('drops children from the union bar and suppresses the mother curve', () => {
+    const result = layout([
+      person('dad', { spouses: ['mom'] }),
+      person('mom', { female: true }),
+      person('kid', { father: 'dad', mother: 'mom' })
+    ])
+    const dad = placedNode(result, 'dad')
+    const mom = placedNode(result, 'mom')
+    expect(result.edges).toEqual([
+      {
+        fromId: 'dad',
+        toId: 'kid',
+        kind: 'primary',
+        // the gap between the couple's cards, at marriage-bar height
+        fromX: mom.x - hGap / 2,
+        fromY: dad.y + nodeHeight / 2
+      },
+      { fromId: 'dad', toId: 'mom', kind: 'spouse', joined: true }
+    ])
+    // the child sits centered under the couple, one row down
+    expect(placedNode(result, 'kid').y).toBe(rowHeight)
+    expect(centerX(placedNode(result, 'kid'))).toBe(mom.x - hGap / 2)
+  })
+
+  it('joins the couple around the wife when she anchors the cluster', () => {
+    const result = layout([
+      person('mom', { female: true, spouses: ['dad'] }),
+      person('dad'),
+      person('kid', { father: 'dad', mother: 'mom' })
+    ])
+    const mom = placedNode(result, 'mom')
+    const dad = placedNode(result, 'dad')
+    expect(dad.y).toBe(mom.y)
+    expect(dad.x).toBe(mom.x + nodeWidth + hGap)
+    const primary = result.edges.find((e) => e.kind === 'primary')!
+    expect(primary).toMatchObject({ fromId: 'dad', toId: 'kid', fromX: dad.x - hGap / 2 })
+    expect(result.edges.filter((e) => e.kind === 'secondary')).toEqual([])
+  })
+
+  it('keeps a spouse placed by their own ancestry and draws a distant link', () => {
+    const result = layout([
+      person('gpaA'),
+      person('gpaB'),
+      person('h', { father: 'gpaA', spouses: ['w'] }),
+      person('w', { female: true, father: 'gpaB' })
+    ])
+    expect(result.edges.filter((e) => e.kind === 'spouse')).toEqual([
+      { fromId: 'h', toId: 'w', kind: 'spouse', joined: false }
+    ])
+    expect(placedNode(result, 'h').y).toBe(rowHeight)
+    expect(placedNode(result, 'w').y).toBe(rowHeight)
+    // the marriage still pulls both families into one island
+    expect(result.separators).toEqual([])
+  })
+
+  it("lines up multiple spouses and drops each union's children by the right card", () => {
+    const result = layout([
+      person('k', { spouses: ['w1', 'w2'] }),
+      person('w1', { female: true }),
+      person('w2', { female: true }),
+      person('kid1', { father: 'k', mother: 'w1', birth: '900.1.1' }),
+      person('kid2', { father: 'k', mother: 'w2', birth: '890.1.1' })
+    ])
+    const k = placedNode(result, 'k')
+    const w1 = placedNode(result, 'w1')
+    const w2 = placedNode(result, 'w2')
+    expect(w1.x).toBe(k.x + nodeWidth + hGap)
+    expect(w2.x).toBe(k.x + 2 * (nodeWidth + hGap))
+    // children group by union (kid1 under w1's bar) before birth order
+    expect(placedNode(result, 'kid1').x).toBeLessThan(placedNode(result, 'kid2').x)
+    const p1 = result.edges.find((e) => e.kind === 'primary' && e.toId === 'kid1')!
+    const p2 = result.edges.find((e) => e.kind === 'primary' && e.toId === 'kid2')!
+    expect(p1.fromX).toBe(w1.x - hGap / 2)
+    expect(p2.fromX).toBe(w2.x - hGap / 2)
+  })
+
+  it('attaches a remarried spouse once and links the other marriage distantly', () => {
+    const result = layout([
+      person('a', { spouses: ['w'] }),
+      person('b', { spouses: ['w'] }),
+      person('w', { female: true })
+    ])
+    const spouseEdges = result.edges.filter((e) => e.kind === 'spouse')
+    expect(spouseEdges).toEqual([
+      { fromId: 'a', toId: 'w', kind: 'spouse', joined: true },
+      { fromId: 'b', toId: 'w', kind: 'spouse', joined: false }
+    ])
+  })
+
+  it('survives a marriage into own ancestry without looping', () => {
+    // s (parentless) marries a; s is also mother of x; x is father of a
+    const result = layout([
+      person('a', { father: 'x', spouses: ['s'] }),
+      person('x', { mother: 's' }),
+      person('s', { female: true })
+    ])
+    expect(result.nodes).toHaveLength(3)
   })
 })
 
