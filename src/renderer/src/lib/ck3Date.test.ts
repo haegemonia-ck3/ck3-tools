@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  dateSortKey,
+  emptyDateRange,
   formatCalendarDate,
   formatCalendarYear,
   fromCalendarInput,
+  isEmptyDateRange,
   isValidCK3Date,
+  matchesDateRange,
   toCalendarInput
 } from './ck3Date'
 import type { CalendarConfig } from '@shared/types'
@@ -132,5 +136,93 @@ describe('toCalendarInput / fromCalendarInput', () => {
     expect(fromCalendarInput('4001.1.1', 'before', bcAd)).toBeNull()
     // and an "after" year past 9999 - epoch overflows the 4-digit raw year
     expect(fromCalendarInput('6001.1.1', 'after', bcAd)).toBeNull()
+  })
+})
+
+describe('dateSortKey', () => {
+  it('orders dates numerically, not lexically', () => {
+    expect(dateSortKey('900.1.1', 'start')!).toBeLessThan(dateSortKey('2410.1.1', 'start')!)
+    expect(dateSortKey('3220.2.1', 'start')!).toBeLessThan(dateSortKey('3220.10.1', 'start')!)
+  })
+
+  it('fills a missing month and day from the requested edge', () => {
+    expect(dateSortKey('3220', 'start')).toBe(dateSortKey('3220.1.1', 'start'))
+    expect(dateSortKey('3220', 'end')).toBe(dateSortKey('3220.12.31', 'start'))
+    expect(dateSortKey('3220.5', 'end')).toBe(dateSortKey('3220.5.31', 'start'))
+  })
+
+  it('tolerates the typos real mod files carry', () => {
+    expect(dateSortKey('3220.1.1.', 'start')).toBe(dateSortKey('3220.1.1', 'start'))
+    expect(dateSortKey(' 3212.1 ', 'start')).toBe(dateSortKey('3212.1.1', 'start'))
+  })
+
+  it('returns null when no year can be read', () => {
+    expect(dateSortKey('', 'start')).toBeNull()
+    expect(dateSortKey('yes', 'start')).toBeNull()
+  })
+})
+
+describe('isEmptyDateRange', () => {
+  it('treats a fresh range as empty', () => {
+    expect(isEmptyDateRange(emptyDateRange())).toBe(true)
+    expect(isEmptyDateRange(emptyDateRange('between'))).toBe(true)
+  })
+
+  it('ignores the bound a mode does not use', () => {
+    expect(isEmptyDateRange({ mode: 'before', from: '3220', to: '' })).toBe(true)
+    expect(isEmptyDateRange({ mode: 'after', from: '', to: '3220' })).toBe(true)
+    expect(isEmptyDateRange({ mode: 'before', from: '', to: '3220' })).toBe(false)
+    expect(isEmptyDateRange({ mode: 'after', from: '3220', to: '' })).toBe(false)
+  })
+
+  it('accepts a one-sided between', () => {
+    expect(isEmptyDateRange({ mode: 'between', from: '3220', to: '' })).toBe(false)
+  })
+})
+
+describe('matchesDateRange', () => {
+  it('keeps every row while the range is empty', () => {
+    expect(matchesDateRange('3220.1.1', emptyDateRange())).toBe(true)
+    expect(matchesDateRange(null, emptyDateRange())).toBe(true)
+  })
+
+  it('drops rows with no date once a bound is set', () => {
+    expect(matchesDateRange(null, { mode: 'before', from: '', to: '3220' })).toBe(false)
+  })
+
+  it('excludes a bare year whole from before and after', () => {
+    const before = { mode: 'before', from: '', to: '3220' } as const
+    expect(matchesDateRange('3219.12.31', before)).toBe(true)
+    expect(matchesDateRange('3220.1.1', before)).toBe(false)
+    expect(matchesDateRange('3220.12.31', before)).toBe(false)
+
+    const after = { mode: 'after', from: '3220', to: '' } as const
+    expect(matchesDateRange('3220.1.1', after)).toBe(false)
+    expect(matchesDateRange('3220.12.31', after)).toBe(false)
+    expect(matchesDateRange('3221.1.1', after)).toBe(true)
+  })
+
+  it('compares a fully specified bound exactly', () => {
+    expect(matchesDateRange('3220.5.2', { mode: 'before', from: '', to: '3220.5.3' })).toBe(true)
+    expect(matchesDateRange('3220.5.3', { mode: 'before', from: '', to: '3220.5.3' })).toBe(false)
+    expect(matchesDateRange('3220.5.4', { mode: 'after', from: '3220.5.3', to: '' })).toBe(true)
+    expect(matchesDateRange('3220.5.3', { mode: 'after', from: '3220.5.3', to: '' })).toBe(false)
+  })
+
+  it('includes both bare-year bounds whole in between', () => {
+    const range = { mode: 'between', from: '3220', to: '3230' } as const
+    expect(matchesDateRange('3219.12.31', range)).toBe(false)
+    expect(matchesDateRange('3220.1.1', range)).toBe(true)
+    expect(matchesDateRange('3230.12.31', range)).toBe(true)
+    expect(matchesDateRange('3231.1.1', range)).toBe(false)
+  })
+
+  it('leaves a one-sided between unconstrained on the open end', () => {
+    expect(matchesDateRange('9999.1.1', { mode: 'between', from: '3220', to: '' })).toBe(true)
+    expect(matchesDateRange('1.1.1', { mode: 'between', from: '', to: '3220' })).toBe(true)
+  })
+
+  it('matches nothing when the bounds are backwards', () => {
+    expect(matchesDateRange('3225.1.1', { mode: 'between', from: '3230', to: '3220' })).toBe(false)
   })
 })

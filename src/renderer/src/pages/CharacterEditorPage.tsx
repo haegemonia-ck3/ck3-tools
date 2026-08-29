@@ -15,7 +15,7 @@ import {
   tableFeatures,
   useTable
 } from '@tanstack/react-table'
-import type { Column, Row, SortFn } from '@tanstack/react-table'
+import type { Column, FilterFn, Row, SortFn } from '@tanstack/react-table'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { FilterX, Star } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
+import DateRangeFilterField from '../components/DateRangeFilterField'
 import DebouncedInput from '../components/DebouncedInput'
 import Reference from '../components/Reference'
 import { Button } from '@/components/ui/button'
@@ -42,7 +43,8 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { formatCalendarDate } from '@/lib/ck3Date'
+import { formatCalendarDate, matchesDateRange } from '@/lib/ck3Date'
+import type { DateRangeFilter } from '@/lib/ck3Date'
 import type {
   AppSettings,
   CalendarConfig,
@@ -60,7 +62,7 @@ const sameChar = (a: CharacterRef, b: { file: string; id: string }): boolean =>
 
 /** Which control a column renders in the filter row under its header. */
 interface CharacterColumnMeta {
-  filter: 'text' | 'dynasty' | 'file'
+  filter: 'text' | 'dynasty' | 'file' | 'birth'
 }
 
 const features = tableFeatures({
@@ -95,6 +97,13 @@ const bySortableString: SortFn<Features, CharacterSummary> = (
   columnId: string
 ) => numericAware(rowA.getValue<string | null>(columnId), rowB.getValue<string | null>(columnId))
 
+/** Before/after/between over the raw file date, whatever the column displays. */
+const byDateRange: FilterFn<Features, CharacterSummary> = (
+  row: Row<Features, CharacterSummary>,
+  columnId: string,
+  filterValue: unknown
+) => matchesDateRange(row.getValue<string | null>(columnId), filterValue as DateRangeFilter)
+
 const columnHelper = createColumnHelper<Features, CharacterSummary>()
 
 const buildColumns = (calendar: CalendarConfig | null) => columnHelper.columns([
@@ -121,8 +130,8 @@ const buildColumns = (calendar: CalendarConfig | null) => columnHelper.columns([
   columnHelper.accessor('birth', {
     header: 'Birth',
     sortFn: bySortableString,
-    filterFn: 'includesString',
-    meta: { filter: 'text' },
+    filterFn: byDateRange,
+    meta: { filter: 'birth' },
     cell: (info) => {
       const raw = info.getValue()
       if (raw === null) return <em className="text-muted-foreground">—</em>
@@ -149,6 +158,7 @@ interface ColumnFilterProps {
   modPath: string | null
   gameDir: string | null
   replacePaths: string[]
+  calendar: CalendarConfig | null
 }
 
 /** Mirrors `charactersDir` in the main process, which the renderer can't call. */
@@ -160,11 +170,13 @@ function ColumnFilter({
   column,
   modPath,
   gameDir,
-  replacePaths
+  replacePaths,
+  calendar
 }: ColumnFilterProps): React.JSX.Element {
   const kind = column.columnDef.meta?.filter ?? 'text'
-  const value = (column.getFilterValue() as string | undefined) ?? ''
-  const facets = kind === 'text' ? null : column.getFacetedUniqueValues()
+  const raw = column.getFilterValue()
+  const value = kind === 'birth' ? '' : ((raw as string | undefined) ?? '')
+  const facets = kind === 'dynasty' || kind === 'file' ? column.getFacetedUniqueValues() : null
 
   const options = useMemo(
     () =>
@@ -175,6 +187,17 @@ function ColumnFilter({
             .sort(numericAware),
     [facets]
   )
+
+  if (kind === 'birth') {
+    return (
+      <DateRangeFilterField
+        className="font-normal"
+        value={raw as DateRangeFilter | undefined}
+        onChange={(v) => column.setFilterValue(v)}
+        calendar={calendar}
+      />
+    )
+  }
 
   if (kind === 'text') {
     return (
@@ -521,6 +544,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                               modPath={modPath}
                               gameDir={settings?.gameDir ?? null}
                               replacePaths={selectedMod.replacePaths}
+                              calendar={calendar}
                             />
                           </div>
                         </TableHead>
