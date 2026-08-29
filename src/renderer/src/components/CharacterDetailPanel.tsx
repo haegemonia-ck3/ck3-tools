@@ -11,6 +11,7 @@ import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
 import type { IconContext } from '../useTraitIcons'
+import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -449,21 +450,25 @@ export default function CharacterDetailPanel({
               placeholder: 'alive'
             })}
           </div>
-          <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
-            {lineageField(
-              'Dynasty',
-              'dynasty',
-              draft.dynasty,
-              (v) => set({ dynasty: v }),
-              refData?.dynasties ?? []
-            )}
-            {lineageField(
-              'House',
-              'house',
-              draft.house,
-              (v) => set({ house: v }),
-              refData?.houses ?? []
-            )}
+          <div className="flex items-start gap-4">
+            {/* The house's CoA when it has one, else the dynasty's */}
+            <CoatOfArms ids={[draft.house, draft.dynasty]} size={112} className="shrink-0" />
+            <div className="min-w-0 flex-1 space-y-3.5">
+              {lineageField(
+                'Dynasty',
+                'dynasty',
+                draft.dynasty,
+                (v) => set({ dynasty: v }),
+                refData?.dynasties ?? []
+              )}
+              {lineageField(
+                'House',
+                'house',
+                draft.house,
+                (v) => set({ house: v }),
+                refData?.houses ?? []
+              )}
+            </div>
           </div>
           <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
             {parentField('Father', draft.father, (v) => set({ father: v }))}

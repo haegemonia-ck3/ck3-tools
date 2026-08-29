@@ -146,6 +146,9 @@ export default function DynastyDetailPanel({
     setCollapsed(new Set())
   }, [kind, id])
 
+  // A house without its own CoA inherits its dynasty's, like in game
+  const coaIds = kind === 'house' ? [id, house?.dynasty] : [id]
+
   const editable = def !== null && def.inMod
   const dirty =
     draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
@@ -378,8 +381,8 @@ export default function DynastyDetailPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
-        {/* A house without its own CoA inherits its dynasty's, like in game */}
-        <CoatOfArms ids={kind === 'house' ? [id, house?.dynasty] : [id]} size={112} />
+        {/* Without the details form the CoA stands alone at the top */}
+        {!(draft && def) && <CoatOfArms ids={coaIds} size={112} />}
         {def === null && (
           <Alert>
             <AlertDescription>
@@ -403,16 +406,23 @@ export default function DynastyDetailPanel({
             <FieldLegend variant="label" className="mb-0">
               Details
             </FieldLegend>
-            <div className="space-y-1.5">
-              <Label className="text-xs tracking-wide text-muted-foreground uppercase">ID</Label>
-              <Input type="text" value={def.id} disabled readOnly className="font-mono" />
+            <div className="flex items-start gap-4">
+              <CoatOfArms ids={coaIds} size={112} className="shrink-0" />
+              <div className="min-w-0 flex-1 space-y-3.5">
+                <div className="space-y-1.5">
+                  <Label className="text-xs tracking-wide text-muted-foreground uppercase">
+                    ID
+                  </Label>
+                  <Input type="text" value={def.id} disabled readOnly className="font-mono" />
+                </div>
+                {textField(
+                  'Name',
+                  draft.name,
+                  (v) => set({ name: v }),
+                  def.localizedName !== null ? hintRow('Display', def.localizedName) : undefined
+                )}
+              </div>
             </div>
-            {textField(
-              'Name',
-              draft.name,
-              (v) => set({ name: v }),
-              def.localizedName !== null ? hintRow('Display', def.localizedName) : undefined
-            )}
             {textField('Prefix', draft.prefix, (v) => set({ prefix: v }))}
             {textField('Motto', draft.motto, (v) => set({ motto: v }))}
             {kind === 'dynasty' && (
