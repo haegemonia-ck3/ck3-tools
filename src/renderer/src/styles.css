@@ -638,10 +638,59 @@ body {
   color: var(--error);
 }
 
-.trait-add {
-  display: flex;
-  gap: 6px;
+.trait-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.trait-icon-empty {
+  display: inline-block;
+}
+
+.chip .trait-icon {
+  width: 20px;
+  height: 20px;
+  margin-left: -4px;
+}
+
+.trait-picker {
+  position: relative;
   margin-top: 6px;
+}
+
+.trait-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  z-index: 10;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.trait-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.trait-option:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
 }
 
 .stats-grid {

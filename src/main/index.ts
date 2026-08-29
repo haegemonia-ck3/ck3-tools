@@ -10,6 +10,7 @@ import {
 } from './ck3'
 import { getCharacter, listCharacters, saveCharacter } from './characters'
 import { getReferenceData } from './refdata'
+import { getTraitIcons } from './traitIcons'
 import type { AppSettings, CharacterDetail } from '@shared/types'
 
 function createWindow(): void {
@@ -56,6 +57,11 @@ function registerIpc(): void {
     'ck3:saveCharacter',
     (_e, modPath: string, file: string, originalId: string, detail: CharacterDetail) =>
       saveCharacter(modPath, file, originalId, detail)
+  )
+  ipcMain.handle(
+    'ck3:getTraitIcons',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], traits: string[]) =>
+      getTraitIcons(gameDir, modPath, replacePaths, traits)
   )
   ipcMain.handle(
     'ck3:getReferenceData',

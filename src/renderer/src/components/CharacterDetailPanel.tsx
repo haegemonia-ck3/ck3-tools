@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { CharacterDetail, ReferenceData } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
+import { useTraitIcons } from '../useTraitIcons'
+import type { IconContext } from '../useTraitIcons'
+import TraitPicker from './TraitPicker'
 
 interface Props {
   modPath: string
   file: string
   id: string
+  gameDir: string | null
+  replacePaths: string[]
   refData: ReferenceData | null
   /** Called after a successful save; newId may differ from the selected id */
   onSaved: (file: string, newId: string) => void
@@ -18,13 +23,14 @@ export default function CharacterDetailPanel({
   modPath,
   file,
   id,
+  gameDir,
+  replacePaths,
   refData,
   onSaved,
   onClose
 }: Props): React.JSX.Element {
   const [original, setOriginal] = useState<CharacterDetail | null>(null)
   const [draft, setDraft] = useState<CharacterDetail | null>(null)
-  const [traitInput, setTraitInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
@@ -33,12 +39,14 @@ export default function CharacterDetailPanel({
     setOriginal(null)
     setDraft(null)
     setError(null)
-    setTraitInput('')
     window.ck3tools.getCharacter(modPath, file, id).then((d) => {
       setOriginal(d)
       setDraft(d ? structuredClone(d) : null)
     })
   }, [modPath, file, id])
+
+  const iconCtx: IconContext = { gameDir, modPath, replacePaths }
+  const iconFor = useTraitIcons(iconCtx, draft?.traits ?? [])
 
   if (!draft || !original) {
     return (
@@ -68,7 +76,6 @@ export default function CharacterDetailPanel({
     if (t && !draft.traits.includes(t)) {
       set({ traits: [...draft.traits, t] })
     }
-    setTraitInput('')
   }
 
   const save = async (): Promise<void> => {
@@ -145,36 +152,30 @@ export default function CharacterDetailPanel({
         <div className="field">
           <span className="field-label">Traits</span>
           <div className="trait-chips">
-            {draft.traits.map((t) => (
-              <span key={t} className="chip">
-                {t}
-                <button
-                  className="chip-x"
-                  title={`Remove ${t}`}
-                  onClick={() => set({ traits: draft.traits.filter((x) => x !== t) })}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+            {draft.traits.map((t) => {
+              const icon = iconFor(t)
+              return (
+                <span key={t} className="chip">
+                  {icon && <img className="trait-icon" src={icon} alt="" />}
+                  {t}
+                  <button
+                    className="chip-x"
+                    title={`Remove ${t}`}
+                    onClick={() => set({ traits: draft.traits.filter((x) => x !== t) })}
+                  >
+                    ×
+                  </button>
+                </span>
+              )
+            })}
             {draft.traits.length === 0 && <span className="dim">none</span>}
           </div>
-          <div className="trait-add">
-            <input
-              className="field-input"
-              type="text"
-              list="dl-traits"
-              placeholder="Add trait…"
-              value={traitInput}
-              onChange={(e) => setTraitInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') addTrait(traitInput)
-              }}
-            />
-            <button className="btn btn-small" onClick={() => addTrait(traitInput)}>
-              Add
-            </button>
-          </div>
+          <TraitPicker
+            available={refData?.traits ?? []}
+            exclude={draft.traits}
+            iconCtx={iconCtx}
+            onAdd={addTrait}
+          />
         </div>
 
         <div className="field">
@@ -236,11 +237,6 @@ export default function CharacterDetailPanel({
           <datalist id="dl-faiths">
             {refData.faiths.map((f) => (
               <option key={f} value={f} />
-            ))}
-          </datalist>
-          <datalist id="dl-traits">
-            {refData.traits.map((t) => (
-              <option key={t} value={t} />
             ))}
           </datalist>
         </>

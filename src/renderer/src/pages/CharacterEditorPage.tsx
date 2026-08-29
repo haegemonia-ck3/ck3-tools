@@ -206,6 +206,8 @@ export default function CharacterEditorPage(): React.JSX.Element {
           modPath={modPath}
           file={selected.file}
           id={selected.id}
+          gameDir={settings?.gameDir ?? null}
+          replacePaths={selectedMod?.replacePaths ?? []}
           refData={refData}
           onSaved={(file, newId) => {
             setSelected({ file, id: newId })

@@ -22,6 +22,12 @@ export interface Ck3ToolsApi {
     originalId: string,
     detail: CharacterDetail
   ) => Promise<SaveResult>
+  getTraitIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    traits: string[]
+  ) => Promise<Record<string, string | null>>
   getReferenceData: (
     gameDir: string | null,
     modPath: string | null,

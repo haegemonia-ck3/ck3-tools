@@ -27,6 +27,13 @@ const api = {
     originalId: string,
     detail: CharacterDetail
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveCharacter', modPath, file, originalId, detail),
+  getTraitIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    traits: string[]
+  ): Promise<Record<string, string | null>> =>
+    ipcRenderer.invoke('ck3:getTraitIcons', gameDir, modPath, replacePaths, traits),
   getReferenceData: (
     gameDir: string | null,
     modPath: string | null,
