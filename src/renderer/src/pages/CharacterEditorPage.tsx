@@ -1,13 +1,79 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+  columnFilteringFeature,
+  createColumnHelper,
+  createFilteredRowModel,
+  createSortedRowModel,
+  filterFns,
+  flexRender,
+  globalFilteringFeature,
+  rowSortingFeature,
+  sortFns,
+  tableFeatures,
+  useTable
+} from '@tanstack/react-table'
+import type { Row, SortFn } from '@tanstack/react-table'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import type { CharacterSummary } from '@shared/types'
+
+const features = tableFeatures({
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  filterFns,
+  sortFns
+})
+
+type Features = typeof features
+
+/** Sort ids and dates like numbers ("219" < "1002", "900.1.1" < "2410.1.1"), text otherwise. */
+function numericAware(a: string | null, b: string | null): number {
+  if (a === null) return b === null ? 0 : -1
+  if (b === null) return 1
+  return a.localeCompare(b, undefined, { numeric: true })
+}
+
+const bySortableString: SortFn<Features, CharacterSummary> = (
+  rowA: Row<Features, CharacterSummary>,
+  rowB: Row<Features, CharacterSummary>,
+  columnId: string
+) => numericAware(rowA.getValue<string | null>(columnId), rowB.getValue<string | null>(columnId))
+
+const columnHelper = createColumnHelper<Features, CharacterSummary>()
+
+const columns = columnHelper.columns([
+  columnHelper.accessor('id', {
+    header: 'ID',
+    sortFn: bySortableString,
+    cell: (info) => <span className="col-id">{info.getValue()}</span>
+  }),
+  columnHelper.accessor('name', {
+    header: 'Name',
+    cell: (info) => info.getValue() ?? <em className="dim">unnamed</em>
+  }),
+  columnHelper.accessor('dynasty', {
+    header: 'Dynasty',
+    sortFn: bySortableString,
+    cell: (info) => info.getValue() ?? <em className="dim">—</em>
+  }),
+  columnHelper.accessor('birth', {
+    header: 'Birth',
+    sortFn: bySortableString,
+    cell: (info) => info.getValue() ?? <em className="dim">—</em>
+  }),
+  columnHelper.accessor('file', {
+    header: 'File',
+    cell: (info) => <span className="col-file">{info.getValue()}</span>
+  })
+])
 
 export default function CharacterEditorPage(): React.JSX.Element {
   const { selectedMod } = useApp()
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const modPath = selectedMod?.path ?? null
@@ -24,17 +90,16 @@ export default function CharacterEditorPage(): React.JSX.Element {
       .finally(() => setLoading(false))
   }, [modPath])
 
-  const filtered = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    if (!q) return characters
-    return characters.filter(
-      (c) =>
-        c.id.toLowerCase().includes(q) ||
-        (c.name ?? '').toLowerCase().includes(q) ||
-        (c.dynasty ?? '').toLowerCase().includes(q) ||
-        c.file.toLowerCase().includes(q)
-    )
-  }, [characters, filter])
+  const table = useTable({
+    features,
+    columns,
+    data: characters,
+    globalFilterFn: (row, columnId, filterValue) =>
+      String(row.getValue(columnId) ?? '')
+        .toLowerCase()
+        .includes(String(filterValue).toLowerCase()),
+    getRowId: (c: CharacterSummary) => `${c.file}:${c.id}`
+  })
 
   if (!selectedMod) {
     return (
@@ -47,6 +112,8 @@ export default function CharacterEditorPage(): React.JSX.Element {
     )
   }
 
+  const rows = table.getRowModel().rows
+
   return (
     <div className="page page-wide">
       <header className="page-header">
@@ -56,11 +123,11 @@ export default function CharacterEditorPage(): React.JSX.Element {
             className="search-input"
             type="search"
             placeholder="Filter by id, name, dynasty, or file…"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
+            value={(table.state.globalFilter as string | undefined) ?? ''}
+            onChange={(e) => table.setGlobalFilter(e.target.value)}
           />
           <span className="hint hint-inline">
-            {loading ? 'Loading…' : `${filtered.length} / ${characters.length}`}
+            {loading ? 'Loading…' : `${rows.length} / ${characters.length}`}
           </span>
         </div>
       </header>
@@ -77,26 +144,35 @@ export default function CharacterEditorPage(): React.JSX.Element {
         <div className="table-wrap">
           <table className="data-table">
             <thead>
-              <tr>
-                <th className="col-id">ID</th>
-                <th>Name</th>
-                <th>Dynasty</th>
-                <th>Birth</th>
-                <th>File</th>
-              </tr>
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id}>
+                  {hg.headers.map((header) => (
+                    <th
+                      key={header.id}
+                      className={header.column.id === 'id' ? 'col-id' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <span className="th-label">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              ))}
             </thead>
             <tbody>
-              {filtered.map((c) => (
+              {rows.map((row) => (
                 <tr
-                  key={`${c.file}:${c.id}`}
-                  className={selectedId === `${c.file}:${c.id}` ? 'selected' : ''}
-                  onClick={() => setSelectedId(`${c.file}:${c.id}`)}
+                  key={row.id}
+                  className={selectedId === row.id ? 'selected' : ''}
+                  onClick={() => setSelectedId(row.id)}
                 >
-                  <td className="col-id">{c.id}</td>
-                  <td>{c.name ?? <em className="dim">unnamed</em>}</td>
-                  <td>{c.dynasty ?? <em className="dim">—</em>}</td>
-                  <td>{c.birth ?? <em className="dim">—</em>}</td>
-                  <td className="col-file">{c.file}</td>
+                  {row.getAllCells().map((cell) => (
+                    <td key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

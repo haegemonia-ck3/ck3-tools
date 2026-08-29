@@ -437,6 +437,13 @@ body {
   color: var(--text-dim);
   border-bottom: 1px solid var(--border);
   z-index: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.data-table th:hover {
+  color: var(--accent);
 }
 
 .data-table td {
