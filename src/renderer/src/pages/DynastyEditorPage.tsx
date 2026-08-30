@@ -194,6 +194,8 @@ interface ColumnFilterProps {
   gameDir: string | null
   modPath: string | null
   replacePaths: string[]
+  /** Display name for a culture or dynasty id, so the picker can offer "Name (id)" */
+  nameOf: (kind: 'culture' | 'parent', id: string) => string | null
 }
 
 /** The filter control rendered under a column header. */
@@ -201,7 +203,8 @@ function ColumnFilter({
   column,
   gameDir,
   modPath,
-  replacePaths
+  replacePaths,
+  nameOf
 }: ColumnFilterProps): React.JSX.Element | null {
   const kind = column.columnDef.meta?.filter ?? 'text'
   const value = (column.getFilterValue() as string | undefined) ?? ''
@@ -209,12 +212,13 @@ function ColumnFilter({
 
   const options = useMemo(
     () =>
-      facets === null
+      facets === null || (kind !== 'culture' && kind !== 'parent')
         ? []
         : [...facets.keys()]
             .filter((v): v is string => typeof v === 'string' && v !== '')
-            .sort(numericAware),
-    [facets]
+            .sort(numericAware)
+            .map((id) => ({ id, name: nameOf(kind, id) })),
+    [facets, kind, nameOf]
   )
 
   if (kind === 'none') return null
@@ -343,6 +347,26 @@ export default function DynastyEditorPage(): React.JSX.Element {
     window.ck3tools.getReferenceData(gameDir, modPath, replacePaths).then(setRefData)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
+
+  /**
+   * Display name for a culture id (from the reference data) or a parent
+   * dynasty id (from the rows the list already built, so an undefined dynasty
+   * that only exists as a reference simply has none). Ids are matched
+   * lowercased: real files reference `Phokus` as `phokus`.
+   */
+  const referenceName = useMemo(() => {
+    const cultures = new Map<string, string>()
+    for (const c of refData?.cultures ?? []) {
+      if (c.name !== null) cultures.set(normId(c.id), c.name)
+    }
+    const dynasties = new Map<string, string>()
+    for (const d of data?.dynasties ?? []) {
+      const name = d.localizedName ?? d.name
+      if (name !== null) dynasties.set(normId(d.id), name)
+    }
+    return (kind: 'culture' | 'parent', id: string): string | null =>
+      (kind === 'culture' ? cultures : dynasties).get(normId(id)) ?? null
+  }, [refData, data])
 
   // Pre-sorted the way the list has always read: biggest families first. The
   // table's own sorting layers on top when a header is clicked.
@@ -633,6 +657,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
                           gameDir={gameDir}
                           modPath={modPath}
                           replacePaths={replacePaths}
+                          nameOf={referenceName}
                         />
                       </div>
                     </TableHead>
@@ -662,8 +687,12 @@ export default function DynastyEditorPage(): React.JSX.Element {
                       {cell.column.id === 'parent' ? (
                         <ReferenceDisplay
                           value={row.original.parent}
+                          name={
+                            row.original.parent === null
+                              ? null
+                              : referenceName('parent', row.original.parent)
+                          }
                           onNavigate={(v) => openRow('dynasty', v)}
-                          className="font-mono"
                         />
                       ) : (
                         flexRender(cell.column.columnDef.cell, cell.getContext())

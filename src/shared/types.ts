@@ -212,14 +212,26 @@ export interface HousePatch {
   dynasty: string | null
 }
 
+/**
+ * A reference id paired with its display name. `name` is the localized name
+ * when one could be resolved (cultures/faiths key off the id, traits off
+ * `trait_<id>`, dynasties/houses off their `name` scalar), and null for
+ * references that have none — an unlocalized id, or a kind with no names at
+ * all (history files, character ids).
+ */
+export interface RefEntry {
+  id: string
+  name: string | null
+}
+
 export interface ReferenceData {
-  cultures: string[]
-  faiths: string[]
-  traits: string[]
+  cultures: RefEntry[]
+  faiths: RefEntry[]
+  traits: RefEntry[]
   /** Ids from `common/dynasties` */
-  dynasties: string[]
+  dynasties: RefEntry[]
   /** Ids from `common/dynasty_houses` */
-  houses: string[]
+  houses: RefEntry[]
 }
 
 /** Kinds of reference data whose definition site can be located on disk */

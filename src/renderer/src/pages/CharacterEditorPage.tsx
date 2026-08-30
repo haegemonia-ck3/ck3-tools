@@ -163,6 +163,8 @@ interface ColumnFilterProps {
   gameDir: string | null
   replacePaths: string[]
   calendar: CalendarConfig | null
+  /** Display name for a dynasty/house id, so the picker can offer "Name (id)" */
+  nameOf: (id: string) => string | null
 }
 
 /** Mirrors `charactersDir` in the main process, which the renderer can't call. */
@@ -175,21 +177,25 @@ function ColumnFilter({
   modPath,
   gameDir,
   replacePaths,
-  calendar
+  calendar,
+  nameOf
 }: ColumnFilterProps): React.JSX.Element {
   const kind = column.columnDef.meta?.filter ?? 'text'
   const raw = column.getFilterValue()
   const value = kind === 'birth' ? '' : ((raw as string | undefined) ?? '')
   const facets = kind === 'dynasty' || kind === 'file' ? column.getFacetedUniqueValues() : null
 
+  // History files have no names of their own; dynasty values (which may name
+  // either a dynasty or a house) get theirs from the reference data.
   const options = useMemo(
     () =>
       facets === null
         ? []
         : [...facets.keys()]
             .filter((v): v is string => typeof v === 'string' && v !== '')
-            .sort(numericAware),
-    [facets]
+            .sort(numericAware)
+            .map((id) => ({ id, name: kind === 'file' ? null : nameOf(id) })),
+    [facets, kind, nameOf]
   )
 
   if (kind === 'birth') {
@@ -265,6 +271,24 @@ export default function CharacterEditorPage(): React.JSX.Element {
   const modKey = selectedMod?.file ?? null
   const calendar = selectedMod?.profile?.calendar ?? null
   const columns = useMemo(() => buildColumns(calendar), [calendar])
+
+  /** The character list as reference options, for the father/mother pickers. */
+  const characterRefs = useMemo(
+    () => characters.map((c) => ({ id: c.id, name: c.name })),
+    [characters]
+  )
+  /**
+   * Display name for a lineage id. A character's `dynasty` value may name
+   * either a dynasty or a house, and real files reference `Phokus` as
+   * `phokus`, so both lists are pooled under lowercased keys.
+   */
+  const lineageName = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const entry of [...(refData?.dynasties ?? []), ...(refData?.houses ?? [])]) {
+      if (entry.name !== null) names.set(entry.id.toLowerCase(), entry.name)
+    }
+    return (id: string): string | null => names.get(id.toLowerCase()) ?? null
+  }, [refData])
   const recents = (modKey && settings?.recentCharacters?.[modKey]) || []
   const favorites = (modKey && settings?.favoriteCharacters?.[modKey]) || []
   const drafts = (modKey && settings?.draftCharacters?.[modKey]) || {}
@@ -610,6 +634,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                               gameDir={settings?.gameDir ?? null}
                               replacePaths={selectedMod.replacePaths}
                               calendar={calendar}
+                              nameOf={lineageName}
                             />
                           </div>
                         </TableHead>
@@ -697,7 +722,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   replacePaths={selectedMod?.replacePaths ?? []}
                   calendar={calendar}
                   refData={refData}
-                  characterIds={characters.map((c) => c.id)}
+                  characters={characterRefs}
                   childCharacters={childCharacters}
                   onNavigate={(id) => {
                     const target = byId.get(id)
@@ -732,7 +757,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   replacePaths={selectedMod?.replacePaths ?? []}
                   calendar={calendar}
                   refData={refData}
-                  characterIds={characters.map((c) => c.id)}
+                  characters={characterRefs}
                   characterFiles={characterFiles ?? []}
                   prefill={createPrefill}
                   initialFile={search.file ?? null}

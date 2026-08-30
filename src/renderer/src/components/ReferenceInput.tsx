@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ArrowRight, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
-import type { RefLocation } from '@shared/types'
+import type { RefEntry, RefLocation } from '@shared/types'
+import ReferenceLabel, { findRef, refLabel } from './ReferenceLabel'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import {
@@ -29,7 +30,7 @@ export async function openReferenceTarget(
 }
 
 interface Props {
-  /** Single-value mode: the current selection. Omit when using onAdd. */
+  /** Single-value mode: the id of the current selection. Omit when using onAdd. */
   value?: string | null
   onChange?: (value: string | null) => void
   /**
@@ -39,7 +40,12 @@ interface Props {
    * ReferenceBadge on the added entries instead.
    */
   onAdd?: (value: string) => void
-  options: string[]
+  /**
+   * The selectable references. Entries carrying a name are listed and filtered
+   * as "Name (id)", so typing either half finds them; name-less ones fall back
+   * to the bare id.
+   */
+  options: readonly RefEntry[]
   placeholder?: string
   /**
    * Managed data: the button switches to the referenced item inside the app
@@ -51,8 +57,8 @@ interface Props {
    * user's text editor. Ignored when onNavigate is provided.
    */
   locate?: (value: string) => Promise<RefLocation | null>
-  /** Custom option rendering (e.g. trait icons); defaults to the plain id */
-  renderItem?: (item: string) => React.ReactNode
+  /** Custom option rendering (e.g. trait icons); defaults to a ReferenceLabel */
+  renderItem?: (item: RefEntry) => React.ReactNode
   /** Cap on dropdown entries; mod lists (dynasties especially) can run to thousands */
   limit?: number
   /** Tooltip for the follow button; defaults to wording for a definition site. */
@@ -78,9 +84,13 @@ export default function ReferenceInput({
 
   // Keep a value that isn't in the reference lists (typo, unscanned file) visible
   const items = useMemo(
-    () => (value && !options.includes(value) ? [value, ...options] : options),
+    () =>
+      value !== null && !options.some((o) => o.id === value)
+        ? [findRef(options, value), ...options]
+        : options,
     [options, value]
   )
+  const selected = value === null ? null : findRef(items, value)
 
   const follow = async (): Promise<void> => {
     if (!value) return
@@ -97,13 +107,13 @@ export default function ReferenceInput({
     }
   }
 
-  const select = (v: string | null): void => {
+  const select = (v: RefEntry | null): void => {
     if (onAdd) {
-      if (v) onAdd(v)
+      if (v) onAdd(v.id)
       setInputText('')
       return
     }
-    onChange?.(v)
+    onChange?.(v?.id ?? null)
   }
 
   const showFollow = !onAdd && Boolean(onNavigate ?? locate)
@@ -111,10 +121,15 @@ export default function ReferenceInput({
   return (
     <ButtonGroup className={cn('w-full', className)}>
       <Combobox
-        items={items}
+        items={items as RefEntry[]}
         limit={limit}
-        value={onAdd ? null : value}
+        value={onAdd ? null : selected}
         onValueChange={select}
+        // Options are objects, so the combobox needs telling how to turn one
+        // into text (this is also what it filters on) and how to match the
+        // selected value back to its item — they aren't the same reference.
+        itemToStringLabel={refLabel}
+        isItemEqualToValue={(item: RefEntry, v: RefEntry) => item.id === v.id}
         inputValue={onAdd ? inputText : undefined}
         onInputValueChange={(text, details) => {
           // In add mode, selecting an item syncs the label back into the input;
@@ -127,9 +142,9 @@ export default function ReferenceInput({
         <ComboboxContent>
           <ComboboxEmpty>No matches.</ComboboxEmpty>
           <ComboboxList>
-            {(item: string) => (
-              <ComboboxItem key={item} value={item}>
-                {renderItem ? renderItem(item) : item}
+            {(item: RefEntry) => (
+              <ComboboxItem key={item.id} value={item}>
+                {renderItem ? renderItem(item) : <ReferenceLabel entry={item} />}
               </ComboboxItem>
             )}
           </ComboboxList>

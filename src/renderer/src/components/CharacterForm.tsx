@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type {
   CalendarConfig,
   CharacterDetail,
+  RefEntry,
   RefKind,
   ReferenceData
 } from '@shared/types'
@@ -11,6 +12,7 @@ import type { IconContext } from '../useTraitIcons'
 import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
+import ReferenceLabel, { findRef } from './ReferenceLabel'
 import { Checkbox } from '@/components/ui/checkbox'
 import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -50,16 +52,16 @@ export function FieldLabel({
 }
 
 /** Dropdown row for the trait picker; fetches its own icon (module-level cached) */
-function TraitOption({ trait, iconCtx }: { trait: string; iconCtx: IconContext }): React.JSX.Element {
-  const icon = useTraitIcons(iconCtx, [trait])(trait)
+function TraitOption({ trait, iconCtx }: { trait: RefEntry; iconCtx: IconContext }): React.JSX.Element {
+  const icon = useTraitIcons(iconCtx, [trait.id])(trait.id)
   return (
-    <span className="flex items-center gap-2.5">
+    <span className="flex min-w-0 items-center gap-2.5">
       {icon ? (
         <img className="size-6 shrink-0 object-contain" src={icon} alt="" />
       ) : (
         <span className="inline-block size-6 shrink-0" />
       )}
-      {trait}
+      <ReferenceLabel entry={trait} />
     </span>
   )
 }
@@ -92,8 +94,8 @@ interface Props {
   /** The mod's offset-calendar display convention, if it declares one */
   calendar: CalendarConfig | null
   refData: ReferenceData | null
-  /** Ids of every character in the mod, offered as father/mother options */
-  characterIds: string[]
+  /** Every character in the mod, offered as father/mother options */
+  characters: RefEntry[]
   /** Switch the editor to another character in the mod (father/mother jump) */
   onNavigate: (id: string) => void
   /** Open a lineage row in the Dynasty & House Editor */
@@ -121,7 +123,7 @@ export default function CharacterForm({
   replacePaths,
   calendar,
   refData,
-  characterIds,
+  characters,
   onNavigate,
   onOpenLineage,
   badBirth,
@@ -233,7 +235,7 @@ export default function CharacterForm({
     kind: RefKind,
     value: string | null,
     onChange: (v: string | null) => void,
-    options: string[],
+    options: RefEntry[],
     required?: boolean
   ): React.JSX.Element => (
     <div className="space-y-1.5">
@@ -259,7 +261,7 @@ export default function CharacterForm({
     kind: 'dynasty' | 'house',
     value: string | null,
     onChange: (v: string | null) => void,
-    options: string[]
+    options: RefEntry[]
   ): React.JSX.Element => (
     <div className="space-y-1.5">
       <FieldLabel>{label}</FieldLabel>
@@ -285,7 +287,7 @@ export default function CharacterForm({
       <ReferenceInput
         value={value}
         onChange={onChange}
-        options={characterIds}
+        options={characters}
         placeholder="none"
         onNavigate={onNavigate}
       />
@@ -389,7 +391,7 @@ export default function CharacterForm({
             {draft.traits.map((t) => (
               <ReferenceBadge
                 key={t}
-                label={t}
+                entry={findRef(refData?.traits ?? [], t)}
                 icon={iconFor(t)}
                 locate={() => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'trait', t)}
                 onRemove={() => set({ traits: draft.traits.filter((x) => x !== t) })}
@@ -398,7 +400,7 @@ export default function CharacterForm({
             {draft.traits.length === 0 && <span className="text-sm text-muted-foreground">none</span>}
           </div>
           <ReferenceInput
-            options={(refData?.traits ?? []).filter((t) => !draft.traits.includes(t))}
+            options={(refData?.traits ?? []).filter((t) => !draft.traits.includes(t.id))}
             placeholder="Add trait…"
             onAdd={addTrait}
             renderItem={(t) => <TraitOption trait={t} iconCtx={iconCtx} />}

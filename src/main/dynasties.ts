@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
-import type { Dirent } from 'fs'
 import { DATE_KEY } from './characters'
 import { makeEditor, setScalar } from './lineEditor'
+import { readLocalization } from './localization'
 import { annotateLines, scanBlocks } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
 import type { BlockSpan } from './pdx'
@@ -196,63 +196,6 @@ function layer(raw: RawDef[], referenced: Set<string>): RawDef[] {
   return defs
 }
 
-// ---------- Localization ----------
-
-function ymlFiles(dir: string): string[] {
-  const files: string[] = []
-  const walk = (d: string): void => {
-    let entries: Dirent[]
-    try {
-      entries = readdirSync(d, { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const entry of entries) {
-      const full = join(d, entry.name)
-      if (entry.isDirectory()) walk(full)
-      else if (entry.name.toLowerCase().endsWith('.yml')) files.push(full)
-    }
-  }
-  if (existsSync(dir)) walk(dir)
-  return files
-}
-
-// `key:0 "Value"` — leading space optional (real files have entries at column
-// 0), any version digit count; the greedy group ends at the LAST quote on the
-// line so trailing comments after the closing quote are dropped
-const LOC_LINE = /^\s*([A-Za-z0-9_.\-']+):\d*\s*"(.*)"/
-
-function parseLocFile(path: string, into: Map<string, string>): void {
-  let text: string
-  try {
-    text = readFileSync(path, 'utf-8')
-  } catch {
-    return
-  }
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
-  for (const line of text.split('\n')) {
-    const m = line.match(LOC_LINE)
-    if (m) into.set(m[1], m[2])
-  }
-}
-
-/** name key -> display text, mod entries layered over the game's. */
-function readLocalization(gameDir: string | null, modPath: string | null): Map<string, string> {
-  const loc = new Map<string, string>()
-  if (gameDir) {
-    for (const file of ymlFiles(join(gameDir, 'localization', 'english', 'dynasties'))) {
-      parseLocFile(file, loc)
-    }
-  }
-  if (modPath) {
-    const root = join(modPath, 'localization')
-    for (const file of ymlFiles(root)) {
-      if (file.slice(root.length).toLowerCase().includes('english')) parseLocFile(file, loc)
-    }
-  }
-  return loc
-}
-
 // ---------- Assembly ----------
 
 export function getDynastyData(
@@ -281,7 +224,7 @@ export function getDynastyData(
     if (parent !== undefined) referenced.add(norm(parent))
   }
 
-  const loc = readLocalization(gameDir, modPath)
+  const loc = readLocalization(gameDir, modPath, 'dynasties')
   const localized = (name: string | undefined): string | null =>
     name !== undefined ? (loc.get(name) ?? null) : null
 
