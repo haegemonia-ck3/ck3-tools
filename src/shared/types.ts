@@ -120,6 +120,31 @@ export interface CharacterSpouse {
   matrilineal: boolean
 }
 
+/**
+ * A scripted relation (lover, rival, friend, …) recorded on a character as a
+ * dated `set_relation_<type>` effect. The file writes it either as a scalar
+ * (`set_relation_rival = character:73815`) or as a block carrying a reason
+ * (`set_relation_rival = { target = character:73818 reason = rival_historical }`).
+ */
+export interface CharacterRelation {
+  /** Relation type without the set_relation_ prefix, e.g. "rival" */
+  type: string
+  /** Target character id, without the character: prefix when it had one */
+  target: string
+  /** Whether the file spelled the target with the character: prefix */
+  prefixed: boolean
+  /** Date of the containing date block */
+  date: string
+  /** reason = value from block form; null for scalar form */
+  reason: string | null
+  /**
+   * Unrecognized inner lines of a block-form relation, verbatim; null if
+   * none. Not editable, but re-emitted if the row has to be rewritten so
+   * nothing the file carried is lost.
+   */
+  extra: string | null
+}
+
 export interface CharacterDetail {
   id: string
   file: string
@@ -144,6 +169,8 @@ export interface CharacterDetail {
   traits: string[]
   /** Marriages, in the order their effects appear in the file */
   spouses: CharacterSpouse[]
+  /** Scripted relations, in the order their effects appear in the file */
+  relations: CharacterRelation[]
   stats: CharacterStats
   /**
    * Raw `female =` value ("yes"/"no"; absent means male). Kept raw so an
@@ -558,6 +585,11 @@ export interface ReferenceData {
   houses: RefEntry[]
   /** Ids from `common/dna_data` (no display names — DNAs aren't localized) */
   dnas: RefEntry[]
+  /**
+   * Top-level keys of `common/scripted_relations` (no display names — ids
+   * like "best_friend" are readable as-is)
+   */
+  relationTypes: RefEntry[]
 }
 
 /** Kinds of reference data whose definition site can be located on disk */
