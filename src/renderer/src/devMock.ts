@@ -42,6 +42,7 @@ const characters: CharacterDetail[] = [
     father: '218',
     mother: null,
     traits: ['brave', 'ambitious'],
+    spouses: [{ id: '1002', marriage: '1070.3.4', divorce: null, matrilineal: false }],
     stats: {
       diplomacy: 4,
       martial: 7,
@@ -50,7 +51,8 @@ const characters: CharacterDetail[] = [
       learning: 2,
       prowess: 6
     },
-    female: null
+    female: null,
+    sexuality: null
   },
   {
     id: '218',
@@ -65,6 +67,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['just'],
+    spouses: [],
     stats: {
       diplomacy: 6,
       martial: 3,
@@ -73,7 +76,8 @@ const characters: CharacterDetail[] = [
       learning: 4,
       prowess: 3
     },
-    female: null
+    female: null,
+    sexuality: null
   },
   {
     id: '1002',
@@ -88,6 +92,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['shy'],
+    spouses: [],
     stats: {
       diplomacy: 6,
       martial: 2,
@@ -96,7 +101,8 @@ const characters: CharacterDetail[] = [
       learning: 5,
       prowess: 1
     },
-    female: 'yes'
+    female: 'yes',
+    sexuality: null
   },
   {
     id: '77',
@@ -111,6 +117,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: [],
+    spouses: [],
     stats: {
       diplomacy: null,
       martial: null,
@@ -119,7 +126,8 @@ const characters: CharacterDetail[] = [
       learning: null,
       prowess: null
     },
-    female: null
+    female: null,
+    sexuality: null
   },
   {
     id: '3410',
@@ -134,6 +142,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['brave'],
+    spouses: [],
     stats: {
       diplomacy: 2,
       martial: 9,
@@ -142,7 +151,8 @@ const characters: CharacterDetail[] = [
       learning: 1,
       prowess: 8
     },
-    female: null
+    female: null,
+    sexuality: null
   },
   {
     id: '3411',
@@ -158,6 +168,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['ambitious', 'craven'],
+    spouses: [],
     stats: {
       diplomacy: 5,
       martial: 3,
@@ -166,7 +177,8 @@ const characters: CharacterDetail[] = [
       learning: 4,
       prowess: 2
     },
-    female: 'yes'
+    female: 'yes',
+    sexuality: null
   }
 ]
 
@@ -351,6 +363,23 @@ const mock: Ck3ToolsApi = {
   },
   getTraitIcons: async (_g, _m, _r, traits) =>
     Object.fromEntries(traits.map((t) => [t, null])),
+  // Initial-letter stand-ins for the game's silhouettes: opaque black on
+  // transparent like the real .dds files, so the mask tinting is exercised in
+  // browser-mode dev. Real icons need Electron (game files + main process).
+  getFlatIcons: async (_g, _m, _r, names) =>
+    Object.fromEntries(
+      names.map((n) => [
+        n,
+        'data:image/svg+xml,' +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">' +
+              '<text x="8" y="13" text-anchor="middle" font-size="14"' +
+              ' font-family="sans-serif" fill="#000">' +
+              n[0].toUpperCase() +
+              '</text></svg>'
+          )
+      ])
+    ),
   // A quartered stand-in so browser-mode dev shows the layout; real rendering
   // needs Electron (game files + main process). Only some ids get one, so the
   // "no coat of arms" placeholder is reachable here too.

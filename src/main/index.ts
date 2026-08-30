@@ -19,6 +19,7 @@ import {
 import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
+import { getFlatIcons } from './icons'
 import { getCoatsOfArms } from './coatOfArms'
 import { detectEditors, openInEditor } from './editor'
 import type { AppSettings, CharacterDetail, DynastyPatch, HousePatch, RefKind } from '@shared/types'
@@ -112,6 +113,11 @@ function registerIpc(): void {
     'ck3:getTraitIcons',
     (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], traits: string[]) =>
       getTraitIcons(gameDir, modPath, replacePaths, traits)
+  )
+  ipcMain.handle(
+    'ck3:getFlatIcons',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], names: string[]) =>
+      getFlatIcons(gameDir, modPath, replacePaths, names)
   )
   ipcMain.handle(
     'ck3:getCoatsOfArms',

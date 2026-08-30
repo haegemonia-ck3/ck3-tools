@@ -1,18 +1,21 @@
 import { useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
   CharacterDetail,
+  CharacterSpouse,
   RefEntry,
   RefKind,
   ReferenceData
 } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
-import { useTraitIcons } from '../useTraitIcons'
-import type { IconContext } from '../useTraitIcons'
+import { useFlatIcons, useTraitIcons } from '../useGameIcons'
+import type { IconContext } from '../useGameIcons'
 import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
 import ReferenceLabel, { findRef } from './ReferenceLabel'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -28,9 +31,45 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   formatCalendarDate,
   fromCalendarInput,
+  isValidCK3Date,
   toCalendarInput
 } from '@/lib/ck3Date'
 import type { CalendarEra } from '@/lib/ck3Date'
+import { cn } from '@/lib/utils'
+
+/** The `sexuality =` values the game defines, in its own display order. */
+const SEXUALITIES = ['heterosexual', 'homosexual', 'bisexual', 'asexual'] as const
+
+/** Stands in for "no `sexuality =` line": Radix selects can't hold an empty value. */
+const NO_SEXUALITY = 'none'
+
+/** Every flat icon this form draws; constant so the batch fetch runs once. */
+const FLAT_ICONS = ['male', 'female', ...SEXUALITIES]
+
+/**
+ * A game flat icon. These ship as black-on-transparent silhouettes, so draw
+ * them as a mask over `currentColor` rather than as an image — that way they
+ * follow the surrounding text color (theme, and a toggle's selected state)
+ * instead of disappearing into the dark background.
+ */
+function FlatIcon({
+  url,
+  className
+}: {
+  url: string | null | undefined
+  className?: string
+}): React.JSX.Element {
+  const mask = url ? `url(${url}) center / contain no-repeat` : undefined
+  return (
+    <span
+      aria-hidden
+      className={cn('inline-block size-4 shrink-0 bg-current', className)}
+      // Hidden rather than dropped while loading (or with no game dir set) so
+      // labels don't shift sideways once the icons arrive.
+      style={mask ? { mask, WebkitMask: mask } : { visibility: 'hidden' }}
+    />
+  )
+}
 
 /** The uppercase micro-label used over every field in the character panels. */
 export function FieldLabel({
@@ -85,6 +124,27 @@ function DateHint({ label, value }: { label: string; value: string }): React.JSX
   )
 }
 
+/**
+ * Whether a marriage row can't be written yet: no spouse chosen, neither date
+ * set, or a date that isn't a real Y.M.D. A row parsed from a file with only a
+ * divorce (a lone `remove_spouse`) is left alone rather than forced to grow a
+ * marriage date it never had.
+ */
+export function spouseRowInvalid(spouse: CharacterSpouse): boolean {
+  const badDate = (d: string | null): boolean => !!d && !isValidCK3Date(d)
+  return (
+    !spouse.id.trim() ||
+    (!spouse.marriage && !spouse.divorce) ||
+    badDate(spouse.marriage) ||
+    badDate(spouse.divorce)
+  )
+}
+
+/** True when any marriage row would be rejected by a save. */
+export function spousesInvalid(spouses: CharacterSpouse[] | undefined): boolean {
+  return (spouses ?? []).some(spouseRowInvalid)
+}
+
 interface Props {
   draft: CharacterDetail
   set: (patch: Partial<CharacterDetail>) => void
@@ -106,7 +166,7 @@ interface Props {
   markRequired?: boolean
   /** Rendered at the top of the identity fieldset (ID display/input, file picker) */
   identitySlot?: React.ReactNode
-  /** Rendered at the end of Life & lineage (the edit panel's children list) */
+  /** Rendered at the end of Family (the edit panel's children list) */
   childrenSlot?: React.ReactNode
 }
 
@@ -137,6 +197,7 @@ export default function CharacterForm({
 
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft.traits)
+  const flatIconFor = useFlatIcons(iconCtx, FLAT_ICONS)
 
   const addTrait = (value: string): void => {
     const t = value.trim()
@@ -294,18 +355,137 @@ export default function CharacterForm({
     </div>
   )
 
+  /**
+   * Marriages are dated effects rather than fields, so each row edits one
+   * `add_spouse` / `remove_spouse` pair: who, when it started, and when (if
+   * ever) it ended. Rows keep file order; `matrilineal` picks the other
+   * add_ effect and is kept so a file that uses it round-trips.
+   */
+  const spouses = draft.spouses ?? []
+  const setSpouse = (index: number, patch: Partial<CharacterSpouse>): void =>
+    set({ spouses: spouses.map((s, i) => (i === index ? { ...s, ...patch } : s)) })
+
+  const spousesField = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel>Spouses · {spouses.length}</FieldLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            set({
+              spouses: [
+                ...spouses,
+                { id: '', marriage: null, divorce: null, matrilineal: false }
+              ]
+            })
+          }
+        >
+          <Plus />
+          Add spouse
+        </Button>
+      </div>
+      {spouses.length === 0 ? (
+        <p className="text-sm text-muted-foreground">none</p>
+      ) : (
+        spouses.map((spouse, index) => (
+          <div key={index} className="space-y-2.5 rounded-md border p-2.5">
+            <div className="flex items-center gap-1.5">
+              <ReferenceInput
+                className="min-w-0 flex-1"
+                value={spouse.id === '' ? null : spouse.id}
+                onChange={(v) => setSpouse(index, { id: v ?? '' })}
+                options={characters}
+                placeholder="character"
+                onNavigate={onNavigate}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Remove this marriage"
+                onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
+              >
+                <X />
+              </Button>
+            </div>
+            <div className="flex gap-2.5 *:flex-1">
+              {dateField('Married', spouse.marriage, (v) => setSpouse(index, { marriage: v }), {
+                invalid: spouse.marriage
+                  ? !isValidCK3Date(spouse.marriage)
+                  : !spouse.divorce,
+                placeholder: 'Y.M.D'
+              })}
+              {dateField('Divorced', spouse.divorce, (v) => setSpouse(index, { divorce: v }), {
+                invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
+                placeholder: 'never'
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id={`spouse-matrilineal-${index}`}
+                checked={spouse.matrilineal}
+                onCheckedChange={(checked) =>
+                  setSpouse(index, { matrilineal: checked === true })
+                }
+              />
+              <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
   return (
     <>
       <FieldSet className="gap-3.5">
         {identitySlot}
         {textField('Name', draft.name, (v) => set({ name: v }), { required: markRequired })}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="character-female"
-            checked={/^yes$/i.test(draft.female ?? '')}
-            onCheckedChange={(checked) => set({ female: checked === true ? 'yes' : null })}
-          />
-          <FieldLabel htmlFor="character-female">Female</FieldLabel>
+        <div className="flex items-end gap-4">
+          <div className="space-y-1.5">
+            <FieldLabel>Gender</FieldLabel>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              value={/^yes$/i.test(draft.female ?? '') ? 'female' : 'male'}
+              onValueChange={(v) => v && set({ female: v === 'female' ? 'yes' : null })}
+              aria-label="Gender"
+            >
+              <ToggleGroupItem value="male">
+                <FlatIcon url={flatIconFor('male')} className="size-3.5" />
+                Male
+              </ToggleGroupItem>
+              <ToggleGroupItem value="female">
+                <FlatIcon url={flatIconFor('female')} className="size-3.5" />
+                Female
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <FieldLabel htmlFor="character-sexuality">Sexuality</FieldLabel>
+            {/* Icons live inside the items, so the trigger shows the chosen one too */}
+            <Select
+              value={draft.sexuality ?? NO_SEXUALITY}
+              onValueChange={(v) => set({ sexuality: v === NO_SEXUALITY ? null : v })}
+            >
+              <SelectTrigger id="character-sexuality" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SEXUALITY}>
+                  <FlatIcon url={null} className="size-3.5" />
+                  Unset
+                </SelectItem>
+                {SEXUALITIES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    <FlatIcon url={flatIconFor(s)} className="size-3.5" />
+                    <span className="capitalize">{s}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </FieldSet>
 
@@ -329,7 +509,7 @@ export default function CharacterForm({
             </ToggleGroup>
           )}
         </FieldLegend>
-        <div className="flex gap-2.5 *:flex-1">
+        <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {dateField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
             placeholder: 'Y.M.D',
@@ -360,10 +540,15 @@ export default function CharacterForm({
             )}
           </div>
         </div>
+      </FieldSet>
+
+      <FieldSet className="gap-3.5">
+        <FieldLegend variant="label" className="mb-0">Family</FieldLegend>
         <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {parentField('Father', draft.father, (v) => set({ father: v }))}
           {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
         </div>
+        {spousesField}
         {childrenSlot}
       </FieldSet>
 
