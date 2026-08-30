@@ -394,26 +394,20 @@ export default function CharacterForm({
       ) : (
         spouses.map((spouse, index) => (
           <div key={index} className="space-y-2.5 rounded-md border p-2.5">
-            <div className="flex flex-col gap-2.5 @sm:flex-row @sm:items-center">
-              <div className="flex items-center gap-1.5">
-                <ReferenceInput
-                  className="min-w-0 flex-1"
-                  value={spouse.id === '' ? null : spouse.id}
-                  onChange={(v) => setSpouse(index, { id: v ?? '' })}
-                  options={characters}
-                  placeholder="character"
-                  onNavigate={onNavigate}
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Remove this marriage"
-                  onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
-                >
-                  <X />
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
+            {/*
+              Narrow: the remove button stays on the input's row and matrilineal
+              wraps below it. Wide: all three sit on one row, remove last.
+            */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 @sm:grid-cols-[minmax(0,1fr)_auto_auto] @sm:gap-x-4">
+              <ReferenceInput
+                className="col-start-1 row-start-1 min-w-0"
+                value={spouse.id === '' ? null : spouse.id}
+                onChange={(v) => setSpouse(index, { id: v ?? '' })}
+                options={characters}
+                placeholder="character"
+                onNavigate={onNavigate}
+              />
+              <div className="col-start-1 row-start-2 flex items-center gap-2 @sm:col-start-2 @sm:row-start-1">
                 <Checkbox
                   id={`spouse-matrilineal-${index}`}
                   checked={spouse.matrilineal}
@@ -423,6 +417,15 @@ export default function CharacterForm({
                 />
                 <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
               </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="col-start-2 row-start-1 text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 @sm:col-start-3"
+                title="Remove this marriage"
+                onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
+              >
+                <X />
+              </Button>
             </div>
             <div className="flex flex-col gap-2.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
               {dateField('Married', spouse.marriage, (v) => setSpouse(index, { marriage: v }), {
