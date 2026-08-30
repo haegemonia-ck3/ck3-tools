@@ -103,6 +103,23 @@ export interface CharacterStats {
   prowess: number | null
 }
 
+/**
+ * A marriage recorded on a character, as the dated `add_spouse` /
+ * `remove_spouse` effects that express it in the history file. `matrilineal`
+ * selects `add_matrilineal_spouse`; a null `divorce` means the marriage is
+ * never dissolved, and a null `marriage` a lone `remove_spouse` with no
+ * matching add (real files carry these).
+ */
+export interface CharacterSpouse {
+  /** Spouse character id, as written in the file */
+  id: string
+  /** Date of the add_spouse effect, e.g. "1070.3.4" */
+  marriage: string | null
+  /** Date of the remove_spouse effect; null while the marriage stands */
+  divorce: string | null
+  matrilineal: boolean
+}
+
 export interface CharacterDetail {
   id: string
   file: string
@@ -125,6 +142,8 @@ export interface CharacterDetail {
   /** Character id of the mother, as written in the file */
   mother: string | null
   traits: string[]
+  /** Marriages, in the order their effects appear in the file */
+  spouses: CharacterSpouse[]
   stats: CharacterStats
   /**
    * Raw `female =` value ("yes"/"no"; absent means male). Kept raw so an
