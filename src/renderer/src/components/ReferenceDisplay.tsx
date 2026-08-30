@@ -67,7 +67,7 @@ export default function ReferenceDisplay({
     <Button
       variant="link"
       className={cn(
-        'h-auto min-w-0 gap-1 p-0 text-left font-normal text-link underline decoration-dotted underline-offset-4 hover:decoration-solid',
+        'h-auto min-w-0 gap-1 p-0 text-left font-normal text-foreground underline decoration-link decoration-dotted underline-offset-4 hover:decoration-solid',
         className
       )}
       disabled={opening}
