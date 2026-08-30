@@ -9,6 +9,7 @@ import type {
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import CoatOfArms from './CoatOfArms'
+import DateFormatToggle from './DateFormatToggle'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -124,6 +125,8 @@ export default function DynastyDetailPanel({
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const [grouped, setGrouped] = useState(true)
+  /** Show file years instead of the mod calendar's era years in member lifespans */
+  const [showRawDates, setShowRawDates] = useState(false)
   // Group keys the user has folded away; absent means open, so new groups
   // (and every group of a freshly opened row) start expanded.
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
@@ -268,7 +271,7 @@ export default function DynastyDetailPanel({
         {c.female && <span className="ml-1 text-muted-foreground">♀</span>}
       </span>
       <span className="text-xs whitespace-nowrap text-muted-foreground">
-        {lifespanLabel(c, calendar)}
+        {lifespanLabel(c, showRawDates ? null : calendar)}
       </span>
       <Button
         variant="ghost"
@@ -371,6 +374,7 @@ export default function DynastyDetailPanel({
           {dirty && <span className="size-2 shrink-0 rounded-full bg-primary" title="Unsaved changes" />}
         </h2>
         <div className="flex shrink-0 items-center gap-1">
+          <DateFormatToggle calendar={calendar} showRaw={showRawDates} onChange={setShowRawDates} />
           <Badge variant="secondary">{kind}</Badge>
           {def && (
             <Button
