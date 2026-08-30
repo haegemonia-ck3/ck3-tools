@@ -25,14 +25,28 @@ export function findRef(entries: readonly RefEntry[], id: string): RefEntry {
  */
 export default function ReferenceLabel({
   entry,
+  stacked = false,
   className
 }: {
   entry: RefEntry
+  /**
+   * Put the id on its own line under the name, unparenthesised, for places
+   * with the vertical room for it (badges).
+   */
+  stacked?: boolean
   /** Applied to the whole label; the id keeps its muted styling regardless. */
   className?: string
 }): React.JSX.Element {
   if (entry.name === null || entry.name === '') {
     return <span className={cn('font-mono', className)}>{entry.id}</span>
+  }
+  if (stacked) {
+    return (
+      <span className={cn('flex min-w-0 flex-col leading-tight', className)}>
+        <span className="truncate">{entry.name}</span>
+        <span className="truncate font-mono text-[0.85em] text-muted-foreground">{entry.id}</span>
+      </span>
+    )
   }
   return (
     <span className={cn('min-w-0 truncate', className)}>

@@ -5,6 +5,7 @@ import { openReferenceTarget } from './ReferenceInput'
 import ReferenceLabel, { refLabel } from './ReferenceLabel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface Props {
   /** The referenced entry, shown as "Name (id)" when it has a name */
@@ -43,9 +44,17 @@ export default function ReferenceBadge({
   }
 
   return (
-    <Badge variant="secondary" className="gap-1 pr-1">
-      {icon && <img className="-ml-1 size-5 object-contain" src={icon} alt="" />}
-      <ReferenceLabel entry={entry} className="font-normal" />
+    <Badge
+      variant="secondary"
+      className={cn(
+        'relative h-9 gap-1 rounded-md py-0 pr-1 text-xs',
+        // The icon is positioned rather than laid out so its intrinsic size
+        // can't stretch the badge; the extra padding reserves its square.
+        icon ? 'pl-11' : 'pl-2'
+      )}
+    >
+      {icon && <img className="absolute inset-y-0 left-0 size-9 object-cover" src={icon} alt="" />}
+      <ReferenceLabel entry={entry} stacked className="font-normal" />
       {(onNavigate ?? locate) && (
         <Button
           variant="ghost"
