@@ -282,13 +282,14 @@ export default function FaithEditorPage(): React.JSX.Element {
     return (id: string): string | null => names.get(normId(id)) ?? null
   }, [data])
 
+  const allRows = useMemo(() => (data ? buildFaithRows(data) : []), [data])
+
   // Biggest congregations first. The table's own sorting layers on top when a
   // header is clicked.
   const rows = useMemo(() => {
-    const all = data ? buildFaithRows(data) : []
-    const visible = modOnly ? all.filter((r) => r.inMod || !r.defined) : all
-    return visible.sort((a, b) => b.adherents - a.adherents || numericAware(a.id, b.id))
-  }, [data, modOnly])
+    const visible = modOnly ? allRows.filter((r) => r.inMod || !r.defined) : allRows
+    return [...visible].sort((a, b) => b.adherents - a.adherents || numericAware(a.id, b.id))
+  }, [allRows, modOnly])
 
   const table = useTable({
     features,
@@ -354,13 +355,13 @@ export default function FaithEditorPage(): React.JSX.Element {
         <h1 className="text-2xl font-semibold">Faith Editor</h1>
       </header>
 
-      {!loading && rows.length === 0 && (
+      {!loading && allRows.length === 0 && (
         <Card>
           <CardContent className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
               No faiths found for {selectedMod.name} in{' '}
-              <code className="font-mono">common/religion/religion_types</code>
-              {modOnly ? ' that the mod defines.' : ', and no character professes one.'}
+              <code className="font-mono">common/religion/religion_types</code>, and no character
+              professes one.
             </p>
             <Button size="sm" className="shrink-0" onClick={() => openCreate()}>
               <Plus />
@@ -376,7 +377,9 @@ export default function FaithEditorPage(): React.JSX.Element {
         defaultLayout={defaultLayout}
         onLayoutChanged={onLayoutChanged}
       >
-        {rows.length > 0 && (
+        {/* Gated on the UNFILTERED rows: when "This mod" filters everything
+            away the table just goes empty, keeping the toggle to switch back */}
+        {allRows.length > 0 && (
           <ResizablePanel id="list" minSize={360} className="flex min-h-0 flex-col gap-2">
             <div className="flex items-center gap-3">
               <Button size="sm" onClick={() => openCreate()}>
@@ -487,7 +490,7 @@ export default function FaithEditorPage(): React.JSX.Element {
         )}
         {(selected || search.create) && data && modPath && (
           <>
-            {rows.length > 0 && (
+            {allRows.length > 0 && (
               <ResizableHandle withHandle className="mx-2 bg-transparent hover:bg-border" />
             )}
             <ResizablePanel
