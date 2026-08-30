@@ -5,9 +5,10 @@ import {
   eolSuffix,
   makeEditor,
   refresh,
+  setRepeatedScalar,
   setScalar,
   splitComment,
-  SCALAR_LINE
+  withEol
 } from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
 import type { LineEditor } from './lineEditor'
@@ -274,34 +275,10 @@ function firstDateBlockLine(ed: LineEditor): number {
   return ed.lines.length
 }
 
-/**
- * Terminate inserted lines with \r in CRLF bodies (join adds only the \n).
- * A line appended at the very end gets none — nothing follows it.
- */
-function withEol(ed: LineEditor, lines: string[], at: number): string[] {
-  const cr = eolSuffix(ed)
-  if (cr === '') return lines
-  const appendAtEnd = at >= ed.lines.length
-  return lines.map((l, i) => (appendAtEnd && i === lines.length - 1 ? l : l + cr))
-}
-
 function setTraits(ed: LineEditor, traits: string[]): void {
-  // Remove existing depth-0 trait lines, remembering where the first one was
-  let insertAt = -1
-  for (let i = ed.lines.length - 1; i >= 0; i--) {
-    if (ed.depths[i] !== 0) continue
-    const code = ed.lines[i].split('#')[0]
-    const m = code.match(SCALAR_LINE)
-    if (m && m[2] === 'trait') {
-      ed.lines.splice(i, 1)
-      insertAt = i
-    }
-  }
-  refresh(ed)
-  if (traits.length === 0) return
-  if (insertAt < 0) insertAt = firstDateBlockLine(ed)
-  ed.lines.splice(insertAt, 0, ...withEol(ed, traits.map((t) => `${ed.indent}trait = ${t}`), insertAt))
-  refresh(ed)
+  // New trait lines go above the first date block, where the rest of a
+  // character's scalars live
+  setRepeatedScalar(ed, 'trait', traits, { insertAt: firstDateBlockLine(ed) })
 }
 
 /** Rename/add/remove the date block containing a birth/death statement. */

@@ -9,6 +9,7 @@ import RootLayout from './RootLayout'
 import SettingsPage from './pages/SettingsPage'
 import CharacterEditorPage from './pages/CharacterEditorPage'
 import DynastyEditorPage from './pages/DynastyEditorPage'
+import FaithEditorPage from './pages/FaithEditorPage'
 import ToolPlaceholder from './pages/ToolPlaceholder'
 
 /**
@@ -41,6 +42,26 @@ export interface CharacterSearch {
 export interface DynastySearch {
   id?: string
   kind?: 'dynasty' | 'house'
+}
+
+/**
+ * Deep-link target for the faith editor (e.g. a character's Faith field, or a
+ * religion's faith list). `kind` says which list to open the id in; the page
+ * falls back to the other list when the id isn't found there.
+ */
+export interface FaithSearch {
+  id?: string
+  kind?: 'religion' | 'faith'
+}
+
+/**
+ * Deep-link target for the faith editor (e.g. a character's Faith field, or a
+ * religion's faith list). `kind` says which list to open the id in; the page
+ * falls back to the other list when the id isn't found there.
+ */
+export interface FaithSearch {
+  id?: string
+  kind?: 'religion' | 'faith'
 }
 
 const rootRoute = createRootRoute({
@@ -96,7 +117,11 @@ const dynastiesRoute = createRoute({
 const faithsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/faiths',
-  component: () => <ToolPlaceholder name="Faith Editor" />
+  component: FaithEditorPage,
+  validateSearch: (search: Record<string, unknown>): FaithSearch => ({
+    id: typeof search.id === 'string' ? search.id : undefined,
+    kind: search.kind === 'religion' || search.kind === 'faith' ? search.kind : undefined
+  })
 })
 
 const culturesRoute = createRoute({

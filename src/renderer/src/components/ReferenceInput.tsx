@@ -63,6 +63,12 @@ interface Props {
   limit?: number
   /** Tooltip for the follow button; defaults to wording for a definition site. */
   followTitle?: string
+  /**
+   * Read-only mode for a field whose entity can't be edited (a base-game
+   * definition). The follow button stays live — going to where a value is
+   * defined is exactly what you want when you can't change it here.
+   */
+  disabled?: boolean
   className?: string
 }
 
@@ -77,6 +83,7 @@ export default function ReferenceInput({
   renderItem,
   limit = 100,
   followTitle,
+  disabled = false,
   className
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
@@ -138,7 +145,12 @@ export default function ReferenceInput({
           setInputText(text)
         }}
       >
-        <ComboboxInput className="flex-1" placeholder={placeholder} showClear={!onAdd} />
+        <ComboboxInput
+          className="flex-1"
+          placeholder={placeholder}
+          showClear={!onAdd}
+          disabled={disabled}
+        />
         <ComboboxContent>
           <ComboboxEmpty>No matches.</ComboboxEmpty>
           <ComboboxList>

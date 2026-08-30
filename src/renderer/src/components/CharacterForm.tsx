@@ -161,6 +161,8 @@ interface Props {
   onNavigate: (id: string) => void
   /** Open a lineage row in the Dynasty & House Editor */
   onOpenLineage: (kind: 'dynasty' | 'house', id: string) => void
+  /** Open a faith in the Faith Editor */
+  onOpenFaith: (id: string) => void
   badBirth: boolean
   badDeath: boolean
   /** Mark the game-mandatory fields with an asterisk (create mode) */
@@ -193,6 +195,7 @@ export default function CharacterForm({
   characters,
   onNavigate,
   onOpenLineage,
+  onOpenFaith,
   badBirth,
   badDeath,
   markRequired = false,
@@ -342,6 +345,21 @@ export default function CharacterForm({
         placeholder="none"
         onNavigate={(v) => onOpenLineage(kind, v)}
         followTitle="Open in Dynasty & House Editor"
+      />
+    </div>
+  )
+
+  /** Faith is managed data too, and opens in the Faith Editor. */
+  const faithField = (value: string | null, onChange: (v: string | null) => void): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <FieldLabel required={markRequired}>Faith</FieldLabel>
+      <ReferenceInput
+        value={value}
+        onChange={onChange}
+        options={refData?.faiths ?? []}
+        placeholder="none"
+        onNavigate={onOpenFaith}
+        followTitle="Open in Faith Editor"
       />
     </div>
   )
@@ -558,14 +576,7 @@ export default function CharacterForm({
           refData?.cultures ?? [],
           markRequired
         )}
-        {refField(
-          'Faith',
-          'faith',
-          draft.faith,
-          (v) => set({ faith: v }),
-          refData?.faiths ?? [],
-          markRequired
-        )}
+        {faithField(draft.faith, (v) => set({ faith: v }))}
         <div className="space-y-1.5">
           <FieldLabel>Traits</FieldLabel>
           <div className="flex min-h-6 flex-wrap gap-1.5">

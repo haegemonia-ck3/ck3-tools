@@ -735,6 +735,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   onOpenLineage={(kind, id) =>
                     void navigate({ to: '/dynasties', search: { id, kind } })
                   }
+                  onOpenFaith={(id) => void navigate({ to: '/faiths', search: { id, kind: 'faith' } })}
                   onCreateChild={openCreate}
                   storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
                   onDraftChange={persistDraft}
@@ -772,6 +773,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   onOpenLineage={(kind, id) =>
                     void navigate({ to: '/dynasties', search: { id, kind } })
                   }
+                  onOpenFaith={(id) => void navigate({ to: '/faiths', search: { id, kind: 'faith' } })}
                   onCreated={(file, id) => {
                     void navigate({ to: '/characters', search: { file, id }, replace: true })
                     reload()

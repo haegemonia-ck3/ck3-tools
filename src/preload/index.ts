@@ -9,11 +9,14 @@ import type {
   DynastyData,
   DynastyPatch,
   EditorInfo,
+  FaithPatch,
   HousePatch,
   ModInfo,
   RefKind,
   RefLocation,
   ReferenceData,
+  ReligionData,
+  ReligionPatch,
   SaveResult
 } from '@shared/types'
 
@@ -74,6 +77,39 @@ const api = {
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveDynasty', modPath, file, id, patch),
   saveHouse: (modPath: string, file: string, id: string, patch: HousePatch): Promise<SaveResult> =>
     ipcRenderer.invoke('ck3:saveHouse', modPath, file, id, patch),
+  getReligionData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<ReligionData> =>
+    ipcRenderer.invoke('ck3:getReligionData', gameDir, modPath, replacePaths),
+  saveFaith: (
+    modPath: string,
+    file: string,
+    religionId: string,
+    faithId: string,
+    patch: FaithPatch
+  ): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:saveFaith', modPath, file, religionId, faithId, patch),
+  saveReligion: (
+    modPath: string,
+    file: string,
+    religionId: string,
+    patch: ReligionPatch
+  ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveReligion', modPath, file, religionId, patch),
+  getFaithIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    icons: string[]
+  ): Promise<Record<string, string | null>> =>
+    ipcRenderer.invoke('ck3:getFaithIcons', gameDir, modPath, replacePaths, icons),
+  listFaithIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<string[]> =>
+    ipcRenderer.invoke('ck3:listFaithIcons', gameDir, modPath, replacePaths),
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

@@ -177,7 +177,10 @@ const KIND_DIRS: Record<RefKind, string[]> = {
   faith: ['common/religion/religion_types'],
   trait: ['common/traits'],
   dynasty: ['common/dynasties', 'common/dynasty_houses'],
-  dna: ['common/dna_data']
+  dna: ['common/dna_data'],
+  religion: ['common/religion/religion_types'],
+  doctrine: ['common/religion/doctrine_types', 'common/religion/doctrine_group_types'],
+  holy_site: ['common/religion/holy_site_types']
 }
 
 function lineOf(text: string, offset: number): number {

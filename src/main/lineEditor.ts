@@ -7,8 +7,6 @@ import { annotateLines } from './pdx'
  * round-trips exactly.
  */
 
-export const SCALAR_LINE = /^(\s*)([A-Za-z0-9_.\-']+)(\s*=\s*)("([^"]*)"|[^\s{}"]+)(\s*)$/
-
 export interface LineEditor {
   lines: string[]
   depths: number[]
@@ -63,40 +61,69 @@ interface StatementHit {
   valueStart: number
   valueEnd: number
   quoted: boolean
+  /** The value with any surrounding quotes stripped */
+  value: string
 }
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
- * First statement carrying one of `keys` at depth 0. Statements are matched
- * anywhere in a line, not just lines holding a single scalar — real files (and
- * this editor's own inline inserts) put several statements on one line — and
- * comments are stripped quote-aware so a `#` inside a quoted value doesn't
- * hide the statement from the writer that the reader can see.
+ * Every statement carrying one of `keys` at depth 0, in file order. Statements
+ * are matched anywhere in a line, not just lines holding a single scalar — real
+ * files (and this editor's own inline inserts) put several statements on one
+ * line — and comments are stripped quote-aware so a `#` inside a quoted value
+ * doesn't hide the statement from the writer that the reader can see.
  */
-function findStatement(ed: LineEditor, keys: string[], ignoreCase: boolean): StatementHit | null {
+function findStatements(ed: LineEditor, keys: string[], ignoreCase: boolean): StatementHit[] {
   const re = new RegExp(
     `(^|[\\s{}])(?:${keys.map(escapeRe).join('|')})\\s*=\\s*("[^"]*"|[^\\s{}"#=]+)`,
     ignoreCase ? 'gi' : 'g'
   )
+  const hits: StatementHit[] = []
   for (let i = 0; i < ed.lines.length; i++) {
     if (ed.depths[i] !== 0) continue
     const [code] = splitComment(ed.lines[i])
-    re.lastIndex = 0
-    const m = re.exec(code)
-    if (!m) continue
-    const start = m.index + m[1].length
-    const valueEnd = m.index + m[0].length
-    return {
-      line: i,
-      start,
-      end: valueEnd,
-      valueStart: valueEnd - m[2].length,
-      valueEnd,
-      quoted: m[2].startsWith('"')
+    for (const m of code.matchAll(re)) {
+      const valueEnd = m.index + m[0].length
+      const quoted = m[2].startsWith('"')
+      hits.push({
+        line: i,
+        start: m.index + m[1].length,
+        end: valueEnd,
+        valueStart: valueEnd - m[2].length,
+        valueEnd,
+        quoted,
+        value: quoted ? m[2].slice(1, -1) : m[2]
+      })
     }
   }
-  return null
+  return hits
+}
+
+/** The first such statement, which is all a single-valued key needs. */
+function findStatement(ed: LineEditor, keys: string[], ignoreCase: boolean): StatementHit | null {
+  return findStatements(ed, keys, ignoreCase)[0] ?? null
+}
+
+/**
+ * Cut one statement out of its line. The whole line goes when the statement was
+ * its only code — a trailing comment annotates the statement it sits on, so it
+ * goes too — otherwise just the statement is spliced out, eating one
+ * neighboring space so no double gap is left behind. Leaves `depths` stale: the
+ * caller refreshes once it has finished removing.
+ */
+function removeStatement(ed: LineEditor, hit: StatementHit): void {
+  const line = ed.lines[hit.line]
+  const [code] = splitComment(line)
+  const rest = code.slice(0, hit.start) + code.slice(hit.end)
+  if (rest.trim() === '') {
+    ed.lines.splice(hit.line, 1)
+    return
+  }
+  let { start, end } = hit
+  if (line[end] === ' ') end++
+  else if (line[start - 1] === ' ') start--
+  ed.lines[hit.line] = line.slice(0, start) + line.slice(end)
 }
 
 /** Line index of the first depth-0 statement carrying one of `keys`, or -1. */
@@ -118,6 +145,17 @@ export function endOfBodyIndex(ed: LineEditor): number {
 /** "\r" when the body uses CRLF line endings, so inserted lines match. */
 export function eolSuffix(ed: LineEditor): string {
   return ed.lines.some((l) => l.endsWith('\r')) ? '\r' : ''
+}
+
+/**
+ * Terminate inserted lines with \r in CRLF bodies (join adds only the \n).
+ * A line appended at the very end gets none — nothing follows it.
+ */
+export function withEol(ed: LineEditor, lines: string[], at: number): string[] {
+  const cr = eolSuffix(ed)
+  if (cr === '') return lines
+  const appendAtEnd = at >= ed.lines.length
+  return lines.map((l, i) => (appendAtEnd && i === lines.length - 1 ? l : l + cr))
 }
 
 export interface SetScalarOptions {
@@ -147,20 +185,7 @@ export function setScalar(
   const hit = findStatement(ed, keys, opts.ignoreCase ?? false)
   if (value === null || value === '') {
     if (!hit) return
-    const line = ed.lines[hit.line]
-    const [code] = splitComment(line)
-    const rest = code.slice(0, hit.start) + code.slice(hit.end)
-    if (rest.trim() === '') {
-      // The statement was the line's only code — drop the whole line
-      ed.lines.splice(hit.line, 1)
-    } else {
-      // Other statements share the line — cut just this one, eating one
-      // neighboring space so no double gap is left behind
-      let { start, end } = hit
-      if (line[end] === ' ') end++
-      else if (line[start - 1] === ' ') start--
-      ed.lines[hit.line] = line.slice(0, start) + line.slice(end)
-    }
+    removeStatement(ed, hit)
     refresh(ed)
     return
   }
@@ -179,5 +204,62 @@ export function setScalar(
   const at = opts.insertAt ?? endOfBodyIndex(ed)
   const cr = at < ed.lines.length ? eolSuffix(ed) : ''
   ed.lines.splice(at, 0, `${ed.indent}${statement}${cr}`)
+  refresh(ed)
+}
+
+export interface SetRepeatedOptions {
+  /**
+   * Line index for the first inserted value when the key has no existing lines
+   * to append after; defaults to the end of the body.
+   */
+  insertAt?: number
+  /** Match existing keys case-insensitively; `key` is still written as given */
+  ignoreCase?: boolean
+}
+
+/**
+ * Set a repeating scalar (`doctrine = …`, `holy_site = …`) to `values`.
+ *
+ * Written as a multiset diff rather than a wipe-and-rewrite: lines whose value
+ * survives stay exactly as they are, comments and ordering included — real
+ * religion files annotate their doctrine lines, and those notes belong to the
+ * doctrine, not to the position. Only surplus lines are cut and only genuinely
+ * new values appended, so saving an untouched list changes nothing at all.
+ */
+export function setRepeatedScalar(
+  ed: LineEditor,
+  key: string,
+  values: string[],
+  opts: SetRepeatedOptions = {}
+): void {
+  const hits = findStatements(ed, [key], opts.ignoreCase ?? false)
+  const wanted = [...values]
+  const surplus: StatementHit[] = []
+  for (const hit of hits) {
+    const at = wanted.indexOf(hit.value)
+    if (at >= 0) wanted.splice(at, 1)
+    else surplus.push(hit)
+  }
+  // Bottom-up so earlier hits' line indices stay valid as lines are spliced out
+  for (const hit of surplus.reverse()) removeStatement(ed, hit)
+  if (surplus.length > 0) refresh(ed)
+  if (wanted.length === 0) return
+
+  // New values land under the last surviving line of the same key, keeping a
+  // faith's doctrines together instead of scattering them down the block
+  const remaining = findStatements(ed, [key], opts.ignoreCase ?? false)
+  if (remaining.length === 0 && opts.insertAt === undefined && ed.lines.length === 1) {
+    // A single-line body (`x = { color = { 1 2 3 } icon = y }`) stays on one
+    // line, the way setScalar keeps it, rather than growing a line that the
+    // closing brace then gets glued to
+    const statements = wanted.map((v) => `${key} = ${v}`).join(' ')
+    ed.lines[0] = `${ed.lines[0].replace(/\s*$/, '')} ${statements} `
+    return
+  }
+  const at =
+    remaining.length > 0
+      ? remaining[remaining.length - 1].line + 1
+      : (opts.insertAt ?? endOfBodyIndex(ed))
+  ed.lines.splice(at, 0, ...withEol(ed, wanted.map((v) => `${ed.indent}${key} = ${v}`), at))
   refresh(ed)
 }

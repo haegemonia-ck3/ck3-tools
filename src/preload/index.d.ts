@@ -8,11 +8,14 @@ import type {
   DynastyData,
   DynastyPatch,
   EditorInfo,
+  FaithPatch,
   HousePatch,
   ModInfo,
   RefKind,
   RefLocation,
   ReferenceData,
+  ReligionData,
+  ReligionPatch,
   SaveResult
 } from '@shared/types'
 
@@ -60,6 +63,37 @@ export interface Ck3ToolsApi {
     patch: DynastyPatch
   ) => Promise<SaveResult>
   saveHouse: (modPath: string, file: string, id: string, patch: HousePatch) => Promise<SaveResult>
+  getReligionData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<ReligionData>
+  saveFaith: (
+    modPath: string,
+    file: string,
+    religionId: string,
+    faithId: string,
+    patch: FaithPatch
+  ) => Promise<SaveResult>
+  saveReligion: (
+    modPath: string,
+    file: string,
+    religionId: string,
+    patch: ReligionPatch
+  ) => Promise<SaveResult>
+  /** Faith icons from gfx/interface/icons/faith, keyed by the `icon =` value */
+  getFaithIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    icons: string[]
+  ) => Promise<Record<string, string | null>>
+  /** Every icon name a faith can point at, mod files layered over the game's */
+  listFaithIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<string[]>
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,
