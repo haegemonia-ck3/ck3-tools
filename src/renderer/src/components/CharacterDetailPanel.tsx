@@ -272,7 +272,7 @@ export default function CharacterDetailPanel({
         </Button>
       </div>
 
-      <div className="@container min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+      <div className="@container min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
         {stale && (
           <Alert>
             <AlertDescription>
