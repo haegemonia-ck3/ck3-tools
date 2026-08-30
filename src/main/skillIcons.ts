@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
 import { decodeDds, encodePng } from './dds'
-import { STAT_KEYS } from './characters'
+import { iconCandidates } from './icons'
 import type { CharacterStats } from '@shared/types'
 
 const ICON_REL_DIR = 'gfx/interface/icons'
@@ -10,10 +9,11 @@ const ICON_REL_DIR = 'gfx/interface/icons'
  * The six skills are engine constants, not moddable data — there is no
  * `common/…` folder defining them — so their icon sources are fixed too.
  * Per `gui/texticons.gui`, five of them are frames of a horizontal strip
- * (`icon_skills.dds`, one frame per sixth of its width, the last frame
- * unused) while prowess has its own file. A mod can still override either
- * file, so both are resolved through the usual mod-over-game layering.
+ * (`icon_skills.dds`, one frame per sixth of its width, the last unused)
+ * while prowess has its own file. A mod can still override either file, so
+ * both go through the usual mod-over-game layering.
  */
+const STRIP_FILE = 'icon_skills.dds'
 const STRIP_FRAMES = 6
 const STRIP_ORDER: (keyof CharacterStats)[] = [
   'diplomacy',
@@ -22,26 +22,9 @@ const STRIP_ORDER: (keyof CharacterStats)[] = [
   'intrigue',
   'learning'
 ]
-const OWN_FILE: Partial<Record<keyof CharacterStats, string>> = { prowess: 'icon_prowess.dds' }
+const OWN_FILE: Partial<Record<string, string>> = { prowess: 'icon_prowess.dds' }
 
-/** Candidate paths for `gfx/interface/icons/<name>`, mod first. */
-function candidates(
-  gameDir: string | null,
-  modPath: string | null,
-  replacePaths: string[],
-  name: string
-): string[] {
-  const replaced = replacePaths.some((rp) => {
-    const nrp = rp.replace(/\\/g, '/').toLowerCase()
-    return ICON_REL_DIR === nrp || ICON_REL_DIR.startsWith(nrp + '/')
-  })
-  const paths: string[] = []
-  if (modPath) paths.push(join(modPath, ...ICON_REL_DIR.split('/'), name))
-  if (gameDir && !replaced) paths.push(join(gameDir, ...ICON_REL_DIR.split('/'), name))
-  return paths
-}
-
-/** Decodes the first readable candidate, taking frame `frame` of the strip if given. */
+/** Decodes the first readable candidate, cropping to frame `frame` of the strip if given. */
 function iconUrl(paths: string[], frame: number | null): string | null {
   for (const path of paths) {
     if (!existsSync(path)) continue
@@ -67,28 +50,33 @@ function iconUrl(paths: string[], frame: number | null): string | null {
   return null
 }
 
-// The set is tiny and fixed, so one entry keyed by mod context suffices
+// skill -> data URL (or null for no icon); reset when the mod context changes
 let cacheKey = ''
-let cached: Record<string, string | null> | null = null
+const iconCache = new Map<string, string | null>()
 
 export function getSkillIcons(
   gameDir: string | null,
   modPath: string | null,
-  replacePaths: string[]
+  replacePaths: string[],
+  skills: string[]
 ): Record<string, string | null> {
   const key = `${gameDir}|${modPath}`
-  if (key === cacheKey && cached) return cached
-  const result: Record<string, string | null> = {}
-  for (const skill of STAT_KEYS) {
-    const own = OWN_FILE[skill]
-    result[skill] = own
-      ? iconUrl(candidates(gameDir, modPath, replacePaths, own), null)
-      : iconUrl(
-          candidates(gameDir, modPath, replacePaths, 'icon_skills.dds'),
-          STRIP_ORDER.indexOf(skill)
-        )
+  if (key !== cacheKey) {
+    cacheKey = key
+    iconCache.clear()
   }
-  cacheKey = key
-  cached = result
+  const result: Record<string, string | null> = {}
+  for (const skill of skills) {
+    if (!iconCache.has(skill)) {
+      const own = OWN_FILE[skill]
+      const frame = own ? null : STRIP_ORDER.indexOf(skill as keyof CharacterStats)
+      const paths =
+        frame !== null && frame < 0
+          ? [] // not a skill we know an icon for
+          : iconCandidates(gameDir, modPath, replacePaths, ICON_REL_DIR, own ?? STRIP_FILE)
+      iconCache.set(skill, iconUrl(paths, frame))
+    }
+    result[skill] = iconCache.get(skill)!
+  }
   return result
 }

@@ -18,15 +18,17 @@ import { cn } from '@/lib/utils'
 import { isValidCK3Date } from '@/lib/ck3Date'
 
 /**
- * Drafts persisted before Dynasty/House (and later Female) became separate
- * fields miss those keys. Treat them as unset so a resumed draft neither reads
- * as dirty against a freshly parsed character nor writes `undefined` back.
+ * Drafts persisted before a field existed (Dynasty/House, then Female, then
+ * Spouses and Sexuality) miss its key. Treat those as unset so a resumed draft
+ * neither reads as dirty against a freshly parsed character nor writes
+ * `undefined` back.
  */
 function withDefaults(detail: CharacterDetail): CharacterDetail {
   return {
     ...detail,
     house: detail.house ?? null,
     female: detail.female ?? null,
+    sexuality: detail.sexuality ?? null,
     spouses: detail.spouses ?? []
   }
 }

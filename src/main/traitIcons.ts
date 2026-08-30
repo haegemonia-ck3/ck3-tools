@@ -1,8 +1,7 @@
-import { existsSync, readFileSync } from 'fs'
-import { join } from 'path'
+import { readFileSync } from 'fs'
 import { scanBlocks, scanScalars } from './pdx'
 import { effectiveFiles } from './refdata'
-import { ddsToPngDataUrl } from './dds'
+import { resolveIcons } from './icons'
 
 const ICON_REL_DIR = 'gfx/interface/icons/traits'
 
@@ -31,9 +30,8 @@ function iconFileNames(
   return names
 }
 
-// path -> data URL (or null for undecodable); reset when the mod context changes
-let cacheKey = ''
-const iconCache = new Map<string, string | null>()
+// Reset when the mod context changes; the decoded icons cache in ./icons
+let namesKey = ''
 let namesCache: Map<string, string> | null = null
 
 export function getTraitIcons(
@@ -43,39 +41,16 @@ export function getTraitIcons(
   traits: string[]
 ): Record<string, string | null> {
   const key = `${gameDir}|${modPath}`
-  if (key !== cacheKey) {
-    cacheKey = key
-    iconCache.clear()
+  if (key !== namesKey) {
+    namesKey = key
     namesCache = null
   }
-  namesCache ??= iconFileNames(gameDir, modPath, replacePaths)
-
-  const result: Record<string, string | null> = {}
-  const replaced = replacePaths.some((rp) => {
-    const nrp = rp.replace(/\\/g, '/').toLowerCase()
-    return ICON_REL_DIR === nrp || ICON_REL_DIR.startsWith(nrp + '/')
-  })
-  for (const trait of traits) {
-    if (iconCache.has(trait)) {
-      result[trait] = iconCache.get(trait)!
-      continue
-    }
-    const fileName = namesCache.get(trait) ?? `${trait}.dds`
-    const candidates: string[] = []
-    if (modPath) candidates.push(join(modPath, ...ICON_REL_DIR.split('/'), fileName))
-    if (gameDir && !replaced) candidates.push(join(gameDir, ...ICON_REL_DIR.split('/'), fileName))
-    let url: string | null = null
-    for (const candidate of candidates) {
-      if (!existsSync(candidate)) continue
-      try {
-        url = ddsToPngDataUrl(readFileSync(candidate))
-      } catch {
-        url = null
-      }
-      if (url) break
-    }
-    iconCache.set(trait, url)
-    result[trait] = url
-  }
-  return result
+  const names = (namesCache ??= iconFileNames(gameDir, modPath, replacePaths))
+  return resolveIcons(
+    gameDir,
+    modPath,
+    replacePaths,
+    ICON_REL_DIR,
+    new Map(traits.map((t) => [t, names.get(t) ?? `${t}.dds`]))
+  )
 }

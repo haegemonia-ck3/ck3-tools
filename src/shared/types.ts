@@ -150,6 +150,8 @@ export interface CharacterDetail {
    * explicit `female = no` in a file round-trips untouched.
    */
   female: string | null
+  /** Raw `sexuality =` value (e.g. "heterosexual", "homosexual", "bisexual", "asexual"); null if unset */
+  sexuality: string | null
 }
 
 /**

@@ -48,10 +48,19 @@ export interface Ck3ToolsApi {
     replacePaths: string[],
     traits: string[]
   ) => Promise<Record<string, string | null>>
+  /** Monochrome silhouette icons from gfx/interface/icons/flat_icons, by bare name */
+  getFlatIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    names: string[]
+  ) => Promise<Record<string, string | null>>
+  /** Skill icons (diplomacy, martial, …), by skill key */
   getSkillIcons: (
     gameDir: string | null,
     modPath: string | null,
-    replacePaths: string[]
+    replacePaths: string[],
+    skills: string[]
   ) => Promise<Record<string, string | null>>
   getCoatsOfArms: (
     gameDir: string | null,

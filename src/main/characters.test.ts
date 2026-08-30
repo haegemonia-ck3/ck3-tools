@@ -467,6 +467,7 @@ describe('createCharacter', () => {
       prowess: null
     },
     female: null,
+    sexuality: null,
     ...over
   })
 
