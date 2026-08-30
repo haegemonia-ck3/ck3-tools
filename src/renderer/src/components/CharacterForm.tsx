@@ -2,6 +2,7 @@ import { ClipboardPaste, Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
   CharacterDetail,
+  CharacterRelation,
   CharacterSpouse,
   RefEntry,
   RefKind,
@@ -142,6 +143,21 @@ export function spouseRowInvalid(spouse: CharacterSpouse): boolean {
 /** True when any marriage row would be rejected by a save. */
 export function spousesInvalid(spouses: CharacterSpouse[] | undefined): boolean {
   return (spouses ?? []).some(spouseRowInvalid)
+}
+
+/**
+ * Whether a relationship row can't be written yet: no type picked, no target
+ * character, or a date that isn't a real Y.M.D.
+ */
+export function relationRowInvalid(relation: CharacterRelation): boolean {
+  return (
+    !relation.type.trim() || !relation.target.trim() || !isValidCK3Date(relation.date)
+  )
+}
+
+/** True when any relationship row would be rejected by a save. */
+export function relationsInvalid(relations: CharacterRelation[] | undefined): boolean {
+  return (relations ?? []).some(relationRowInvalid)
 }
 
 interface Props {
@@ -397,8 +413,9 @@ export default function CharacterForm({
 
   /**
    * Marriages are dated effects rather than fields, so each row edits one
-   * `add_spouse` / `remove_spouse` pair: who, when it started, and when (if
-   * ever) it ended. Rows keep file order; `matrilineal` picks the other
+   * `add_spouse` / `remove_spouse` pair (`add_concubine` / `remove_concubine`
+   * for concubine rows): who, when it started, and when (if ever) it ended.
+   * Rows keep file order; `matrilineal` picks the other
    * add_ effect and is kept so a file that uses it round-trips.
    */
   const spouses = draft.spouses ?? []
@@ -408,7 +425,7 @@ export default function CharacterForm({
   const spousesField = (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <FieldLabel>Spouses · {spouses.length}</FieldLabel>
+        <FieldLabel>Spouses & concubines · {spouses.length}</FieldLabel>
         <Button
           variant="outline"
           size="sm"
@@ -416,7 +433,7 @@ export default function CharacterForm({
             set({
               spouses: [
                 ...spouses,
-                { id: '', marriage: null, divorce: null, matrilineal: false }
+                { id: '', marriage: null, divorce: null, matrilineal: false, concubine: false }
               ]
             })
           }
@@ -443,36 +460,148 @@ export default function CharacterForm({
                 placeholder="character"
                 onNavigate={onNavigate}
               />
-              <div className="col-start-1 row-start-2 flex items-center gap-2 @sm:col-start-2 @sm:row-start-1">
-                <Checkbox
-                  id={`spouse-matrilineal-${index}`}
-                  checked={spouse.matrilineal}
-                  onCheckedChange={(checked) =>
-                    setSpouse(index, { matrilineal: checked === true })
-                  }
-                />
-                <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+              <div className="col-start-1 row-start-2 flex items-center gap-4 @sm:col-start-2 @sm:row-start-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`spouse-matrilineal-${index}`}
+                    checked={spouse.matrilineal}
+                    disabled={spouse.concubine}
+                    onCheckedChange={(checked) =>
+                      setSpouse(index, { matrilineal: checked === true })
+                    }
+                  />
+                  <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+                </div>
+                {/* Concubinage has no matrilineal variant, so the two exclude each other */}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`spouse-concubine-${index}`}
+                    checked={spouse.concubine}
+                    onCheckedChange={(checked) =>
+                      setSpouse(
+                        index,
+                        checked === true
+                          ? { concubine: true, matrilineal: false }
+                          : { concubine: false }
+                      )
+                    }
+                  />
+                  <FieldLabel htmlFor={`spouse-concubine-${index}`}>Concubine</FieldLabel>
+                </div>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 className="col-start-2 row-start-1 text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 @sm:col-start-3"
-                title="Remove this marriage"
+                title="Remove this union"
                 onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
               >
                 <X />
               </Button>
             </div>
             <div className="flex flex-col gap-2.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
-              {dateField('Married', spouse.marriage, (v) => setSpouse(index, { marriage: v }), {
-                invalid: spouse.marriage
-                  ? !isValidCK3Date(spouse.marriage)
-                  : !spouse.divorce,
+              {dateField(
+                spouse.concubine ? 'Since' : 'Married',
+                spouse.marriage,
+                (v) => setSpouse(index, { marriage: v }),
+                {
+                  invalid: spouse.marriage
+                    ? !isValidCK3Date(spouse.marriage)
+                    : !spouse.divorce,
+                  placeholder: 'Y.M.D'
+                }
+              )}
+              {dateField(
+                spouse.concubine ? 'Until' : 'Divorced',
+                spouse.divorce,
+                (v) => setSpouse(index, { divorce: v }),
+                {
+                  invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
+                  placeholder: 'never'
+                }
+              )}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  /**
+   * Scripted relations (lover, rival, friend, …) are dated `set_relation_*`
+   * effects; each row edits one: the type, who, when, and (optionally) the
+   * scripted reason. Rows keep file order; `extra` (unrecognized inner lines
+   * of a block-form statement) is carried invisibly so nothing is lost.
+   */
+  const relations = draft.relations ?? []
+  const setRelation = (index: number, patch: Partial<CharacterRelation>): void =>
+    set({ relations: relations.map((r, i) => (i === index ? { ...r, ...patch } : r)) })
+
+  const relationsField = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel>Relationships · {relations.length}</FieldLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            set({
+              relations: [
+                ...relations,
+                { type: '', target: '', prefixed: true, date: '', reason: null, extra: null }
+              ]
+            })
+          }
+        >
+          <Plus />
+          Add relationship
+        </Button>
+      </div>
+      {relations.length === 0 ? (
+        <p className="text-sm text-muted-foreground">none</p>
+      ) : (
+        relations.map((relation, index) => (
+          <div key={index} className="space-y-2.5 rounded-md border p-2.5">
+            {/*
+              Narrow: the remove button stays on the type's row and the target
+              wraps below it. Wide: all three sit on one row, remove last.
+            */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 @sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] @sm:gap-x-2.5">
+              <ReferenceInput
+                className="col-start-1 row-start-1 min-w-0"
+                value={relation.type === '' ? null : relation.type}
+                onChange={(v) => setRelation(index, { type: v ?? '' })}
+                options={refData?.relationTypes ?? []}
+                placeholder="relation"
+                renderItem={(t) => <span>{t.id.replace(/_/g, ' ')}</span>}
+              />
+              <ReferenceInput
+                className="col-start-1 row-start-2 min-w-0 @sm:col-start-2 @sm:row-start-1"
+                value={relation.target === '' ? null : relation.target}
+                // A user-picked target is always written as character:<id>;
+                // only untouched rows keep a bare token the file used
+                onChange={(v) => setRelation(index, { target: v ?? '', prefixed: true })}
+                options={characters}
+                placeholder="character"
+                onNavigate={onNavigate}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="col-start-2 row-start-1 text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 @sm:col-start-3"
+                title="Remove this relationship"
+                onClick={() => set({ relations: relations.filter((_, i) => i !== index) })}
+              >
+                <X />
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
+              {dateField('Date', relation.date || null, (v) => setRelation(index, { date: v ?? '' }), {
+                invalid: !isValidCK3Date(relation.date),
                 placeholder: 'Y.M.D'
               })}
-              {dateField('Divorced', spouse.divorce, (v) => setSpouse(index, { divorce: v }), {
-                invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
-                placeholder: 'never'
+              {textField('Reason', relation.reason, (v) => setRelation(index, { reason: v }), {
+                placeholder: 'none'
               })}
             </div>
           </div>
@@ -576,6 +705,7 @@ export default function CharacterForm({
           {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
         </div>
         {spousesField}
+        {relationsField}
         {childrenSlot}
       </FieldSet>
 

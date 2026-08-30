@@ -47,7 +47,21 @@ const characters: CharacterDetail[] = [
     father: '218',
     mother: null,
     traits: ['brave', 'ambitious'],
-    spouses: [{ id: '1002', marriage: '1070.3.4', divorce: null, matrilineal: false }],
+    spouses: [
+      { id: '1002', marriage: '1070.3.4', divorce: null, matrilineal: false, concubine: false }
+    ],
+    relations: [
+      // One of each file shape: scalar form, and block form with a reason
+      { type: 'rival', target: '218', prefixed: true, date: '1067.1.1', reason: null, extra: null },
+      {
+        type: 'lover',
+        target: '1002',
+        prefixed: true,
+        date: '1069.2.3',
+        reason: 'lover_historical',
+        extra: null
+      }
+    ],
     stats: {
       diplomacy: 4,
       martial: 7,
@@ -74,6 +88,7 @@ const characters: CharacterDetail[] = [
     mother: null,
     traits: ['just'],
     spouses: [],
+    relations: [],
     stats: {
       diplomacy: 6,
       martial: 3,
@@ -100,6 +115,7 @@ const characters: CharacterDetail[] = [
     mother: null,
     traits: ['shy'],
     spouses: [],
+    relations: [],
     stats: {
       diplomacy: 6,
       martial: 2,
@@ -126,6 +142,7 @@ const characters: CharacterDetail[] = [
     mother: null,
     traits: [],
     spouses: [],
+    relations: [],
     stats: {
       diplomacy: null,
       martial: null,
@@ -152,6 +169,7 @@ const characters: CharacterDetail[] = [
     mother: null,
     traits: ['brave'],
     spouses: [],
+    relations: [],
     stats: {
       diplomacy: 2,
       martial: 9,
@@ -179,6 +197,7 @@ const characters: CharacterDetail[] = [
     mother: null,
     traits: ['ambitious', 'craven'],
     spouses: [],
+    relations: [],
     stats: {
       diplomacy: 5,
       martial: 3,
@@ -811,7 +830,23 @@ const mock: Ck3ToolsApi = {
     traits: named({ brave: 'Brave', ambitious: 'Ambitious', craven: 'Craven', shy: null }),
     dynasties: named({ dynn_Mock: 'Mockidae', dynn_Other: null }),
     houses: named({ house_Mockington: 'Mockington', house_Other: null }),
-    dnas: named({ '163112_halfdan_whiteshirt': null, mock_dna: null })
+    dnas: named({ '163112_halfdan_whiteshirt': null, mock_dna: null }),
+    relationTypes: named({
+      best_friend: null,
+      bully: null,
+      crush: null,
+      friend: null,
+      grudge: null,
+      guardian: null,
+      lover: null,
+      mentor: null,
+      nemesis: null,
+      rival: null,
+      soulmate: null,
+      student: null,
+      victim: null,
+      ward: null
+    })
   }),
   locateRef: async (_g, _m, _r, kind, id) =>
     id.includes('missing')

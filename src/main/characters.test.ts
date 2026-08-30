@@ -318,8 +318,8 @@ describe('spouses', () => {
 
   it('pairs add/remove effects into marriages', () => {
     expect(load().spouses).toEqual([
-      { id: '301', marriage: '1020.5.6', divorce: '1030.2.3', matrilineal: false },
-      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true }
+      { id: '301', marriage: '1020.5.6', divorce: '1030.2.3', matrilineal: false, concubine: false },
+      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true, concubine: false }
     ])
   })
 
@@ -336,7 +336,7 @@ describe('spouses', () => {
     const detail = load()
     const spouses = [
       ...detail.spouses,
-      { id: '303', marriage: '1040.7.8', divorce: null, matrilineal: false }
+      { id: '303', marriage: '1040.7.8', divorce: null, matrilineal: false, concubine: false }
     ]
     expect(saveCharacter(modPath, sfile, '300', { ...detail, spouses })).toEqual({ ok: true })
     expect(text()).toContain(
@@ -349,7 +349,7 @@ describe('spouses', () => {
     const detail = load()
     const spouses = [
       ...detail.spouses,
-      { id: '304', marriage: '1000.1.1', divorce: null, matrilineal: false }
+      { id: '304', marriage: '1000.1.1', divorce: null, matrilineal: false, concubine: false }
     ]
     expect(saveCharacter(modPath, sfile, '300', { ...detail, spouses })).toEqual({ ok: true })
     expect(text()).toContain(
@@ -375,7 +375,7 @@ describe('spouses', () => {
     // The shared block keeps its other statement
     expect(text()).toContain(['\t1030.2.3 = {', '\t\tadd_matrilineal_spouse = "302"', '\t}'].join('\n'))
     expect(load().spouses).toEqual([
-      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true }
+      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true, concubine: false }
     ])
   })
 
@@ -396,14 +396,15 @@ describe('spouses', () => {
       id: '301',
       marriage: '1021.1.1',
       divorce: '1030.2.3',
-      matrilineal: false
+      matrilineal: false,
+      concubine: false
     })
   })
 
   it('switches a marriage to matrilineal', () => {
     const detail = load()
     const spouses = detail.spouses.map((s) =>
-      s.id === '301' ? { ...s, matrilineal: true } : s
+      s.id === '301' ? { ...s, matrilineal: true, concubine: false } : s
     )
     expect(saveCharacter(modPath, sfile, '300', { ...detail, spouses })).toEqual({ ok: true })
     expect(text()).toContain(['\t1020.5.6 = {', '\t\tadd_matrilineal_spouse = 301', '\t}'].join('\n'))
@@ -414,13 +415,13 @@ describe('spouses', () => {
     expect(
       saveCharacter(modPath, sfile, '300', {
         ...detail,
-        spouses: [{ id: '305', marriage: 'nope', divorce: null, matrilineal: false }]
+        spouses: [{ id: '305', marriage: 'nope', divorce: null, matrilineal: false, concubine: false }]
       })
     ).toEqual({ ok: false, error: 'Invalid marriage date "nope" (expected Y.M.D)' })
     expect(
       saveCharacter(modPath, sfile, '300', {
         ...detail,
-        spouses: [{ id: '  ', marriage: '1020.5.6', divorce: null, matrilineal: false }]
+        spouses: [{ id: '  ', marriage: '1020.5.6', divorce: null, matrilineal: false, concubine: false }]
       })
     ).toEqual({ ok: false, error: 'Every spouse needs a character id' })
     expect(text()).toBe(SPOUSES)
@@ -434,11 +435,394 @@ describe('spouses', () => {
         ...detail,
         spouses: [
           ...detail.spouses,
-          { id: '306', marriage: '1045.1.1', divorce: null, matrilineal: false }
+          { id: '306', marriage: '1045.1.1', divorce: null, matrilineal: false, concubine: false }
         ]
       })
     ).toEqual({ ok: true })
     expect(text()).toContain('\r\n\t1045.1.1 = {\r\n\t\tadd_spouse = 306\r\n\t}\r\n')
+    expect(text()).not.toMatch(/[^\r]\n/)
+  })
+})
+
+describe('concubines', () => {
+  const cfile = 'concubine_characters.txt'
+  const cpath = join(modPath, 'history', 'characters', cfile)
+  const CONCUBINES = [
+    '400 = {',
+    '\tname = "Halfdan"',
+    '\t1000.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '\t1020.5.6 = {',
+    '\t\tadd_spouse = 401',
+    '\t\tadd_concubine = 402 # a prize',
+    '\t}',
+    '\t1030.2.3 = {',
+    '\t\tremove_concubine = 402',
+    '\t\tadd_concubine = "403"',
+    '\t}',
+    '}',
+    ''
+  ].join('\n')
+
+  beforeEach(() => writeFileSync(cpath, CONCUBINES, 'utf-8'))
+
+  const load = (): CharacterDetail => getCharacter(modPath, cfile, '400')!
+  const text = (): string => readFileSync(cpath, 'utf-8')
+
+  it('pairs add/remove concubine effects alongside marriages', () => {
+    expect(load().spouses).toEqual([
+      { id: '401', marriage: '1020.5.6', divorce: null, matrilineal: false, concubine: false },
+      { id: '402', marriage: '1020.5.6', divorce: '1030.2.3', matrilineal: false, concubine: true },
+      { id: '403', marriage: '1030.2.3', divorce: null, matrilineal: false, concubine: true }
+    ])
+  })
+
+  it('never lets a remove_spouse close a concubinage of the same id', () => {
+    writeFileSync(
+      cpath,
+      [
+        '410 = {',
+        '\t1020.1.1 = {',
+        '\t\tadd_concubine = 411',
+        '\t}',
+        '\t1025.1.1 = {',
+        '\t\tremove_spouse = 411',
+        '\t}',
+        '}',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    expect(getCharacter(modPath, cfile, '410')!.spouses).toEqual([
+      { id: '411', marriage: '1020.1.1', divorce: null, matrilineal: false, concubine: true },
+      { id: '411', marriage: null, divorce: '1025.1.1', matrilineal: false, concubine: false }
+    ])
+  })
+
+  it('round-trips an untouched list byte-for-byte', () => {
+    expect(saveCharacter(modPath, cfile, '400', load())).toEqual({ ok: true })
+    expect(text()).toBe(CONCUBINES)
+  })
+
+  it('adds a concubine into the date block for the start date', () => {
+    const detail = load()
+    const spouses = [
+      ...detail.spouses,
+      { id: '404', marriage: '1030.2.3', divorce: null, matrilineal: false, concubine: true }
+    ]
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(
+      ['\t1030.2.3 = {', '\t\tadd_concubine = 404', '\t\tremove_concubine = 402'].join('\n')
+    )
+  })
+
+  it('ends a concubinage with remove_concubine', () => {
+    const detail = load()
+    const spouses = detail.spouses.map((s) => (s.id === '403' ? { ...s, divorce: '1040.1.1' } : s))
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(['\t1040.1.1 = {', '\t\tremove_concubine = 403', '\t}'].join('\n'))
+  })
+
+  it('switches a marriage to a concubinage, dropping matrilineal', () => {
+    const detail = load()
+    const spouses = detail.spouses.map((s) =>
+      s.id === '401' ? { ...s, matrilineal: true, concubine: true } : s
+    )
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(
+      ['\t1020.5.6 = {', '\t\tadd_concubine = 401', '\t\tadd_concubine = 402 # a prize', '\t}'].join(
+        '\n'
+      )
+    )
+    expect(load().spouses.find((s) => s.id === '401')).toEqual({
+      id: '401',
+      marriage: '1020.5.6',
+      divorce: null,
+      matrilineal: false,
+      concubine: true
+    })
+  })
+
+  it('removing a concubinage leaves other statements in its blocks alone', () => {
+    const detail = load()
+    const spouses = detail.spouses.filter((s) => s.id !== '402')
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(['\t1020.5.6 = {', '\t\tadd_spouse = 401', '\t}'].join('\n'))
+    expect(text()).toContain(['\t1030.2.3 = {', '\t\tadd_concubine = "403"', '\t}'].join('\n'))
+    expect(text()).not.toContain('402')
+  })
+
+  it('requires a start date on a new concubine row', () => {
+    const detail = load()
+    expect(
+      saveCharacter(modPath, cfile, '400', {
+        ...detail,
+        spouses: [{ id: '405', marriage: null, divorce: null, matrilineal: false, concubine: true }]
+      })
+    ).toEqual({ ok: false, error: 'Concubine 405 needs a start date' })
+    expect(text()).toBe(CONCUBINES)
+  })
+})
+
+describe('relations', () => {
+  const rfile = 'relation_characters.txt'
+  const rpath = join(modPath, 'history', 'characters', rfile)
+  const RELATIONS = [
+    '500 = {',
+    '\tname = "Orestes"',
+    '\t1000.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '\t1020.1.1 = {',
+    '\t\teffect = {',
+    '\t\t\tset_relation_rival = character:501 # old grudge',
+    '\t\t\tadd_gold = 50',
+    '\t\t}',
+    '\t}',
+    '\t1025.3.4 = {',
+    '\t\teffect = {',
+    '\t\t\tset_relation_friend = c_502',
+    '\t\t\tset_relation_lover = {',
+    '\t\t\t\ttarget = character:503',
+    '\t\t\t\treason = lover_historical',
+    '\t\t\t}',
+    '\t\t\tset_relation_nemesis = {',
+    '\t\t\t\ttarget = 504',
+    '\t\t\t\treason = rival_historical',
+    '\t\t\t\tinvolved_character = character:505',
+    '\t\t\t}',
+    '\t\t}',
+    '\t}',
+    '\t1030.6.7 = {',
+    '\t\teffect = {',
+    '\t\t\tset_relation_bully = character:506',
+    '\t\t}',
+    '\t}',
+    '\t1060.1.1 = {',
+    '\t\tdeath = yes',
+    '\t}',
+    '}',
+    ''
+  ].join('\n')
+
+  beforeEach(() => writeFileSync(rpath, RELATIONS, 'utf-8'))
+
+  const load = (): CharacterDetail => getCharacter(modPath, rfile, '500')!
+  const load2 = (id: string): CharacterDetail => getCharacter(modPath, rfile, id)!
+  const text = (): string => readFileSync(rpath, 'utf-8')
+
+  it('reads scalar and block forms, prefixes, reasons and extra lines', () => {
+    expect(load().relations).toEqual([
+      { type: 'rival', target: '501', prefixed: true, date: '1020.1.1', reason: null, extra: null },
+      { type: 'friend', target: 'c_502', prefixed: false, date: '1025.3.4', reason: null, extra: null },
+      {
+        type: 'lover',
+        target: '503',
+        prefixed: true,
+        date: '1025.3.4',
+        reason: 'lover_historical',
+        extra: null
+      },
+      {
+        type: 'nemesis',
+        target: '504',
+        prefixed: false,
+        date: '1025.3.4',
+        reason: 'rival_historical',
+        extra: 'involved_character = character:505'
+      },
+      { type: 'bully', target: '506', prefixed: true, date: '1030.6.7', reason: null, extra: null }
+    ])
+  })
+
+  it('reads no relations on a character without any', () => {
+    expect(getCharacter(modPath, file, '218')!.relations).toEqual([])
+  })
+
+  it('round-trips byte-for-byte on a no-op save', () => {
+    expect(saveCharacter(modPath, rfile, '500', load())).toEqual({ ok: true })
+    expect(text()).toBe(RELATIONS)
+  })
+
+  it('appends a relation inside an existing effect block', () => {
+    const detail = load()
+    const relations = [
+      ...detail.relations,
+      { type: 'friend', target: '507', prefixed: true, date: '1020.1.1', reason: null, extra: null }
+    ]
+    expect(saveCharacter(modPath, rfile, '500', { ...detail, relations })).toEqual({ ok: true })
+    expect(text()).toContain(
+      [
+        '\t1020.1.1 = {',
+        '\t\teffect = {',
+        '\t\t\tset_relation_rival = character:501 # old grudge',
+        '\t\t\tadd_gold = 50',
+        '\t\t\tset_relation_friend = character:507',
+        '\t\t}',
+        '\t}'
+      ].join('\n')
+    )
+    expect(load().relations.map((r) => r.target)).toContain('507')
+  })
+
+  it('creates a new, chronologically placed date block with an effect wrapper', () => {
+    const detail = load()
+    const relations = [
+      ...detail.relations,
+      {
+        type: 'grudge',
+        target: '508',
+        prefixed: true,
+        date: '1040.2.2',
+        reason: 'grudge_test',
+        extra: null
+      }
+    ]
+    expect(saveCharacter(modPath, rfile, '500', { ...detail, relations })).toEqual({ ok: true })
+    expect(text()).toContain(
+      [
+        '\t1040.2.2 = {',
+        '\t\teffect = {',
+        '\t\t\tset_relation_grudge = {',
+        '\t\t\t\ttarget = character:508',
+        '\t\t\t\treason = grudge_test',
+        '\t\t\t}',
+        '\t\t}',
+        '\t}',
+        '\t1060.1.1 = {'
+      ].join('\n')
+    )
+  })
+
+  it('drops an effect block, and its date block, emptied by a removal', () => {
+    const detail = load()
+    const relations = detail.relations.filter((r) => r.type !== 'bully')
+    expect(saveCharacter(modPath, rfile, '500', { ...detail, relations })).toEqual({ ok: true })
+    expect(text()).not.toContain('1030.6.7')
+    expect(text()).not.toContain('set_relation_bully')
+    expect(text()).toContain(['\t\t}', '\t}', '\t1060.1.1 = {'].join('\n'))
+  })
+
+  it('leaves other statements in the effect block when a relation is removed', () => {
+    const detail = load()
+    const relations = detail.relations.filter((r) => r.type !== 'rival')
+    expect(saveCharacter(modPath, rfile, '500', { ...detail, relations })).toEqual({ ok: true })
+    expect(text()).not.toContain('set_relation_rival')
+    // The comment annotated the cut statement, so it goes with it
+    expect(text()).not.toContain('old grudge')
+    expect(text()).toContain(
+      ['\t1020.1.1 = {', '\t\teffect = {', '\t\t\tadd_gold = 50', '\t\t}', '\t}'].join('\n')
+    )
+  })
+
+  it('rewrites a reason, keeping the target spelling and extra lines', () => {
+    const detail = load()
+    const relations = detail.relations.map((r) =>
+      r.type === 'nemesis' ? { ...r, reason: 'nemesis_new' } : r
+    )
+    expect(saveCharacter(modPath, rfile, '500', { ...detail, relations })).toEqual({ ok: true })
+    expect(text()).toContain(
+      [
+        '\t\t\tset_relation_nemesis = {',
+        '\t\t\t\ttarget = 504',
+        '\t\t\t\treason = nemesis_new',
+        '\t\t\t\tinvolved_character = character:505',
+        '\t\t\t}'
+      ].join('\n')
+    )
+    const reparsed = load().relations.find((r) => r.type === 'nemesis')!
+    expect(reparsed.reason).toBe('nemesis_new')
+    expect(reparsed.extra).toBe('involved_character = character:505')
+    // The untouched block-form lover kept its bytes
+    expect(text()).toContain('\t\t\t\treason = lover_historical\n')
+  })
+
+  it('rejects a type-less, target-less or bad-dated relation, leaving the file alone', () => {
+    const detail = load()
+    const base = { prefixed: true, reason: null, extra: null }
+    expect(
+      saveCharacter(modPath, rfile, '500', {
+        ...detail,
+        relations: [{ ...base, type: ' ', target: '501', date: '1020.1.1' }]
+      })
+    ).toEqual({ ok: false, error: 'Every relation needs a type' })
+    expect(
+      saveCharacter(modPath, rfile, '500', {
+        ...detail,
+        relations: [{ ...base, type: 'rival', target: '', date: '1020.1.1' }]
+      })
+    ).toEqual({ ok: false, error: 'Every relation needs a target character id' })
+    expect(
+      saveCharacter(modPath, rfile, '500', {
+        ...detail,
+        relations: [{ ...base, type: 'rival', target: '501', date: 'nope' }]
+      })
+    ).toEqual({ ok: false, error: 'Invalid relation date "nope" (expected Y.M.D)' })
+    expect(text()).toBe(RELATIONS)
+  })
+
+  it('handles one-line blocks: reads them, and splices new relations inline', () => {
+    const ONE_LINE = [
+      '600 = {',
+      '\t900.1.1 = { birth = yes }',
+      '\t905.1.1 = { effect = { set_relation_friend = character:601 } }',
+      '}',
+      ''
+    ].join('\n')
+    writeFileSync(rpath, ONE_LINE, 'utf-8')
+    const detail = load2('600')
+    expect(detail.relations).toEqual([
+      { type: 'friend', target: '601', prefixed: true, date: '905.1.1', reason: null, extra: null }
+    ])
+    // No-op save round-trips byte-for-byte
+    expect(saveCharacter(modPath, rfile, '600', detail)).toEqual({ ok: true })
+    expect(text()).toBe(ONE_LINE)
+    // A new relation on a one-line effect's date splices in without reshaping
+    expect(
+      saveCharacter(modPath, rfile, '600', {
+        ...detail,
+        relations: [
+          ...detail.relations,
+          { type: 'rival', target: '602', prefixed: true, date: '905.1.1', reason: null, extra: null },
+          { type: 'ward', target: '603', prefixed: true, date: '900.1.1', reason: null, extra: null }
+        ]
+      })
+    ).toEqual({ ok: true })
+    expect(text()).toContain(
+      '\t905.1.1 = { effect = { set_relation_friend = character:601 set_relation_rival = character:602 } }'
+    )
+    // A one-line date block with no effect grows a one-line wrapper
+    expect(text()).toContain(
+      '\t900.1.1 = { birth = yes effect = { set_relation_ward = character:603 } }'
+    )
+    expect(load2('600').relations.map((r) => r.type).sort()).toEqual(['friend', 'rival', 'ward'])
+  })
+
+  it('keeps CRLF line endings when inserting', () => {
+    writeFileSync(rpath, RELATIONS.split('\n').join('\r\n'), 'utf-8')
+    const detail = load()
+    expect(
+      saveCharacter(modPath, rfile, '500', {
+        ...detail,
+        relations: [
+          ...detail.relations,
+          { type: 'ward', target: '509', prefixed: true, date: '1020.1.1', reason: null, extra: null },
+          {
+            type: 'crush',
+            target: '510',
+            prefixed: true,
+            date: '1050.5.5',
+            reason: 'crush_test',
+            extra: null
+          }
+        ]
+      })
+    ).toEqual({ ok: true })
+    expect(text()).toContain('\r\n\t\t\tset_relation_ward = character:509\r\n')
+    expect(text()).toContain(
+      '\r\n\t1050.5.5 = {\r\n\t\teffect = {\r\n\t\t\tset_relation_crush = {\r\n'
+    )
     expect(text()).not.toMatch(/[^\r]\n/)
   })
 })
@@ -458,6 +842,7 @@ describe('createCharacter', () => {
     mother: null,
     traits: [],
     spouses: [],
+    relations: [],
     stats: {
       diplomacy: null,
       martial: null,
@@ -556,8 +941,8 @@ describe('createCharacter', () => {
       id: '9003',
       death: '1080.1.1',
       spouses: [
-        { id: '219', marriage: '1030.4.5', divorce: '1040.6.7', matrilineal: false },
-        { id: '218', marriage: '1040.6.7', divorce: null, matrilineal: true }
+        { id: '219', marriage: '1030.4.5', divorce: '1040.6.7', matrilineal: false, concubine: false },
+        { id: '218', marriage: '1040.6.7', divorce: null, matrilineal: true, concubine: false }
       ]
     })
     expect(createCharacter(modPath, 'spouse_create.txt', detail)).toEqual({ ok: true })
@@ -581,6 +966,67 @@ describe('createCharacter', () => {
       ].join('\n')
     )
     expect(getCharacter(modPath, 'spouse_create.txt', '9003')!.spouses).toEqual(detail.spouses)
+  })
+
+  it('writes concubine effects with the concubine keywords', () => {
+    const detail = newDetail({
+      id: '9004',
+      spouses: [
+        { id: '218', marriage: '1030.4.5', divorce: '1040.6.7', matrilineal: false, concubine: true }
+      ]
+    })
+    expect(createCharacter(modPath, 'concubine_create.txt', detail)).toEqual({ ok: true })
+    const text = readFileSync(
+      join(modPath, 'history', 'characters', 'concubine_create.txt'),
+      'utf-8'
+    )
+    expect(text).toContain(['\t1030.4.5 = {', '\t\tadd_concubine = 218', '\t}'].join('\n'))
+    expect(text).toContain(['\t1040.6.7 = {', '\t\tremove_concubine = 218', '\t}'].join('\n'))
+    expect(getCharacter(modPath, 'concubine_create.txt', '9004')!.spouses).toEqual(detail.spouses)
+  })
+
+  it('writes relation effects into date blocks, wrapped in effect blocks', () => {
+    const detail = newDetail({
+      id: '9005',
+      relations: [
+        {
+          type: 'lover',
+          target: '219',
+          prefixed: true,
+          date: '1000.1.1',
+          reason: 'lover_historical',
+          extra: null
+        },
+        { type: 'rival', target: '218', prefixed: true, date: '1020.2.2', reason: null, extra: null }
+      ]
+    })
+    expect(createCharacter(modPath, 'relation_create.txt', detail)).toEqual({ ok: true })
+    const text = readFileSync(
+      join(modPath, 'history', 'characters', 'relation_create.txt'),
+      'utf-8'
+    )
+    expect(text).toContain(
+      [
+        '\t1000.1.1 = {',
+        '\t\tbirth = yes',
+        '\t\teffect = {',
+        '\t\t\tset_relation_lover = {',
+        '\t\t\t\ttarget = character:219',
+        '\t\t\t\treason = lover_historical',
+        '\t\t\t}',
+        '\t\t}',
+        '\t}',
+        '\t1020.2.2 = {',
+        '\t\teffect = {',
+        '\t\t\tset_relation_rival = character:218',
+        '\t\t}',
+        '\t}',
+        '}'
+      ].join('\n')
+    )
+    expect(getCharacter(modPath, 'relation_create.txt', '9005')!.relations).toEqual(
+      detail.relations
+    )
   })
 
   it('rejects a duplicate id anywhere in the mod', () => {

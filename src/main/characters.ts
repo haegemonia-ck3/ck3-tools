@@ -15,6 +15,7 @@ import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
 import type { LineEditor } from './lineEditor'
 import type {
   CharacterDetail,
+  CharacterRelation,
   CharacterSpouse,
   CharacterStats,
   CharacterSummary,
@@ -65,14 +66,17 @@ function dateSortKey(date: string): number {
 
 // Marriages live as dated effects rather than scalars: `add_spouse` (or
 // `add_matrilineal_spouse`) in the wedding year's block, `remove_spouse` in
-// the divorce year's.
+// the divorce year's. Concubines (Islam's "consorts" are the same effect
+// under a different localization) use the parallel `add_concubine` /
+// `remove_concubine` pair; there is no matrilineal variant for them.
 const SPOUSE_STATEMENT =
-  /(^|[\s{])(add_matrilineal_spouse|add_spouse|remove_spouse)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
+  /(^|[\s{])(add_matrilineal_spouse|add_spouse|remove_spouse|add_concubine|remove_concubine)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
 
 interface SpouseEvent {
   kind: 'add' | 'remove'
   id: string
   matrilineal: boolean
+  concubine: boolean
   /** Date of the block the statement sits in, cleaned of a trailing dot */
   date: string
 }
@@ -102,9 +106,10 @@ function scanSpouseEvents(body: string): SpouseEventHit[] {
       while ((m = SPOUSE_STATEMENT.exec(code)) !== null) {
         const keyword = m[2].toLowerCase()
         hits.push({
-          kind: keyword === 'remove_spouse' ? 'remove' : 'add',
+          kind: keyword.startsWith('remove') ? 'remove' : 'add',
           id: m[3] ?? m[4],
           matrilineal: keyword === 'add_matrilineal_spouse',
+          concubine: keyword.endsWith('concubine'),
           date: cleanDate(block.key),
           block: index,
           start: block.bodyStart + at + m.index + m[1].length,
@@ -116,7 +121,10 @@ function scanSpouseEvents(body: string): SpouseEventHit[] {
   return hits
 }
 
-/** Pair add/remove effects into marriages; a remove closes the latest open one. */
+/**
+ * Pair add/remove effects into marriages; a remove closes the latest open one
+ * of its own kind (remove_spouse never ends a concubinage or vice versa).
+ */
 function pairSpouses(events: SpouseEvent[]): CharacterSpouse[] {
   const spouses: CharacterSpouse[] = []
   for (const event of events) {
@@ -125,13 +133,24 @@ function pairSpouses(events: SpouseEvent[]): CharacterSpouse[] {
         id: event.id,
         marriage: event.date,
         divorce: null,
-        matrilineal: event.matrilineal
+        matrilineal: event.matrilineal,
+        concubine: event.concubine
       })
       continue
     }
-    const open = [...spouses].reverse().find((s) => s.id === event.id && s.divorce === null)
+    const open = [...spouses]
+      .reverse()
+      .find((s) => s.id === event.id && s.concubine === event.concubine && s.divorce === null)
     if (open) open.divorce = event.date
-    else spouses.push({ id: event.id, marriage: null, divorce: event.date, matrilineal: false })
+    else {
+      spouses.push({
+        id: event.id,
+        marriage: null,
+        divorce: event.date,
+        matrilineal: false,
+        concubine: event.concubine
+      })
+    }
   }
   return spouses
 }
@@ -142,11 +161,19 @@ function spouseEvents(spouses: CharacterSpouse[]): SpouseEvent[] {
   for (const spouse of spouses) {
     const id = spouse.id.trim()
     if (!id) continue
+    // A concubine has no matrilineal variant, so the flag is dropped there
+    const concubine = spouse.concubine === true
     if (spouse.marriage) {
-      events.push({ kind: 'add', id, matrilineal: spouse.matrilineal, date: spouse.marriage })
+      events.push({
+        kind: 'add',
+        id,
+        matrilineal: !concubine && spouse.matrilineal,
+        concubine,
+        date: spouse.marriage
+      })
     }
     if (spouse.divorce) {
-      events.push({ kind: 'remove', id, matrilineal: false, date: spouse.divorce })
+      events.push({ kind: 'remove', id, matrilineal: false, concubine, date: spouse.divorce })
     }
   }
   return events
@@ -155,15 +182,21 @@ function spouseEvents(spouses: CharacterSpouse[]): SpouseEvent[] {
 function statementFor(event: SpouseEvent): string {
   const keyword =
     event.kind === 'remove'
-      ? 'remove_spouse'
-      : event.matrilineal
-        ? 'add_matrilineal_spouse'
-        : 'add_spouse'
+      ? event.concubine
+        ? 'remove_concubine'
+        : 'remove_spouse'
+      : event.concubine
+        ? 'add_concubine'
+        : event.matrilineal
+          ? 'add_matrilineal_spouse'
+          : 'add_spouse'
   return `${keyword} = ${event.id}`
 }
 
 const eventKey = (e: SpouseEvent): string =>
-  `${e.kind}|${e.id}|${cleanDate(e.date)}|${e.kind === 'add' && e.matrilineal ? 'm' : ''}`
+  `${e.kind}|${e.id}|${cleanDate(e.date)}|${e.kind === 'add' && e.matrilineal ? 'm' : ''}${
+    e.concubine ? 'c' : ''
+  }`
 
 /** Reject a spouse list that can't be written; null when it's fine. */
 function validateSpouses(spouses: CharacterSpouse[]): string | null {
@@ -178,7 +211,193 @@ function validateSpouses(spouses: CharacterSpouse[]): string | null {
       }
     }
     if (!spouse.marriage && !spouse.divorce) {
-      return `Spouse ${spouse.id.trim()} needs a marriage date`
+      return spouse.concubine
+        ? `Concubine ${spouse.id.trim()} needs a start date`
+        : `Spouse ${spouse.id.trim()} needs a marriage date`
+    }
+  }
+  return null
+}
+
+// Scripted relations (lover, rival, friend, …) live as `set_relation_<type>`
+// statements inside `effect = { … }` wrappers within dated blocks, either as
+// a scalar (`set_relation_rival = character:73815`) or as a block carrying a
+// reason (`set_relation_rival = { target = … reason = … }`).
+const RELATION_SCALAR =
+  /(^|[\s{])set_relation_([A-Za-z0-9_.\-']+)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
+
+/** `target =` / `reason =` statements inside a block-form relation's body. */
+const RELATION_INNER = /(^|[\s{])(target|reason)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
+
+interface RelationHit extends CharacterRelation {
+  /** Index of the containing date block within scanBlocks(body) */
+  block: number
+  /** Span of the statement (scalar) or whole block (block form) within the character body */
+  start: number
+  end: number
+}
+
+/** Split a raw target into the id and whether it carried the character: prefix. */
+function splitTarget(raw: string): { target: string; prefixed: boolean } {
+  const prefixed = /^character:/i.test(raw)
+  return { target: prefixed ? raw.slice('character:'.length) : raw, prefixed }
+}
+
+/**
+ * Parse a block-form relation's body: the first `target =` and `reason =`
+ * become fields, and every other non-blank line (nested blocks and trailing
+ * comments included) is kept verbatim as `extra` so a rewrite loses nothing.
+ */
+function parseRelationBlockBody(inner: string): {
+  target: string
+  prefixed: boolean
+  reason: string | null
+  extra: string | null
+} {
+  let target = ''
+  let prefixed = false
+  let reason: string | null = null
+  const extraLines: string[] = []
+  for (const { text, depth } of annotateLines(inner)) {
+    if (depth !== 0) {
+      // Inside a nested sub-block that belongs to extra — keep the line
+      if (text.trim() !== '') extraLines.push(text.trim())
+      continue
+    }
+    const [code, comment] = splitComment(text)
+    const cuts: [number, number][] = []
+    RELATION_INNER.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = RELATION_INNER.exec(code)) !== null) {
+      const key = m[2].toLowerCase()
+      const value = m[3] ?? m[4]
+      if (key === 'target' && target === '') {
+        const split = splitTarget(value)
+        target = split.target
+        prefixed = split.prefixed
+        cuts.push([m.index + m[1].length, m.index + m[0].length])
+      } else if (key === 'reason' && reason === null) {
+        reason = value
+        cuts.push([m.index + m[1].length, m.index + m[0].length])
+      }
+    }
+    let leftover = code
+    for (const [s, e] of cuts.reverse()) leftover = leftover.slice(0, s) + leftover.slice(e)
+    const rest = `${leftover.trim()}${leftover.trim() && comment ? ' ' : ''}${comment}`.trim()
+    if (rest !== '') extraLines.push(rest)
+  }
+  return { target, prefixed, reason, extra: extraLines.length > 0 ? extraLines.join('\n') : null }
+}
+
+/** Every relation effect in the body's dated blocks, in file order, with spans. */
+function scanRelationHits(body: string): RelationHit[] {
+  const hits: RelationHit[] = []
+  scanBlocks(body).forEach((dateBlock, index) => {
+    if (!DATE_KEY.test(dateBlock.key)) return
+    const dateBody = body.slice(dateBlock.bodyStart, dateBlock.bodyEnd)
+    for (const eff of scanBlocks(dateBody)) {
+      if (eff.key !== 'effect') continue
+      const effBody = dateBody.slice(eff.bodyStart, eff.bodyEnd)
+      const base = dateBlock.bodyStart + eff.bodyStart
+      // Block form: `set_relation_x = { target = … }` sub-blocks
+      for (const sub of scanBlocks(effBody)) {
+        const m = sub.key.match(/^set_relation_(.+)$/i)
+        if (!m) continue
+        const parsed = parseRelationBlockBody(effBody.slice(sub.bodyStart, sub.bodyEnd))
+        hits.push({
+          type: m[1],
+          ...parsed,
+          date: cleanDate(dateBlock.key),
+          block: index,
+          start: base + sub.start,
+          end: base + sub.end
+        })
+      }
+      // Scalar form: `set_relation_x = character:123` on depth-0 lines of the
+      // effect body (the value charset excludes `{`, so block form never
+      // double-matches here)
+      let lineStart = 0
+      for (const { text, depth } of annotateLines(effBody)) {
+        const at = lineStart
+        lineStart += text.length + 1
+        if (depth !== 0) continue
+        const [code] = splitComment(text)
+        RELATION_SCALAR.lastIndex = 0
+        let m: RegExpExecArray | null
+        while ((m = RELATION_SCALAR.exec(code)) !== null) {
+          const { target, prefixed } = splitTarget(m[3] ?? m[4])
+          hits.push({
+            type: m[2],
+            target,
+            prefixed,
+            date: cleanDate(dateBlock.key),
+            reason: null,
+            extra: null,
+            block: index,
+            start: base + at + m.index + m[1].length,
+            end: base + at + m.index + m[0].length
+          })
+        }
+      }
+    }
+  })
+  return hits.sort((a, b) => a.start - b.start)
+}
+
+/** A relation's identity for matching file statements against edited rows. */
+const relationKey = (r: CharacterRelation): string =>
+  [
+    r.type.trim(),
+    r.target.trim(),
+    r.prefixed ? 'p' : '',
+    cleanDate(r.date),
+    r.reason ?? '',
+    r.extra ?? ''
+  ].join('|')
+
+/** Strip span bookkeeping so a hit can travel as plain detail data. */
+const hitToRelation = (h: RelationHit): CharacterRelation => ({
+  type: h.type,
+  target: h.target,
+  prefixed: h.prefixed,
+  date: h.date,
+  reason: h.reason,
+  extra: h.extra
+})
+
+/**
+ * The statement a relation writes, as lines relative to its own indentation
+ * (nested lines carry one `indent` unit). Scalar form unless a reason or
+ * extra content forces the block form.
+ */
+function relationStatementLines(rel: CharacterRelation, indent: string): string[] {
+  const target = `${rel.prefixed ? 'character:' : ''}${rel.target.trim()}`
+  const key = `set_relation_${rel.type.trim()}`
+  const reason = rel.reason?.trim() ? rel.reason.trim() : null
+  if (reason === null && rel.extra === null) return [`${key} = ${target}`]
+  const lines = [`${key} = {`, `${indent}target = ${target}`]
+  if (reason !== null) lines.push(`${indent}reason = ${reason}`)
+  for (const x of (rel.extra ?? '').split('\n')) {
+    if (x !== '') lines.push(`${indent}${x}`)
+  }
+  lines.push('}')
+  return lines
+}
+
+/** The statement as a single line, for splicing into one-line blocks. */
+function relationInline(rel: CharacterRelation): string {
+  return relationStatementLines(rel, '')
+    .map((l) => l.trim())
+    .join(' ')
+}
+
+/** Reject a relation list that can't be written; null when it's fine. */
+function validateRelations(relations: CharacterRelation[]): string | null {
+  for (const rel of relations) {
+    if (!rel.type.trim()) return 'Every relation needs a type'
+    if (!rel.target.trim()) return 'Every relation needs a target character id'
+    if (!DATE_KEY.test(rel.date)) {
+      return `Invalid relation date "${rel.date}" (expected Y.M.D)`
     }
   }
   return null
@@ -208,6 +427,7 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     mother: scalars.get('mother') ?? null,
     traits: scanRepeatedScalar(body, 'trait'),
     spouses: pairSpouses(scanSpouseEvents(body)),
+    relations: scanRelationHits(body).map(hitToRelation),
     stats,
     female: scalars.get('female') ?? null,
     sexuality: scalars.get('sexuality') ?? null,
@@ -470,6 +690,210 @@ function setSpouses(ed: LineEditor, spouses: CharacterSpouse[]): void {
   }
 }
 
+/** Line index the given body offset falls on. */
+function lineIndexOf(body: string, offset: number): number {
+  let line = 0
+  for (let i = 0; i < offset && i < body.length; i++) {
+    if (body[i] === '\n') line++
+  }
+  return line
+}
+
+/**
+ * Remove one relation statement from an effect body, given its span. A scalar
+ * relation behaves like cutStatement; a block-form relation can span several
+ * lines, in which case its lines go whole (a trailing comment on the closing
+ * brace included, since it annotated that statement).
+ */
+function cutRelationStatement(sub: string, start: number, end: number): string {
+  const lineStart = sub.lastIndexOf('\n', start - 1) + 1
+  const nl = sub.indexOf('\n', end)
+  const lineEnd = nl < 0 ? sub.length : nl
+  const before = sub.slice(lineStart, start)
+  const [afterCode] = splitComment(sub.slice(end, lineEnd))
+  if (before.trim() === '' && afterCode.trim() === '') {
+    return sub.slice(0, lineStart) + sub.slice(nl < 0 ? lineEnd : nl + 1)
+  }
+  // Shares its line(s) with other code — cut just the statement and one
+  // neighboring space, so nothing else on the line is disturbed
+  let from = start
+  let to = end
+  if (sub[to] === ' ') to++
+  else if (sub[from - 1] === ' ') from--
+  return sub.slice(0, from) + sub.slice(to)
+}
+
+/** Splice text out of `text`, consuming leading blanks and the trailing newline. */
+function cutBlockSpan(text: string, start: number, end: number): string {
+  let from = start
+  while (from > 0 && (text[from - 1] === ' ' || text[from - 1] === '\t')) from--
+  let to = end
+  if (text[to] === '\r') to++
+  if (text[to] === '\n') to++
+  return text.slice(0, from) + text.slice(to)
+}
+
+/**
+ * Add a relation statement into the `effect = { … }` wrapper of the block for
+ * `date`: reuse the date block's first effect block when there is one, create
+ * the wrapper when there isn't, and create the date block itself (placed
+ * chronologically) when even that is missing. One-line blocks stay one-line —
+ * the statement is spliced inline, in its single-line spelling.
+ */
+function insertRelation(ed: LineEditor, date: string, rel: CharacterRelation): void {
+  const body = ed.lines.join('\n')
+  const dateBlock = scanBlocks(body).find(
+    (b) => DATE_KEY.test(b.key) && cleanDate(b.key) === date
+  )
+  const t = ed.indent
+
+  if (!dateBlock) {
+    // No block for that date — create one, before the first later-dated block
+    let at = endOfBodyIndex(ed)
+    for (let i = 0; i < ed.lines.length; i++) {
+      if (ed.depths[i] !== 0) continue
+      const [code] = splitComment(ed.lines[i])
+      const m = code.match(/^\s*([A-Za-z0-9_.\-']+)\s*=\s*\{/)
+      if (m && DATE_KEY.test(m[1]) && dateSortKey(m[1]) > dateSortKey(date)) {
+        at = i
+        break
+      }
+    }
+    ed.lines.splice(
+      at,
+      0,
+      ...withEol(
+        ed,
+        [
+          `${t}${date} = {`,
+          `${t}${t}effect = {`,
+          ...relationStatementLines(rel, t).map((l) => `${t}${t}${t}${l}`),
+          `${t}${t}}`,
+          `${t}}`
+        ],
+        at
+      )
+    )
+    refresh(ed)
+    return
+  }
+
+  const dateBody = body.slice(dateBlock.bodyStart, dateBlock.bodyEnd)
+  const eff = scanBlocks(dateBody).find((b) => b.key === 'effect')
+
+  /** Splice `text` into the body at `offset`, padding with spaces as needed. */
+  const spliceInline = (offset: number, text: string): void => {
+    const pre = /\s/.test(body[offset - 1] ?? '') ? '' : ' '
+    const post = /\s/.test(body[offset] ?? '') ? '' : ' '
+    ed.lines = (body.slice(0, offset) + pre + text + post + body.slice(offset)).split('\n')
+    refresh(ed)
+  }
+
+  if (eff) {
+    const effBody = dateBody.slice(eff.bodyStart, eff.bodyEnd)
+    if (!effBody.includes('\n')) {
+      // One-line effect block — splice the statement before its closing brace
+      spliceInline(dateBlock.bodyStart + eff.bodyEnd, relationInline(rel))
+      return
+    }
+    // Append inside the effect block, above its closing brace's line
+    const closerLine = lineIndexOf(body, dateBlock.bodyStart + eff.bodyEnd)
+    const base = (ed.lines[closerLine].match(/^[ \t]*/)?.[0] ?? `${t}${t}`) + t
+    ed.lines.splice(
+      closerLine,
+      0,
+      ...withEol(ed, relationStatementLines(rel, t).map((l) => `${base}${l}`), closerLine)
+    )
+    refresh(ed)
+    return
+  }
+
+  if (!dateBody.includes('\n')) {
+    // One-line date block with no effect — splice a one-line wrapper in
+    spliceInline(dateBlock.bodyEnd, `effect = { ${relationInline(rel)} }`)
+    return
+  }
+  // Multi-line date block with no effect — insert the wrapper after the opener
+  const at = lineIndexOf(body, dateBlock.start) + 1
+  ed.lines.splice(
+    at,
+    0,
+    ...withEol(
+      ed,
+      [
+        `${t}${t}effect = {`,
+        ...relationStatementLines(rel, t).map((l) => `${t}${t}${t}${l}`),
+        `${t}${t}}`
+      ],
+      at
+    )
+  )
+  refresh(ed)
+}
+
+/**
+ * Reconcile the body's relation effects with the edited list, mirroring
+ * setSpouses: statements that survive unchanged are matched by value and left
+ * byte-for-byte alone; removed ones are cut (an effect block emptied by the
+ * cuts goes whole, and a date block emptied with it goes too) and new ones
+ * inserted into their date's effect block.
+ */
+function setRelations(ed: LineEditor, relations: CharacterRelation[]): void {
+  const body = ed.lines.join('\n')
+  const existing = scanRelationHits(body)
+  const wanted = relations.map((rel) => ({ rel, placed: false }))
+  const cuts: RelationHit[] = []
+  for (const hit of existing) {
+    const match = wanted.find((w) => !w.placed && relationKey(w.rel) === relationKey(hit))
+    if (match) match.placed = true
+    else cuts.push(hit)
+  }
+
+  if (cuts.length > 0) {
+    const blocks = scanBlocks(body)
+    const byBlock = new Map<number, RelationHit[]>()
+    for (const cut of cuts) byBlock.set(cut.block, [...(byBlock.get(cut.block) ?? []), cut])
+    let next = body
+    // Date blocks are edited back to front so their spans stay valid; the
+    // effect blocks within each, likewise
+    for (const index of [...byBlock.keys()].sort((a, b) => b - a)) {
+      const block = blocks[index]
+      let sub = next.slice(block.bodyStart, block.bodyEnd)
+      const effects = scanBlocks(sub)
+        .filter((b) => b.key === 'effect')
+        .sort((a, b) => b.start - a.start)
+      for (const eff of effects) {
+        const inEffect = byBlock
+          .get(index)!
+          .map((c) => ({ start: c.start - block.bodyStart, end: c.end - block.bodyStart }))
+          .filter((c) => c.start >= eff.bodyStart && c.end <= eff.bodyEnd)
+          .sort((a, b) => b.start - a.start)
+        if (inEffect.length === 0) continue
+        let effBody = sub.slice(eff.bodyStart, eff.bodyEnd)
+        for (const c of inEffect) {
+          effBody = cutRelationStatement(effBody, c.start - eff.bodyStart, c.end - eff.bodyStart)
+        }
+        sub = hasCode(effBody)
+          ? sub.slice(0, eff.bodyStart) + effBody + sub.slice(eff.bodyEnd)
+          : cutBlockSpan(sub, eff.start, eff.end)
+      }
+      if (hasCode(sub)) {
+        next = next.slice(0, block.bodyStart) + sub + next.slice(block.bodyEnd)
+      } else {
+        next = cutBlockSpan(next, block.start, block.end)
+      }
+    }
+    ed.lines = next.split('\n')
+    refresh(ed)
+  }
+
+  for (const { rel } of wanted
+    .filter((w) => !w.placed)
+    .sort((a, b) => dateSortKey(a.rel.date) - dateSortKey(b.rel.date))) {
+    insertRelation(ed, cleanDate(rel.date), rel)
+  }
+}
+
 export function saveCharacter(
   modPath: string,
   file: string,
@@ -502,6 +926,8 @@ export function saveCharacter(
     }
     const spouseError = validateSpouses(detail.spouses ?? [])
     if (spouseError) return { ok: false, error: spouseError }
+    const relationError = validateRelations(detail.relations ?? [])
+    if (relationError) return { ok: false, error: relationError }
 
     const ed = makeEditor(text.slice(block.bodyStart, block.bodyEnd))
     // New scalar lines go above the first date block
@@ -525,6 +951,7 @@ export function saveCharacter(
     setDateBlock(ed, 'birth', detail.birth)
     setDateBlock(ed, 'death', detail.death)
     setSpouses(ed, detail.spouses ?? [])
+    setRelations(ed, detail.relations ?? [])
 
     const newBody = ed.lines.join('\n')
     const updated =
@@ -631,6 +1058,8 @@ export function createCharacter(
     }
     const spouseError = validateSpouses(detail.spouses ?? [])
     if (spouseError) return { ok: false, error: spouseError }
+    const relationError = validateRelations(detail.relations ?? [])
+    if (relationError) return { ok: false, error: relationError }
     const clash = listCharacters(modPath).find((c) => c.id === id)
     if (clash) return { ok: false, error: `ID ${id} already exists in ${clash.file}` }
 
@@ -666,10 +1095,21 @@ export function createCharacter(
     for (const event of spouseEvents(detail.spouses ?? [])) {
       onDate(event.date, statementFor(event))
     }
+    // Relations need an `effect = { … }` wrapper inside their date's block,
+    // emitted after that date's plain statements
+    const relDated = new Map<string, string[]>()
+    for (const rel of detail.relations ?? []) {
+      const date = cleanDate(rel.date)
+      relDated.set(date, [...(relDated.get(date) ?? []), ...relationStatementLines(rel, t)])
+      if (!dated.has(date)) dated.set(date, [])
+    }
     for (const [date, statements] of [...dated].sort(
       (a, b) => dateSortKey(a[0]) - dateSortKey(b[0])
     )) {
-      lines.push(`${t}${date} = {`, ...statements.map((x) => `${t}${t}${x}`), `${t}}`)
+      lines.push(`${t}${date} = {`, ...statements.map((x) => `${t}${t}${x}`))
+      const rels = relDated.get(date)
+      if (rels) lines.push(`${t}${t}effect = {`, ...rels.map((x) => `${t}${t}${t}${x}`), `${t}${t}}`)
+      lines.push(`${t}}`)
     }
     lines.push('}')
     appendBlock(charactersDir(modPath), file, lines)
