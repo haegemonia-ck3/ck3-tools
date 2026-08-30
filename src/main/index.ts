@@ -17,7 +17,7 @@ import {
   saveCharacter
 } from './characters'
 import { applyRulerDesignerDna, getDnaPasteInfo } from './dna'
-import { getCultureData, saveCulture } from './cultures'
+import { createCulture, getCultureData, listCultureFiles, saveCulture } from './cultures'
 import {
   createDynasty,
   createHouse,
@@ -41,6 +41,7 @@ import type {
   DynastyPatch,
   FaithPatch,
   HousePatch,
+  NewCulture,
   NewDynasty,
   NewHouse,
   RefKind,
@@ -197,6 +198,11 @@ function registerIpc(): void {
       id: string,
       patch: CulturePatch
     ) => saveCulture(gameDir, modPath, replacePaths, file, id, patch)
+  )
+  ipcMain.handle('ck3:listCultureFiles', (_e, modPath: string) => listCultureFiles(modPath))
+  ipcMain.handle(
+    'ck3:createCulture',
+    (_e, modPath: string, file: string, def: NewCulture) => createCulture(modPath, file, def)
   )
   ipcMain.handle(
     'ck3:getTraitIcons',

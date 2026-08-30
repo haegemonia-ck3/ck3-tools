@@ -10,6 +10,7 @@ import {
   splitComment
 } from './lineEditor'
 import { readLocalization, resolveLocReferences } from './localization'
+import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
 import { annotateLines, scanBlocks, scanScalarsCI } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
 import type { LineEditor } from './lineEditor'
@@ -23,6 +24,7 @@ import type {
   CulturePatch,
   CulturePillarType,
   CultureTraditionEntry,
+  NewCulture,
   RefEntry,
   SaveResult
 } from '@shared/types'
@@ -122,6 +124,12 @@ function colorFormat(tag: string | undefined, value: string): CultureColorFormat
   // `{ 0.8 0.2 0.2 }` can share a syntax.
   return /\./.test(value) ? 'float' : 'int'
 }
+
+/**
+ * A colour value the writers can turn into a triple. `formatColor` parseInts
+ * the string blindly, so anything else would be written as `rgb { NaN NaN NaN }`.
+ */
+const HEX = /^#[0-9a-f]{6}$/i
 
 /** Hex → the components a given format writes, formatted the way CK3 files do. */
 function formatColor(format: CultureColorFormat, hex: string): string {
@@ -577,6 +585,9 @@ export function saveCulture(
   const path = join(modPath, ...CULTURE_DIR.split('/'), file)
   try {
     if (!existsSync(path)) return { ok: false, error: `File not found: ${file}` }
+    if (patch.color !== null && !HEX.test(patch.color.trim())) {
+      return { ok: false, error: `Invalid colour "${patch.color}" (expected #rrggbb)` }
+    }
     const text = readFileSync(path, 'utf-8')
     const block = scanBlocks(text).find((b) => b.key === id)
     if (!block) return { ok: false, error: `${id} not found in ${file}` }
@@ -622,6 +633,146 @@ export function saveCulture(
 
     const updated = text.slice(0, block.bodyStart) + ed.lines.join('\n') + text.slice(block.bodyEnd)
     writeFileSync(path, updated, 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// ---------- Creating ----------
+
+function listTxt(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.txt'))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/** The mod's own culture files — the targets a new definition can be written to. */
+export function listCultureFiles(modPath: string): string[] {
+  return listTxt(join(modPath, ...CULTURE_DIR.split('/')))
+}
+
+/**
+ * Every culture id the mod itself defines, normalized, mapped to the file it
+ * lives in. Only the mod's own files: shadowing a base-game culture is the
+ * normal way to override one, so that stays the caller's call.
+ */
+function modCultureFiles(modPath: string): Map<string, string> {
+  const ids = new Map<string, string>()
+  for (const path of effectiveFiles(null, modPath, [], CULTURE_DIR)) {
+    let text: string
+    try {
+      text = readFileSync(path, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const block of scanBlocks(text)) {
+      if (!ids.has(normId(block.key))) ids.set(normId(block.key), basename(path))
+    }
+  }
+  return ids
+}
+
+/**
+ * The lines of a new culture block, in the order the game's own files write
+ * them. List blocks are emitted multi-line with double-tab items — byte for
+ * byte what `setBlockList` splices into a tab-indented body — so the first
+ * edit of a new culture is a minimal diff rather than a reflow.
+ */
+function cultureBlockLines(id: string, def: NewCulture): string[] {
+  const lines = [`${id} = {`]
+  const scalar = (key: string, value: string | null): void => {
+    if (value !== null && value.trim() !== '') lines.push(`\t${key} = ${value.trim()}`)
+  }
+  // Duplicates are dropped because `blockWords` dedupes on read — writing them
+  // would make the block fail to round-trip through the next scan.
+  const block = (key: string, items: string[]): void => {
+    const kept = [...new Set(items.map((v) => v.trim()).filter((v) => v !== ''))]
+    if (kept.length === 0) return
+    lines.push(`\t${key} = {`, ...kept.map((v) => `\t\t${v}`), '\t}')
+  }
+
+  if (def.color !== null) lines.push(`\tcolor = ${formatColor('rgb', def.color.trim())}`)
+  scalar('created', def.created)
+  block('parents', def.parents)
+  scalar('ethos', def.ethos)
+  scalar('heritage', def.heritage)
+  scalar('language', def.language)
+  scalar('martial_custom', def.martialCustom)
+  scalar('head_determination', def.headDetermination)
+  block('traditions', def.traditions)
+  scalar('name_list', def.nameList)
+  block('coa_gfx', def.coaGfx)
+  block('building_gfx', def.buildingGfx)
+  block('clothing_gfx', def.clothingGfx)
+  block('unit_gfx', def.unitGfx)
+  scalar('house_coa_frame', def.houseCoaFrame)
+  block(
+    'ethnicities',
+    def.ethnicities
+      .filter((e) => e.id.trim() !== '')
+      .map((e) => `${e.weight.trim()} = ${e.id.trim()}`)
+  )
+  lines.push('}')
+  return lines
+}
+
+/**
+ * Append a brand-new culture to one of the mod's files (created if missing).
+ * Existing content is preserved byte-for-byte; the block follows a separating
+ * blank line, in the file's own line-ending style.
+ *
+ * The required fields are the ones every hand-authored culture on disk sets —
+ * vanilla's 244 and the mod's own — without which the culture isn't playable.
+ * The graphics bundles are deliberately not among them: they're free-form tags
+ * with no registry to validate against, and requiring them would make writing
+ * the FIRST culture into a replace_path'd folder impossible.
+ */
+export function createCulture(modPath: string, file: string, def: NewCulture): SaveResult {
+  try {
+    const id = def.id.trim()
+    if (!id) return { ok: false, error: 'ID must not be empty' }
+    if (!KEY_CHARS.test(id)) {
+      return { ok: false, error: `Invalid ID "${id}" (letters, digits, _ . - ' only)` }
+    }
+    if (!isTxtFileName(file)) {
+      return { ok: false, error: `Invalid file name "${file}" (expected a .txt file name)` }
+    }
+    const required: [string, string | null][] = [
+      ['Colour', def.color],
+      ['Ethos', def.ethos],
+      ['Heritage', def.heritage],
+      ['Language', def.language],
+      ['Martial custom', def.martialCustom],
+      ['Name list', def.nameList]
+    ]
+    for (const [label, value] of required) {
+      if (!value?.trim()) return { ok: false, error: `${label} is required` }
+    }
+    if (!HEX.test(def.color!.trim())) {
+      return { ok: false, error: `Invalid colour "${def.color}" (expected #rrggbb)` }
+    }
+    // Portrait generation reads this block, and no culture on disk omits it
+    const ethnicities = def.ethnicities.filter((e) => e.id.trim() !== '')
+    if (ethnicities.length === 0) return { ok: false, error: 'At least one ethnicity is required' }
+    for (const e of ethnicities) {
+      if (!/^\d+(\.\d+)?$/.test(e.weight.trim())) {
+        return { ok: false, error: `Invalid weight "${e.weight}" for ethnicity ${e.id}` }
+      }
+      if (!KEY_CHARS.test(e.id.trim())) {
+        return { ok: false, error: `Invalid ethnicity "${e.id}"` }
+      }
+    }
+    // Lenient like every other date here: real files carry "3212.1" and "3220.1.1."
+    const created = def.created?.trim() ?? ''
+    if (created !== '' && !DATE_KEY.test(created)) {
+      return { ok: false, error: `Invalid date "${def.created}" (expected Y.M.D)` }
+    }
+    const clash = modCultureFiles(modPath).get(normId(id))
+    if (clash !== undefined) return { ok: false, error: `ID ${id} already exists in ${clash}` }
+
+    appendBlock(join(modPath, ...CULTURE_DIR.split('/')), file, cultureBlockLines(id, def))
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

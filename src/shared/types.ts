@@ -346,7 +346,8 @@ export interface CultureData {
 /**
  * Editable culture fields. A null scalar clears its line, an empty list drops
  * the whole block, and `color` is a hex string written back in the format the
- * file already used (a named color becomes `rgb { … }`).
+ * file already used (a named color becomes `rgb { … }`); a brand-new block has
+ * no existing spelling to keep, so it writes `rgb { … }` too.
  */
 export interface CulturePatch {
   color: string | null
@@ -488,6 +489,16 @@ export interface ReligionPatch {
  */
 export interface NewDynasty extends DynastyPatch {
   /** Top-level key of the new block, e.g. "dynn_Komnenos" or "25061" */
+  id: string
+}
+
+/**
+ * A brand-new culture definition: an id for the block plus the same editable
+ * fields a patch carries. Null (or blank) scalars and empty lists are simply
+ * not written.
+ */
+export interface NewCulture extends CulturePatch {
+  /** Top-level key of the new block, e.g. "attic" */
   id: string
 }
 

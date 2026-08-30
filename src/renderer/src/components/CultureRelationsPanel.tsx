@@ -30,6 +30,8 @@ interface Props {
   showRawDates: boolean
   /** Switch the editor to another culture */
   onOpenCulture: (id: string) => void
+  /** Open the create panel seeded from this culture */
+  onDeriveCulture: () => void
   /** Jump to the character editor */
   onOpenCharacter: (character: CultureCharacter) => void
   /** Open the character editor's create panel with this culture prefilled */
@@ -99,6 +101,7 @@ export default function CultureRelationsPanel({
   calendar,
   showRawDates,
   onOpenCulture,
+  onDeriveCulture,
   onOpenCharacter,
   onAddCharacter
 }: Props): React.JSX.Element {
@@ -161,8 +164,20 @@ export default function CultureRelationsPanel({
         </FieldSet>
 
         <FieldSet className="gap-2">
-          <FieldLegend variant="label" className="mb-0">
-            Descendants · {children.length}
+          <FieldLegend
+            variant="label"
+            className="mb-0 flex w-full items-center justify-between gap-2"
+          >
+            <span>Descendants · {children.length}</span>
+            <Button
+              variant="outline"
+              size="xs"
+              title="Create a culture descended from this one"
+              onClick={onDeriveCulture}
+            >
+              <Plus />
+              Derive
+            </Button>
           </FieldLegend>
           {children.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground">

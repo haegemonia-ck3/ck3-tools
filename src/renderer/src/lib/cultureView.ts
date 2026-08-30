@@ -6,7 +6,14 @@
  * culture may name parents that no file defines; those still show as
  * references, just without anywhere to navigate to.
  */
-import type { CultureCharacter, CultureData, CultureDef, RefEntry } from '@shared/types'
+import type {
+  CultureCharacter,
+  CultureData,
+  CultureDef,
+  CultureEthnicity,
+  CulturePatch,
+  RefEntry
+} from '@shared/types'
 
 export const normId = (id: string): string => id.trim().toLowerCase()
 
@@ -117,4 +124,125 @@ export function swatchForeground(hex: string): string {
   }
   const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
   return luminance > 0.45 ? '#16130f' : '#ffffff'
+}
+
+/**
+ * The fields a culture must set to be playable — every hand-authored culture on
+ * disk sets all of them, vanilla's and the mod's alike. They carry the create
+ * form's asterisks and gate its Create button, matching what `createCulture`
+ * enforces on the other side of the bridge.
+ *
+ * The graphics bundles are deliberately absent: they're free-form tags with no
+ * registry to pick from, and requiring them would make writing the first
+ * culture into an empty `replace_path` folder impossible.
+ */
+export const REQUIRED_FIELDS = [
+  ['color', 'Colour'],
+  ['ethos', 'Ethos'],
+  ['heritage', 'Heritage'],
+  ['language', 'Language'],
+  ['martialCustom', 'Martial custom'],
+  ['nameList', 'Name list'],
+  ['ethnicities', 'Ethnicities']
+] as const satisfies readonly (readonly [keyof CulturePatch, string])[]
+
+const REQUIRED_KEYS: ReadonlySet<string> = new Set(REQUIRED_FIELDS.map(([key]) => key))
+
+/** Whether a field carries a required asterisk in the create form. */
+export const isRequired = (key: keyof CulturePatch): boolean => REQUIRED_KEYS.has(key)
+
+/** A culture definition as the editable draft both panels hold. */
+export function draftOf(def: CultureDef): CulturePatch {
+  return {
+    color: def.color?.hex ?? null,
+    ethos: def.ethos,
+    heritage: def.heritage,
+    language: def.language,
+    martialCustom: def.martialCustom,
+    headDetermination: def.headDetermination,
+    traditions: def.traditions,
+    nameList: def.nameList,
+    parents: def.parents,
+    created: def.created,
+    coaGfx: def.coaGfx,
+    buildingGfx: def.buildingGfx,
+    clothingGfx: def.clothingGfx,
+    unitGfx: def.unitGfx,
+    houseCoaFrame: def.houseCoaFrame,
+    ethnicities: def.ethnicities
+  }
+}
+
+/**
+ * Seed for "start from an existing culture". A derived culture wants its source
+ * as its parent rather than a copy of the source's own ancestors, and a copied
+ * founding date says something false about the new culture.
+ */
+export function seedFrom(def: CultureDef): CulturePatch {
+  return { ...draftOf(def), parents: [def.id], created: null }
+}
+
+/** The most common non-empty value of a field across the cultures the mod loads. */
+function modal<T extends string>(values: (T | null | undefined)[]): T | null {
+  const counts = new Map<T, number>()
+  for (const v of values) {
+    if (v === null || v === undefined || v === '') continue
+    counts.set(v, (counts.get(v) ?? 0) + 1)
+  }
+  let best: T | null = null
+  let bestCount = 0
+  for (const [value, count] of counts) {
+    if (count > bestCount) {
+      best = value
+      bestCount = count
+    }
+  }
+  return best
+}
+
+/**
+ * A blank culture, pre-filled from the conventions of the cultures the mod
+ * actually loads rather than from vanilla's — so a total conversion starts from
+ * its own house style. `color` is passed in because it is the one field with no
+ * sensible common value.
+ */
+export function blankDraft(data: CultureData, color: string): CulturePatch {
+  const one = (pick: (c: CultureDef) => string[]): string[] => {
+    const value = modal(data.cultures.map((c) => pick(c)[0]))
+    return value === null ? [] : [value]
+  }
+  return {
+    color,
+    ethos: null,
+    heritage: null,
+    language: null,
+    martialCustom: modal(data.cultures.map((c) => c.martialCustom)),
+    headDetermination: modal(data.cultures.map((c) => c.headDetermination)),
+    traditions: [],
+    nameList: null,
+    parents: [],
+    created: null,
+    coaGfx: one((c) => c.coaGfx),
+    buildingGfx: one((c) => c.buildingGfx),
+    clothingGfx: one((c) => c.clothingGfx),
+    unitGfx: one((c) => c.unitGfx),
+    houseCoaFrame: modal(data.cultures.map((c) => c.houseCoaFrame)),
+    ethnicities: [{ weight: '100', id: '' }]
+  }
+}
+
+/** Whether an ethnicities list has at least one row the writer would accept. */
+const hasUsableEthnicity = (rows: CultureEthnicity[]): boolean =>
+  rows.some((e) => e.id.trim() !== '' && /^\d+(\.\d+)?$/.test(e.weight.trim()))
+
+/**
+ * The required fields still unset, by label. One source of truth for the create
+ * button's gate and the line that explains why it is disabled.
+ */
+export function missingRequired(draft: CulturePatch): string[] {
+  return REQUIRED_FIELDS.filter(([key]) => {
+    if (key === 'ethnicities') return !hasUsableEthnicity(draft.ethnicities)
+    const value = draft[key] as string | null
+    return value === null || value.trim() === ''
+  }).map(([, label]) => label)
 }

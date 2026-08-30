@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { getCultureData, saveCulture } from './cultures'
-import type { CulturePatch } from '@shared/types'
+import { createCulture, getCultureData, listCultureFiles, saveCulture } from './cultures'
+import type { CulturePatch, NewCulture } from '@shared/types'
 
 // Synthetic game/mod layout in a temp dir — never touches real CK3 files
 const root = mkdtempSync(join(tmpdir(), 'ck3-tools-cultures-'))
@@ -409,5 +409,339 @@ describe('saveCulture', () => {
       identityPatch('attic')
     )
     expect(result).toEqual({ ok: false, error: 'nope not found in HAAO_greek.txt' })
+  })
+})
+
+describe('creating', () => {
+  const newMod = join(root, 'newmod')
+  const CULTURE_FILE = 'common/culture/cultures/00_cultures.txt'
+  const EXISTING = ['old_culture = {', '\tcolor = rgb { 1 2 3 }', '}', ''].join('\n')
+
+  const newCulture = (over: Partial<NewCulture> = {}): NewCulture => ({
+    id: 'new_culture',
+    color: '#809548',
+    ethos: 'ethos_bellicose',
+    heritage: 'heritage_hellenic',
+    language: 'language_arcadian',
+    martialCustom: 'martial_custom_male_only',
+    headDetermination: null,
+    traditions: [],
+    nameList: 'name_list_arcadian',
+    parents: [],
+    created: null,
+    coaGfx: [],
+    buildingGfx: [],
+    clothingGfx: [],
+    unitGfx: [],
+    houseCoaFrame: null,
+    ethnicities: [{ weight: '100', id: 'mediterranean_byzantine' }],
+    ...over
+  })
+  const read = (rel: string): string => readFileSync(join(newMod, ...rel.split('/')), 'utf-8')
+  const create = (
+    file: string,
+    over: Partial<NewCulture> = {}
+  ): ReturnType<typeof createCulture> => createCulture(newMod, file, newCulture(over))
+
+  beforeEach(() => {
+    rmSync(newMod, { recursive: true, force: true })
+    writeFixture(newMod, CULTURE_FILE, EXISTING)
+  })
+
+  it('appends to an existing file, preserving the current content byte-for-byte', () => {
+    expect(create('00_cultures.txt')).toEqual({ ok: true })
+    expect(read(CULTURE_FILE)).toBe(
+      EXISTING +
+        '\n' +
+        [
+          'new_culture = {',
+          '\tcolor = rgb { 128 149 72 }',
+          '\tethos = ethos_bellicose',
+          '\theritage = heritage_hellenic',
+          '\tlanguage = language_arcadian',
+          '\tmartial_custom = martial_custom_male_only',
+          '\tname_list = name_list_arcadian',
+          '\tethnicities = {',
+          '\t\t100 = mediterranean_byzantine',
+          '\t}',
+          '}',
+          ''
+        ].join('\n')
+    )
+  })
+
+  it('creates a missing file, writing every field in the order the game does', () => {
+    expect(
+      create('my_cultures.txt', {
+        id: '  spaced_id  ',
+        created: '750.1.1',
+        parents: ['achean', 'ionian'],
+        headDetermination: 'head_determination_domain',
+        traditions: ['tradition_politeia', 'tradition_fishermen'],
+        coaGfx: ['gre_archaic_coa_gfx'],
+        buildingGfx: ['greek_building_gfx'],
+        clothingGfx: ['greek_clothing_gfx'],
+        unitGfx: ['geometric_unit_gfx'],
+        houseCoaFrame: 'house_frame_05',
+        ethnicities: [
+          { weight: '10', id: 'mediterranean_byzantine' },
+          { weight: '5', id: 'levantine_arabic' }
+        ]
+      })
+    ).toEqual({ ok: true })
+    expect(read('common/culture/cultures/my_cultures.txt')).toBe(
+      [
+        'spaced_id = {',
+        '\tcolor = rgb { 128 149 72 }',
+        '\tcreated = 750.1.1',
+        '\tparents = {',
+        '\t\tachean',
+        '\t\tionian',
+        '\t}',
+        '\tethos = ethos_bellicose',
+        '\theritage = heritage_hellenic',
+        '\tlanguage = language_arcadian',
+        '\tmartial_custom = martial_custom_male_only',
+        '\thead_determination = head_determination_domain',
+        '\ttraditions = {',
+        '\t\ttradition_politeia',
+        '\t\ttradition_fishermen',
+        '\t}',
+        '\tname_list = name_list_arcadian',
+        '\tcoa_gfx = {',
+        '\t\tgre_archaic_coa_gfx',
+        '\t}',
+        '\tbuilding_gfx = {',
+        '\t\tgreek_building_gfx',
+        '\t}',
+        '\tclothing_gfx = {',
+        '\t\tgreek_clothing_gfx',
+        '\t}',
+        '\tunit_gfx = {',
+        '\t\tgeometric_unit_gfx',
+        '\t}',
+        '\thouse_coa_frame = house_frame_05',
+        '\tethnicities = {',
+        '\t\t10 = mediterranean_byzantine',
+        '\t\t5 = levantine_arabic',
+        '\t}',
+        '}',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('omits empty lists and blank optional scalars', () => {
+    expect(create('00_cultures.txt', { headDetermination: '   ', created: '' })).toEqual({
+      ok: true
+    })
+    const text = read(CULTURE_FILE)
+    expect(text).not.toContain('head_determination')
+    expect(text).not.toContain('created')
+    // An empty list writes no block at all, rather than `traditions = { }`
+    expect(text).not.toContain('traditions')
+    expect(text).not.toContain('coa_gfx')
+  })
+
+  it('drops duplicate list entries, which the reader would collapse anyway', () => {
+    expect(
+      create('00_cultures.txt', { traditions: ['tradition_politeia', 'tradition_politeia'] })
+    ).toEqual({ ok: true })
+    expect(read(CULTURE_FILE)).toContain(
+      ['\ttraditions = {', '\t\ttradition_politeia', '\t}'].join('\n')
+    )
+  })
+
+  it('skips ethnicity rows whose id was never filled in', () => {
+    expect(
+      create('00_cultures.txt', {
+        ethnicities: [
+          { weight: '10', id: 'mediterranean_byzantine' },
+          { weight: '10', id: '   ' }
+        ]
+      })
+    ).toEqual({ ok: true })
+    expect(read(CULTURE_FILE)).toContain(
+      ['\tethnicities = {', '\t\t10 = mediterranean_byzantine', '\t}'].join('\n')
+    )
+  })
+
+  it("matches a CRLF file's line endings", () => {
+    writeFixture(newMod, CULTURE_FILE, EXISTING.replace(/\n/g, '\r\n'))
+    expect(create('00_cultures.txt', { traditions: ['tradition_politeia'] })).toEqual({ ok: true })
+    const text = read(CULTURE_FILE)
+    expect(text).toContain('\r\n\ttraditions = {\r\n\t\ttradition_politeia\r\n\t}\r\n')
+    expect(text).not.toMatch(/[^\r]\n/)
+  })
+
+  it('separates the block from a file that does not end in a newline', () => {
+    writeFixture(newMod, CULTURE_FILE, 'old_culture = {\n\tcolor = rgb { 1 2 3 }\n}')
+    expect(create('00_cultures.txt')).toEqual({ ok: true })
+    expect(read(CULTURE_FILE)).toContain('}\n\nnew_culture = {\n')
+  })
+
+  it('shows the new culture in the next scan', () => {
+    expect(
+      create('00_cultures.txt', {
+        traditions: ['tradition_politeia'],
+        parents: ['old_culture']
+      })
+    ).toEqual({ ok: true })
+    const scanned = getCultureData(gameDir, newMod, []).cultures.find(
+      (c) => c.id === 'new_culture'
+    )
+    expect(scanned).toMatchObject({
+      file: '00_cultures.txt',
+      inMod: true,
+      localizedName: null,
+      ethos: 'ethos_bellicose',
+      heritage: 'heritage_hellenic',
+      language: 'language_arcadian',
+      martialCustom: 'martial_custom_male_only',
+      nameList: 'name_list_arcadian',
+      traditions: ['tradition_politeia'],
+      parents: ['old_culture'],
+      ethnicities: [{ weight: '100', id: 'mediterranean_byzantine' }]
+    })
+    expect(scanned!.color).toMatchObject({ format: 'rgb', hex: '#809548' })
+  })
+
+  it('round-trips a no-op save over a generated block, byte for byte', () => {
+    expect(
+      create('00_cultures.txt', {
+        traditions: ['tradition_politeia', 'tradition_fishermen'],
+        coaGfx: ['gre_archaic_coa_gfx'],
+        parents: ['old_culture'],
+        created: '750.1.1'
+      })
+    ).toEqual({ ok: true })
+    const before = read(CULTURE_FILE)
+    const c = getCultureData(gameDir, newMod, []).cultures.find((x) => x.id === 'new_culture')!
+    const result = saveCulture(gameDir, newMod, [], '00_cultures.txt', 'new_culture', {
+      color: c.color?.hex ?? null,
+      ethos: c.ethos,
+      heritage: c.heritage,
+      language: c.language,
+      martialCustom: c.martialCustom,
+      headDetermination: c.headDetermination,
+      traditions: c.traditions,
+      nameList: c.nameList,
+      parents: c.parents,
+      created: c.created,
+      coaGfx: c.coaGfx,
+      buildingGfx: c.buildingGfx,
+      clothingGfx: c.clothingGfx,
+      unitGfx: c.unitGfx,
+      houseCoaFrame: c.houseCoaFrame,
+      ethnicities: c.ethnicities
+    })
+    expect(result).toEqual({ ok: true })
+    expect(read(CULTURE_FILE)).toBe(before)
+  })
+
+  it('edits one list of a generated block without reflowing the rest', () => {
+    expect(create('00_cultures.txt', { traditions: ['tradition_politeia'] })).toEqual({ ok: true })
+    const c = getCultureData(gameDir, newMod, []).cultures.find((x) => x.id === 'new_culture')!
+    expect(
+      saveCulture(gameDir, newMod, [], '00_cultures.txt', 'new_culture', {
+        color: c.color?.hex ?? null,
+        ethos: c.ethos,
+        heritage: c.heritage,
+        language: c.language,
+        martialCustom: c.martialCustom,
+        headDetermination: c.headDetermination,
+        traditions: ['tradition_politeia', 'tradition_fishermen'],
+        nameList: c.nameList,
+        parents: c.parents,
+        created: c.created,
+        coaGfx: c.coaGfx,
+        buildingGfx: c.buildingGfx,
+        clothingGfx: c.clothingGfx,
+        unitGfx: c.unitGfx,
+        houseCoaFrame: c.houseCoaFrame,
+        ethnicities: c.ethnicities
+      })
+    ).toEqual({ ok: true })
+    const text = read(CULTURE_FILE)
+    expect(text).toContain(
+      ['\ttraditions = {', '\t\ttradition_politeia', '\t\ttradition_fishermen', '\t}'].join('\n')
+    )
+    expect(text).toContain('\tname_list = name_list_arcadian\n')
+    expect(text).toContain('\tcolor = rgb { 128 149 72 }\n')
+  })
+
+  it('rejects a duplicate id, case-insensitively, naming the file', () => {
+    expect(create('00_cultures.txt', { id: 'OLD_CULTURE' })).toEqual({
+      ok: false,
+      error: 'ID OLD_CULTURE already exists in 00_cultures.txt'
+    })
+    expect(read(CULTURE_FILE)).toBe(EXISTING)
+  })
+
+  it('allows an id the base game defines, since a mod culture overrides it', () => {
+    // `italian` lives only in the game fixture, so nothing in the mod clashes
+    expect(create('00_cultures.txt', { id: 'italian' })).toEqual({ ok: true })
+  })
+
+  it('rejects a definition missing a required field', () => {
+    const cases: [Partial<NewCulture>, string][] = [
+      [{ color: null }, 'Colour is required'],
+      [{ ethos: '  ' }, 'Ethos is required'],
+      [{ heritage: null }, 'Heritage is required'],
+      [{ language: null }, 'Language is required'],
+      [{ martialCustom: null }, 'Martial custom is required'],
+      [{ nameList: '' }, 'Name list is required'],
+      [{ ethnicities: [] }, 'At least one ethnicity is required'],
+      [{ ethnicities: [{ weight: '10', id: ' ' }] }, 'At least one ethnicity is required']
+    ]
+    for (const [over, error] of cases) {
+      expect(create('00_cultures.txt', over)).toEqual({ ok: false, error })
+    }
+    expect(read(CULTURE_FILE)).toBe(EXISTING)
+  })
+
+  it('rejects a colour that is not a hex triple', () => {
+    expect(create('00_cultures.txt', { color: '#zz' })).toEqual({
+      ok: false,
+      error: 'Invalid colour "#zz" (expected #rrggbb)'
+    })
+  })
+
+  it('rejects a malformed date and a malformed ethnicity weight', () => {
+    expect(create('00_cultures.txt', { created: 'not-a-date' })).toEqual({
+      ok: false,
+      error: 'Invalid date "not-a-date" (expected Y.M.D)'
+    })
+    expect(
+      create('00_cultures.txt', { ethnicities: [{ weight: 'lots', id: 'mediterranean_byzantine' }] })
+    ).toEqual({ ok: false, error: 'Invalid weight "lots" for ethnicity mediterranean_byzantine' })
+    // Tolerated like the rest of the date parsing: real files carry "3212.1"
+    expect(create('00_cultures.txt', { created: '3212.1' })).toEqual({ ok: true })
+  })
+
+  it('rejects bad ids and file names, writing nothing', () => {
+    expect(create('00_cultures.txt', { id: '   ' })).toEqual({
+      ok: false,
+      error: 'ID must not be empty'
+    })
+    expect(create('00_cultures.txt', { id: 'has space' })).toEqual({
+      ok: false,
+      error: `Invalid ID "has space" (letters, digits, _ . - ' only)`
+    })
+    for (const file of ['notes.md', '.txt', 'sub/dir.txt', 'sub\\dir.txt']) {
+      expect(create(file)).toEqual({
+        ok: false,
+        error: `Invalid file name "${file}" (expected a .txt file name)`
+      })
+    }
+    expect(read(CULTURE_FILE)).toBe(EXISTING)
+  })
+
+  it("lists the mod's culture files, sorted, ignoring everything else", () => {
+    writeFixture(newMod, 'common/culture/cultures/zz_last.txt', '')
+    writeFixture(newMod, 'common/culture/cultures/aa_first.txt', '')
+    writeFixture(newMod, 'common/culture/cultures/notes.md', '')
+    expect(listCultureFiles(newMod)).toEqual(['00_cultures.txt', 'aa_first.txt', 'zz_last.txt'])
+    expect(listCultureFiles(join(root, 'nowhere'))).toEqual([])
   })
 })

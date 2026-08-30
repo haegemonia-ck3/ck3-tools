@@ -606,6 +606,26 @@ const mock: Ck3ToolsApi = {
     })
     return { ok: true }
   },
+  listCultureFiles: async () =>
+    [...new Set(cultures.filter((c) => c.inMod).map((c) => c.file))].sort(),
+  createCulture: async (_modPath, file, def) => {
+    // Mod-only, like the backend: overriding a base-game culture is legal
+    const taken = cultures.find((c) => c.inMod && c.id.toLowerCase() === def.id.toLowerCase())
+    if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
+    const { id, color, ...rest } = def
+    // Spelled the way the real writer spells a new culture's colour
+    const triple = (hex: string): string =>
+      `rgb { ${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(' ')} }`
+    cultures.push({
+      ...rest,
+      id,
+      file,
+      inMod: true,
+      localizedName: null,
+      color: color === null ? null : { format: 'rgb', raw: triple(color), hex: color }
+    })
+    return { ok: true }
+  },
   getDynastyData: async () => ({
     dynasties: structuredClone(dynasties),
     houses: structuredClone(houses),

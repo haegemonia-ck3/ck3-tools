@@ -12,10 +12,12 @@ export const KEY_CHARS = /^[A-Za-z0-9_.\-']+$/
 
 /**
  * Whether `file` is a plain `.txt` file name that can be joined onto a mod
- * directory: no path separators, no drive letters, no wildcards.
+ * directory: no path separators, no drive letters, no wildcards. Backslash
+ * counts as a separator too — this app runs on Windows, where a name carrying
+ * one would otherwise reach out of the directory it was joined onto.
  */
 export function isTxtFileName(file: string): boolean {
-  return file.toLowerCase().endsWith('.txt') && file.length > 4 && /^[^\/:*?"<>|]+$/.test(file)
+  return file.toLowerCase().endsWith('.txt') && file.length > 4 && /^[^\\/:*?"<>|]+$/.test(file)
 }
 
 /**

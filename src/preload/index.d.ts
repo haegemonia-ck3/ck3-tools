@@ -14,6 +14,7 @@ import type {
   FaithPatch,
   HousePatch,
   ModInfo,
+  NewCulture,
   NewDynasty,
   NewHouse,
   RefKind,
@@ -117,6 +118,9 @@ export interface Ck3ToolsApi {
     modPath: string | null,
     replacePaths: string[]
   ) => Promise<string[]>
+  /** The mod's own .txt files under common/culture/cultures */
+  listCultureFiles: (modPath: string) => Promise<string[]>
+  createCulture: (modPath: string, file: string, def: NewCulture) => Promise<SaveResult>
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

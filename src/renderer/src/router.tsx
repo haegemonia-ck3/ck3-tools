@@ -63,9 +63,15 @@ export interface FaithSearch {
 /**
  * Deep-link target for the culture editor (e.g. a character's or dynasty's
  * Culture field). An id that matches no culture falls back to the list.
+ *
+ * With `create` set the page opens the new-culture panel instead of a row,
+ * and `from` seeds every field from an existing culture and makes it the new
+ * culture's parent — which is what "Derive" on a culture passes.
  */
 export interface CultureSearch {
   id?: string
+  create?: boolean
+  from?: string
 }
 
 const rootRoute = createRootRoute({
@@ -138,9 +144,14 @@ const culturesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/cultures',
   component: CultureEditorPage,
-  validateSearch: (search: Record<string, unknown>): CultureSearch => ({
-    id: typeof search.id === 'string' ? search.id : undefined
-  })
+  validateSearch: (search: Record<string, unknown>): CultureSearch => {
+    const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
+    return {
+      id: str(search.id),
+      create: search.create === true || search.create === 'true' ? true : undefined,
+      from: str(search.from)
+    }
+  }
 })
 
 const routeTree = rootRoute.addChildren([

@@ -15,6 +15,7 @@ import type {
   FaithPatch,
   HousePatch,
   ModInfo,
+  NewCulture,
   NewDynasty,
   NewHouse,
   RefKind,
@@ -144,6 +145,10 @@ const api = {
     replacePaths: string[]
   ): Promise<string[]> =>
     ipcRenderer.invoke('ck3:listFaithIcons', gameDir, modPath, replacePaths),
+  listCultureFiles: (modPath: string): Promise<string[]> =>
+    ipcRenderer.invoke('ck3:listCultureFiles', modPath),
+  createCulture: (modPath: string, file: string, def: NewCulture): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createCulture', modPath, file, def),
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
   allPillars,
+  blankDraft,
   buildRows,
   childrenOf,
   cultureLabel,
+  draftOf,
   findCulture,
+  isRequired,
   membersOf,
+  missingRequired,
   nameLookup,
+  seedFrom,
   sortMembers,
   swatchForeground
 } from './cultureView'
-import type { CultureCharacter, CultureData, CultureDef } from '@shared/types'
+import type {
+  CultureCharacter,
+  CultureData,
+  CultureDef,
+  CulturePatch
+} from '@shared/types'
 
 const culture = (id: string, over: Partial<CultureDef> = {}): CultureDef => ({
   id,
@@ -49,11 +59,20 @@ const data: CultureData = {
       color: { format: 'rgb', raw: 'rgb { 20 85 150 }', hex: '#145596' },
       heritage: 'heritage_hellenic',
       ethos: 'ethos_bellicose',
+      martialCustom: 'martial_custom_male_only',
+      coaGfx: ['greek_coa_gfx'],
+      buildingGfx: ['med_building_gfx'],
       traditions: ['tradition_a', 'tradition_b']
     }),
     // References its parent in a different case, as real files do
-    culture('attic', { localizedName: 'Attic', parents: ['greek'] }),
-    culture('dorian', { parents: ['GREEK'] }),
+    culture('attic', {
+    localizedName: 'Attic',
+    parents: ['greek'],
+    martialCustom: 'martial_custom_male_only',
+    coaGfx: ['greek_coa_gfx'],
+    buildingGfx: ['med_building_gfx']
+  }),
+    culture('dorian', { parents: ['GREEK'], martialCustom: 'martial_custom_equal' }),
     culture('saxon', { inMod: false, localizedName: 'Saxon' })
   ],
   pillars: {
@@ -165,5 +184,124 @@ describe('swatchForeground', () => {
     expect(swatchForeground('#ffffff')).toBe('#16130f')
     expect(swatchForeground('#000000')).toBe('#ffffff')
     expect(swatchForeground('#145596')).toBe('#ffffff')
+  })
+})
+
+describe('draftOf', () => {
+  it('maps a definition to the editable draft, resolving the colour to hex', () => {
+    const draft = draftOf(data.cultures[0])
+    expect(draft).toMatchObject({
+      color: '#145596',
+      heritage: 'heritage_hellenic',
+      ethos: 'ethos_bellicose',
+      traditions: ['tradition_a', 'tradition_b']
+    })
+  })
+
+  it('leaves a culture with no colour at null', () => {
+    expect(draftOf(culture('x')).color).toBeNull()
+  })
+})
+
+describe('seedFrom', () => {
+  it('copies every field but makes the source the parent', () => {
+    const source = culture('Greek', {
+      parents: ['proto_greek'],
+      ethos: 'ethos_bellicose',
+      traditions: ['tradition_a']
+    })
+    const seed = seedFrom(source)
+    expect(seed.ethos).toBe('ethos_bellicose')
+    expect(seed.traditions).toEqual(['tradition_a'])
+    // Its own ancestry, not the source's — and the source's spelling is kept
+    expect(seed.parents).toEqual(['Greek'])
+  })
+
+  it('drops the founding date, which never carries over', () => {
+    expect(seedFrom(culture('x', { created: '1050.1.1' })).created).toBeNull()
+  })
+})
+
+describe('blankDraft', () => {
+  it("takes the mod's most common value for the fields that have one", () => {
+    const draft = blankDraft(data, '#123456')
+    expect(draft.color).toBe('#123456')
+    expect(draft.martialCustom).toBe('martial_custom_male_only')
+    expect(draft.coaGfx).toEqual(['greek_coa_gfx'])
+    expect(draft.buildingGfx).toEqual(['med_building_gfx'])
+  })
+
+  it('leaves the identity fields for the user to choose', () => {
+    const draft = blankDraft(data, '#123456')
+    expect(draft.ethos).toBeNull()
+    expect(draft.heritage).toBeNull()
+    expect(draft.language).toBeNull()
+    expect(draft.nameList).toBeNull()
+    expect(draft.parents).toEqual([])
+    expect(draft.traditions).toEqual([])
+  })
+
+  it('starts one ethnicity row, so only the ethnicity itself is left to pick', () => {
+    expect(blankDraft(data, '#123456').ethnicities).toEqual([{ weight: '100', id: '' }])
+  })
+
+  it('falls back to nothing when the mod loads no cultures at all', () => {
+    const empty: CultureData = { ...data, cultures: [] }
+    const draft = blankDraft(empty, '#123456')
+    expect(draft.martialCustom).toBeNull()
+    expect(draft.headDetermination).toBeNull()
+    expect(draft.coaGfx).toEqual([])
+    expect(draft.houseCoaFrame).toBeNull()
+  })
+})
+
+describe('missingRequired', () => {
+  const complete = (): CulturePatch => ({
+    ...blankDraft(data, '#123456'),
+    ethos: 'ethos_bellicose',
+    heritage: 'heritage_hellenic',
+    language: 'language_greek',
+    martialCustom: 'martial_custom_male_only',
+    nameList: 'name_list_greek',
+    ethnicities: [{ weight: '100', id: 'mediterranean' }]
+  })
+
+  it('is empty for a draft the writer would accept', () => {
+    expect(missingRequired(complete())).toEqual([])
+  })
+
+  it('does not ask for the graphics bundles', () => {
+    const draft = { ...complete(), coaGfx: [], buildingGfx: [], clothingGfx: [], unitGfx: [] }
+    expect(missingRequired(draft)).toEqual([])
+  })
+
+  it('names each unset field by its label', () => {
+    expect(missingRequired({ ...complete(), color: null })).toEqual(['Colour'])
+    expect(missingRequired({ ...complete(), ethos: '  ' })).toEqual(['Ethos'])
+    expect(missingRequired({ ...complete(), nameList: '' })).toEqual(['Name list'])
+    expect(missingRequired({ ...complete(), heritage: null, language: null })).toEqual([
+      'Heritage',
+      'Language'
+    ])
+  })
+
+  it('counts an ethnicity row the writer would reject as missing', () => {
+    expect(missingRequired({ ...complete(), ethnicities: [] })).toEqual(['Ethnicities'])
+    expect(missingRequired({ ...complete(), ethnicities: [{ weight: '100', id: ' ' }] })).toEqual([
+      'Ethnicities'
+    ])
+    expect(
+      missingRequired({ ...complete(), ethnicities: [{ weight: 'lots', id: 'mediterranean' }] })
+    ).toEqual(['Ethnicities'])
+  })
+})
+
+describe('isRequired', () => {
+  it('marks what a playable culture needs, and nothing else', () => {
+    expect(isRequired('ethos')).toBe(true)
+    expect(isRequired('ethnicities')).toBe(true)
+    expect(isRequired('headDetermination')).toBe(false)
+    expect(isRequired('coaGfx')).toBe(false)
+    expect(isRequired('traditions')).toBe(false)
   })
 })
