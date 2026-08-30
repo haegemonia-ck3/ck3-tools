@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import type { CalendarConfig, CharacterDetail, RefEntry, ReferenceData } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
+import DateFormatToggle from './DateFormatToggle'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -98,6 +99,8 @@ export default function CharacterCreatePanel({
   const [newFileName, setNewFileName] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Show file years instead of the mod calendar's era years in the date fields */
+  const [showRawDates, setShowRawDates] = useState(false)
 
   const set = (patch: Partial<CharacterDetail>): void => setDraft({ ...draft, ...patch })
 
@@ -211,9 +214,12 @@ export default function CharacterCreatePanel({
     <Card className="flex h-full min-h-0 w-full min-w-0 flex-col gap-0 py-0">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h2 className="text-lg font-semibold text-foreground">New character</h2>
-        <Button variant="ghost" size="icon-sm" title="Close (Esc)" onClick={onClose}>
-          <X />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <DateFormatToggle calendar={calendar} showRaw={showRawDates} onChange={setShowRawDates} />
+          <Button variant="ghost" size="icon-sm" title="Close (Esc)" onClick={onClose}>
+            <X />
+          </Button>
+        </div>
       </div>
 
       <div className="@container min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
@@ -224,6 +230,7 @@ export default function CharacterCreatePanel({
           gameDir={gameDir}
           replacePaths={replacePaths}
           calendar={calendar}
+          showRawDates={showRawDates}
           refData={refData}
           characters={characters}
           onNavigate={onNavigate}

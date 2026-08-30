@@ -11,6 +11,7 @@ import type {
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import type { CharacterSearch } from '../router'
 import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
+import DateFormatToggle from './DateFormatToggle'
 import ReferenceDisplay from './ReferenceDisplay'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -90,6 +91,8 @@ export default function CharacterDetailPanel({
   const [savedFlash, setSavedFlash] = useState(false)
   /** The file changed on disk while this draft was dormant (external edit) */
   const [stale, setStale] = useState(false)
+  /** Show file years instead of the mod calendar's era years in the date fields */
+  const [showRawDates, setShowRawDates] = useState(false)
 
   /** Debounced draft persist waiting to fire; flushed before switching characters */
   const pendingPersist = useRef<(() => void) | null>(null)
@@ -267,9 +270,12 @@ export default function CharacterDetailPanel({
             <span className="size-2 rounded-full bg-primary" title="Unsaved changes" />
           )}
         </h2>
-        <Button variant="ghost" size="icon-sm" title="Close (Esc)" onClick={onClose}>
-          <X />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <DateFormatToggle calendar={calendar} showRaw={showRawDates} onChange={setShowRawDates} />
+          <Button variant="ghost" size="icon-sm" title="Close (Esc)" onClick={onClose}>
+            <X />
+          </Button>
+        </div>
       </div>
 
       <div className="@container min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
@@ -288,6 +294,7 @@ export default function CharacterDetailPanel({
           gameDir={gameDir}
           replacePaths={replacePaths}
           calendar={calendar}
+          showRawDates={showRawDates}
           refData={refData}
           characters={characters}
           onNavigate={onNavigate}
