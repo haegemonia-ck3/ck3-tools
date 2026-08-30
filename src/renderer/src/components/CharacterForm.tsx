@@ -394,25 +394,37 @@ export default function CharacterForm({
       ) : (
         spouses.map((spouse, index) => (
           <div key={index} className="space-y-2.5 rounded-md border p-2.5">
-            <div className="flex items-center gap-1.5">
-              <ReferenceInput
-                className="min-w-0 flex-1"
-                value={spouse.id === '' ? null : spouse.id}
-                onChange={(v) => setSpouse(index, { id: v ?? '' })}
-                options={characters}
-                placeholder="character"
-                onNavigate={onNavigate}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Remove this marriage"
-                onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
-              >
-                <X />
-              </Button>
+            <div className="flex flex-col gap-2.5 @sm:flex-row @sm:items-center">
+              <div className="flex items-center gap-1.5">
+                <ReferenceInput
+                  className="min-w-0 flex-1"
+                  value={spouse.id === '' ? null : spouse.id}
+                  onChange={(v) => setSpouse(index, { id: v ?? '' })}
+                  options={characters}
+                  placeholder="character"
+                  onNavigate={onNavigate}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Remove this marriage"
+                  onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
+                >
+                  <X />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id={`spouse-matrilineal-${index}`}
+                  checked={spouse.matrilineal}
+                  onCheckedChange={(checked) =>
+                    setSpouse(index, { matrilineal: checked === true })
+                  }
+                />
+                <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+              </div>
             </div>
-            <div className="flex gap-2.5 *:flex-1">
+            <div className="flex flex-col gap-2.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
               {dateField('Married', spouse.marriage, (v) => setSpouse(index, { marriage: v }), {
                 invalid: spouse.marriage
                   ? !isValidCK3Date(spouse.marriage)
@@ -423,16 +435,6 @@ export default function CharacterForm({
                 invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
                 placeholder: 'never'
               })}
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id={`spouse-matrilineal-${index}`}
-                checked={spouse.matrilineal}
-                onCheckedChange={(checked) =>
-                  setSpouse(index, { matrilineal: checked === true })
-                }
-              />
-              <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
             </div>
           </div>
         ))
