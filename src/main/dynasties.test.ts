@@ -2,7 +2,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
+import {
+  createDynasty,
+  createHouse,
+  getDynastyData,
+  listDynastyFiles,
+  saveDynasty,
+  saveHouse
+} from './dynasties'
+import type { NewDynasty, NewHouse } from '@shared/types'
 
 // Synthetic game/mod layout in a temp dir — never touches real CK3 files
 const root = mkdtempSync(join(tmpdir(), 'ck3-tools-dynasties-'))
@@ -519,5 +527,182 @@ describe('forward-slash mod path', () => {
     expect(getDynastyData(gameDir, slashed, []).dynasties.some((x) => x.id === 'dynn_ModOnly')).toBe(
       true
     )
+  })
+})
+
+// Creation writes into a mod of its own, so the blocks it appends can't leak
+// into the layering/localization expectations above.
+describe('creating', () => {
+  const newMod = join(root, 'newmod')
+  const DYN_FILE = 'common/dynasties/00_dynasties.txt'
+  const HOUSE_FILE = 'common/dynasty_houses/00_houses.txt'
+  const EXISTING_DYN = ['dynn_Old = {', '\tname = "dynn_Old"', '}', ''].join('\n')
+  const EXISTING_HOUSES = [
+    'house_Old = {',
+    '\tname = "house_Old"',
+    '\tdynasty = dynn_Old',
+    '}',
+    ''
+  ].join('\n')
+
+  const dynasty = (over: Partial<NewDynasty> = {}): NewDynasty => ({
+    id: 'dynn_New',
+    name: 'dynn_New',
+    prefix: null,
+    motto: null,
+    culture: null,
+    ...over
+  })
+  const house = (over: Partial<NewHouse> = {}): NewHouse => ({
+    id: 'house_New',
+    name: 'house_New',
+    prefix: null,
+    motto: null,
+    dynasty: 'dynn_Old',
+    ...over
+  })
+  const read = (rel: string): string => readFileSync(join(newMod, ...rel.split('/')), 'utf-8')
+
+  beforeEach(() => {
+    rmSync(newMod, { recursive: true, force: true })
+    writeFixture(newMod, DYN_FILE, EXISTING_DYN)
+    writeFixture(newMod, HOUSE_FILE, EXISTING_HOUSES)
+  })
+
+  it('appends to an existing file, preserving the current content byte-for-byte', () => {
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty({ culture: 'greek' }))).toEqual({
+      ok: true
+    })
+    expect(read(DYN_FILE)).toBe(
+      EXISTING_DYN +
+        '\n' +
+        ['dynn_New = {', '\tname = "dynn_New"', '\tculture = greek', '}', ''].join('\n')
+    )
+  })
+
+  it('creates a missing file, with every optional field written', () => {
+    expect(
+      createDynasty(newMod, 'my_dynasties.txt', {
+        id: '  dynn_All  ',
+        name: 'dynn_All',
+        prefix: 'dynnp_of',
+        motto: 'dynn_All_motto',
+        culture: 'greek'
+      })
+    ).toEqual({ ok: true })
+    expect(read('common/dynasties/my_dynasties.txt')).toBe(
+      [
+        'dynn_All = {',
+        '\tname = "dynn_All"',
+        '\tprefix = "dynnp_of"',
+        '\tmotto = "dynn_All_motto"',
+        '\tculture = greek',
+        '}',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('writes a house with its parent dynasty unquoted', () => {
+    expect(createHouse(newMod, '00_houses.txt', house({ motto: 'house_New_motto' }))).toEqual({
+      ok: true
+    })
+    expect(read(HOUSE_FILE)).toBe(
+      EXISTING_HOUSES +
+        '\n' +
+        [
+          'house_New = {',
+          '\tname = "house_New"',
+          '\tmotto = "house_New_motto"',
+          '\tdynasty = dynn_Old',
+          '}',
+          ''
+        ].join('\n')
+    )
+  })
+
+  it('skips blank fields instead of writing empty values', () => {
+    expect(
+      createDynasty(newMod, '00_dynasties.txt', dynasty({ prefix: '   ', motto: '' }))
+    ).toEqual({ ok: true })
+    expect(read(DYN_FILE)).toContain(['dynn_New = {', '\tname = "dynn_New"', '}'].join('\n'))
+    expect(read(DYN_FILE)).not.toContain('prefix')
+    expect(read(DYN_FILE)).not.toContain('motto')
+  })
+
+  it('matches an existing CRLF file with CRLF lines', () => {
+    writeFixture(newMod, DYN_FILE, EXISTING_DYN.replace(/\n/g, '\r\n'))
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty())).toEqual({ ok: true })
+    const text = read(DYN_FILE)
+    expect(text).toContain('\r\ndynn_New = {\r\n\tname = "dynn_New"\r\n}\r\n')
+    expect(text).not.toMatch(/[^\r]\n/)
+  })
+
+  it('separates from a file that does not end in a newline', () => {
+    writeFixture(newMod, DYN_FILE, 'dynn_Old = { name = "dynn_Old" }')
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty())).toEqual({ ok: true })
+    expect(read(DYN_FILE)).toBe(
+      'dynn_Old = { name = "dynn_Old" }\n\ndynn_New = {\n\tname = "dynn_New"\n}\n'
+    )
+  })
+
+  it('shows up in the next scan as an editable mod definition', () => {
+    createDynasty(newMod, '00_dynasties.txt', dynasty({ culture: 'greek' }))
+    createHouse(newMod, '00_houses.txt', house({ dynasty: 'dynn_New' }))
+    const scan = getDynastyData(gameDir, newMod, [])
+    expect(scan.dynasties.find((x) => x.id === 'dynn_New')).toMatchObject({
+      inMod: true,
+      name: 'dynn_New',
+      culture: 'greek'
+    })
+    expect(scan.houses.find((x) => x.id === 'house_New')).toMatchObject({
+      inMod: true,
+      dynasty: 'dynn_New'
+    })
+  })
+
+  it('rejects a duplicate id, case-insensitively, naming the file', () => {
+    const same = createDynasty(newMod, 'other.txt', dynasty({ id: 'DYNN_old' }))
+    expect(same.ok).toBe(false)
+    if (!same.ok) expect(same.error).toBe('ID DYNN_old already exists in 00_dynasties.txt')
+  })
+
+  it('rejects an id that the other kind already uses', () => {
+    const cross = createDynasty(newMod, 'other.txt', dynasty({ id: 'house_Old' }))
+    expect(cross.ok).toBe(false)
+    if (!cross.ok) {
+      expect(cross.error).toBe('ID house_Old is already a house, defined in 00_houses.txt')
+    }
+    const back = createHouse(newMod, 'other.txt', house({ id: 'dynn_Old' }))
+    expect(back.ok).toBe(false)
+    if (!back.ok) expect(back.error).toMatch(/already a dynasty/)
+  })
+
+  it('rejects missing mandatory fields', () => {
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty({ name: null })).ok).toBe(false)
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty({ name: '  ' })).ok).toBe(false)
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty({ id: '  ' })).ok).toBe(false)
+    expect(createHouse(newMod, '00_houses.txt', house({ name: null })).ok).toBe(false)
+    expect(createHouse(newMod, '00_houses.txt', house({ dynasty: null })).ok).toBe(false)
+    expect(createHouse(newMod, '00_houses.txt', house({ dynasty: ' ' })).ok).toBe(false)
+  })
+
+  it('rejects bad ids and file names', () => {
+    expect(createDynasty(newMod, '00_dynasties.txt', dynasty({ id: 'has space' })).ok).toBe(false)
+    expect(createDynasty(newMod, 'notes.md', dynasty()).ok).toBe(false)
+    expect(createDynasty(newMod, '.txt', dynasty()).ok).toBe(false)
+    expect(createDynasty(newMod, 'sub/dir.txt', dynasty()).ok).toBe(false)
+    // None of the rejects above wrote anything
+    expect(read(DYN_FILE)).toBe(EXISTING_DYN)
+  })
+
+  it('lists both definition folders, ignoring non-.txt files', () => {
+    writeFixture(newMod, 'common/dynasties/aa_more.txt', '')
+    writeFixture(newMod, 'common/dynasties/readme.md', '')
+    expect(listDynastyFiles(newMod)).toEqual({
+      dynasties: ['00_dynasties.txt', 'aa_more.txt'],
+      houses: ['00_houses.txt']
+    })
+    expect(listDynastyFiles(join(root, 'nope'))).toEqual({ dynasties: [], houses: [] })
   })
 })

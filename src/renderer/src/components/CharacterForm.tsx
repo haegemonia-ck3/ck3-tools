@@ -70,7 +70,7 @@ function FlatIcon({
   )
 }
 
-/** The uppercase micro-label used over every field in the character panels. */
+/** The uppercase micro-label used over every field in the editor panels. */
 export function FieldLabel({
   children,
   required,

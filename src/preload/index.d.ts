@@ -6,11 +6,14 @@ import type {
   DirValidation,
   DnaPasteInfo,
   DynastyData,
+  DynastyFiles,
   DynastyPatch,
   EditorInfo,
   FaithPatch,
   HousePatch,
   ModInfo,
+  NewDynasty,
+  NewHouse,
   RefKind,
   RefLocation,
   ReferenceData,
@@ -63,6 +66,10 @@ export interface Ck3ToolsApi {
     patch: DynastyPatch
   ) => Promise<SaveResult>
   saveHouse: (modPath: string, file: string, id: string, patch: HousePatch) => Promise<SaveResult>
+  /** The mod's own common/dynasties and common/dynasty_houses .txt files */
+  listDynastyFiles: (modPath: string) => Promise<DynastyFiles>
+  createDynasty: (modPath: string, file: string, def: NewDynasty) => Promise<SaveResult>
+  createHouse: (modPath: string, file: string, def: NewHouse) => Promise<SaveResult>
   getReligionData: (
     gameDir: string | null,
     modPath: string | null,

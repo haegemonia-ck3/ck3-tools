@@ -478,6 +478,22 @@ const mock: Ck3ToolsApi = {
     Object.assign(h, patch)
     return { ok: true }
   },
+  listDynastyFiles: async () => ({
+    dynasties: [...new Set(dynasties.filter((d) => d.inMod).map((d) => d.file))].sort(),
+    houses: [...new Set(houses.filter((h) => h.inMod).map((h) => h.file))].sort()
+  }),
+  createDynasty: async (_modPath, file, def) => {
+    const taken = [...dynasties, ...houses].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
+    dynasties.push({ ...def, file, inMod: true, localizedName: null })
+    return { ok: true }
+  },
+  createHouse: async (_modPath, file, def) => {
+    const taken = [...dynasties, ...houses].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
+    houses.push({ ...def, file, inMod: true, localizedName: null })
+    return { ok: true }
+  },
   getReligionData: async () => ({
     religions: structuredClone(religions),
     faiths: structuredClone(faiths),

@@ -7,11 +7,14 @@ import type {
   DirValidation,
   DnaPasteInfo,
   DynastyData,
+  DynastyFiles,
   DynastyPatch,
   EditorInfo,
   FaithPatch,
   HousePatch,
   ModInfo,
+  NewDynasty,
+  NewHouse,
   RefKind,
   RefLocation,
   ReferenceData,
@@ -77,6 +80,12 @@ const api = {
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveDynasty', modPath, file, id, patch),
   saveHouse: (modPath: string, file: string, id: string, patch: HousePatch): Promise<SaveResult> =>
     ipcRenderer.invoke('ck3:saveHouse', modPath, file, id, patch),
+  listDynastyFiles: (modPath: string): Promise<DynastyFiles> =>
+    ipcRenderer.invoke('ck3:listDynastyFiles', modPath),
+  createDynasty: (modPath: string, file: string, def: NewDynasty): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createDynasty', modPath, file, def),
+  createHouse: (modPath: string, file: string, def: NewHouse): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createHouse', modPath, file, def),
   getReligionData: (
     gameDir: string | null,
     modPath: string | null,

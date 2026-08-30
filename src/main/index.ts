@@ -17,7 +17,14 @@ import {
   saveCharacter
 } from './characters'
 import { applyRulerDesignerDna, getDnaPasteInfo } from './dna'
-import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
+import {
+  createDynasty,
+  createHouse,
+  getDynastyData,
+  listDynastyFiles,
+  saveDynasty,
+  saveHouse
+} from './dynasties'
 import { getReligionData, saveFaith, saveReligion } from './religions'
 import { getFaithIcons, listFaithIcons } from './faithIcons'
 import { getReferenceData, locateRef } from './refdata'
@@ -32,6 +39,8 @@ import type {
   DynastyPatch,
   FaithPatch,
   HousePatch,
+  NewDynasty,
+  NewHouse,
   RefKind,
   ReligionPatch
 } from '@shared/types'
@@ -137,6 +146,13 @@ function registerIpc(): void {
     'ck3:saveHouse',
     (_e, modPath: string, file: string, id: string, patch: HousePatch) =>
       saveHouse(modPath, file, id, patch)
+  )
+  ipcMain.handle('ck3:listDynastyFiles', (_e, modPath: string) => listDynastyFiles(modPath))
+  ipcMain.handle('ck3:createDynasty', (_e, modPath: string, file: string, def: NewDynasty) =>
+    createDynasty(modPath, file, def)
+  )
+  ipcMain.handle('ck3:createHouse', (_e, modPath: string, file: string, def: NewHouse) =>
+    createHouse(modPath, file, def)
   )
   ipcMain.handle(
     'ck3:getReligionData',
