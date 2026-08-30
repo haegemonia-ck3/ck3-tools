@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
@@ -153,6 +152,8 @@ interface Props {
   replacePaths: string[]
   /** The mod's offset-calendar display convention, if it declares one */
   calendar: CalendarConfig | null
+  /** Show file years instead of the mod calendar's era years in the date inputs */
+  showRawDates?: boolean
   refData: ReferenceData | null
   /** Every character in the mod, offered as father/mother options */
   characters: RefEntry[]
@@ -182,6 +183,7 @@ export default function CharacterForm({
   gameDir,
   replacePaths,
   calendar,
+  showRawDates = false,
   refData,
   characters,
   onNavigate,
@@ -192,9 +194,6 @@ export default function CharacterForm({
   identitySlot,
   childrenSlot
 }: Props): React.JSX.Element {
-  /** Show file years instead of the mod calendar's era years in the date inputs */
-  const [showRawDates, setShowRawDates] = useState(false)
-
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft.traits)
   const flatIconFor = useFlatIcons(iconCtx, FLAT_ICONS)
@@ -496,25 +495,7 @@ export default function CharacterForm({
       </FieldSet>
 
       <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
-          Life &amp; lineage
-          {calendar && (
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              spacing={0}
-              value={showRawDates ? 'raw' : 'era'}
-              onValueChange={(v) => v && setShowRawDates(v === 'raw')}
-              aria-label="Date display mode"
-            >
-              <ToggleGroupItem value="era">
-                {calendar.beforeLabel}/{calendar.afterLabel}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="raw">File</ToggleGroupItem>
-            </ToggleGroup>
-          )}
-        </FieldLegend>
+        <FieldLegend variant="label" className="mb-0">Life &amp; lineage</FieldLegend>
         <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {dateField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
