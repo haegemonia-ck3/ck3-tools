@@ -16,8 +16,16 @@ import ReferenceDisplay from './ReferenceDisplay'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { isValidCK3Date } from '@/lib/ck3Date'
+import { formatCalendarDate, isValidCK3Date } from '@/lib/ck3Date'
 
 /**
  * Drafts persisted before a field existed (Dynasty/House, then Female, then
@@ -223,6 +231,25 @@ export default function CharacterDetailPanel({
     onCreateChild(prefill)
   }
 
+  /** Mother ids resolve to a display name through the mod-wide character list */
+  const charName = new Map(characters.map((c) => [c.id, c.name]))
+
+  /**
+   * Same convention as the date fields: the era year alone while the calendar
+   * is on, otherwise the raw file date with the era year as a muted hint.
+   */
+  const birthCell = (raw: string | null): React.ReactNode => {
+    if (raw === null) return <em className="text-muted-foreground">—</em>
+    const converted = formatCalendarDate(raw, calendar)
+    if (converted === null) return raw
+    if (!showRawDates) return converted
+    return (
+      <>
+        {raw} <span className="text-muted-foreground">({converted})</span>
+      </>
+    )
+  }
+
   /**
    * Children are derived from the other characters' father/mother keys, not
    * stored on this one, so the list is read-only; adding one creates a new
@@ -245,17 +272,39 @@ export default function CharacterDetailPanel({
       {childCharacters.length === 0 ? (
         <p className="text-sm text-muted-foreground">none</p>
       ) : (
-        <div className="flex flex-col gap-0.5">
-          {childCharacters.map((c) => (
-            <div key={`${c.file}:${c.id}`} className="flex min-w-0 items-baseline gap-2 text-sm">
-              <ReferenceDisplay
-                value={c.id}
-                name={c.name}
-                onNavigate={() => onNavigate(c.id)}
-                className="truncate"
-              />
-            </div>
-          ))}
+        <div className="overflow-hidden rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Name</TableHead>
+                <TableHead>Mother</TableHead>
+                <TableHead>Birth</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {childCharacters.map((c) => (
+                <TableRow key={`${c.file}:${c.id}`}>
+                  <TableCell className="max-w-50 truncate">
+                    <ReferenceDisplay
+                      value={c.id}
+                      name={c.name}
+                      onNavigate={() => onNavigate(c.id)}
+                      className="truncate"
+                    />
+                  </TableCell>
+                  <TableCell className="max-w-50 truncate">
+                    <ReferenceDisplay
+                      value={c.mother}
+                      name={c.mother === null ? null : (charName.get(c.mother) ?? null)}
+                      onNavigate={() => onNavigate(c.mother as string)}
+                      className="truncate"
+                    />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{birthCell(c.birth)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>
