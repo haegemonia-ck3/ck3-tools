@@ -152,6 +152,8 @@ export interface CharacterDetail {
   female: string | null
   /** Raw `sexuality =` value (e.g. "heterosexual", "homosexual", "bisexual", "asexual"); null if unset */
   sexuality: string | null
+  /** Raw `dna =` value: a key defined in common/dna_data; null if unset */
+  dna: string | null
 }
 
 /**
@@ -253,10 +255,12 @@ export interface ReferenceData {
   dynasties: RefEntry[]
   /** Ids from `common/dynasty_houses` */
   houses: RefEntry[]
+  /** Ids from `common/dna_data` (no display names — DNAs aren't localized) */
+  dnas: RefEntry[]
 }
 
 /** Kinds of reference data whose definition site can be located on disk */
-export type RefKind = 'culture' | 'faith' | 'trait' | 'dynasty'
+export type RefKind = 'culture' | 'faith' | 'trait' | 'dynasty' | 'dna'
 
 export interface RefLocation {
   /** Absolute path of the file containing the definition */
@@ -274,6 +278,25 @@ export interface EditorInfo {
 }
 
 export type SaveResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * What the "Paste from Ruler Designer" dialog needs to offer its file pickers.
+ * A locked file means the mod already carries the character's DNA definition
+ * (or a portrait modifier for the character) there, so the paste must land in
+ * that same file rather than scatter duplicates.
+ */
+export interface DnaPasteInfo {
+  /** DNA key the paste will define: the character's existing `dna =` value, or `<id>_dna` */
+  dnaKey: string
+  /** .txt files under the mod's common/dna_data */
+  dnaFiles: string[]
+  /** .txt files under the mod's gfx/portraits/portrait_modifiers */
+  modifierFiles: string[]
+  /** Mod file already defining the DNA key; locks the DNA file picker */
+  lockedDnaFile: string | null
+  /** Mod file already carrying a portrait modifier for this character; locks that picker */
+  lockedModifierFile: string | null
+}
 
 export interface DetectionResult {
   gameDir: string | null

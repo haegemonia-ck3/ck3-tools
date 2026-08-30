@@ -16,6 +16,7 @@ import {
   listCharacters,
   saveCharacter
 } from './characters'
+import { applyRulerDesignerDna, getDnaPasteInfo } from './dna'
 import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
@@ -94,6 +95,23 @@ function registerIpc(): void {
     'ck3:createCharacter',
     (_e, modPath: string, file: string, detail: CharacterDetail) =>
       createCharacter(modPath, file, detail)
+  )
+  ipcMain.handle('ck3:getDnaPasteInfo', (_e, modPath: string, file: string, id: string) =>
+    getDnaPasteInfo(modPath, file, id)
+  )
+  ipcMain.handle(
+    'ck3:applyRulerDesignerDna',
+    (
+      _e,
+      gameDir: string | null,
+      modPath: string,
+      replacePaths: string[],
+      file: string,
+      id: string,
+      paste: string,
+      dnaFile: string,
+      modifierFile: string | null
+    ) => applyRulerDesignerDna(gameDir, modPath, replacePaths, file, id, paste, dnaFile, modifierFile)
   )
   ipcMain.handle(
     'ck3:getDynastyData',

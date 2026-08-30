@@ -90,6 +90,7 @@ export default function CharacterCreatePanel({
     },
     female: null,
     sexuality: null,
+    dna: null,
     ...prefill
   }))
   const [fileChoice, setFileChoice] = useState<string>(() => {

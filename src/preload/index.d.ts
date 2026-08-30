@@ -4,6 +4,7 @@ import type {
   CharacterSummary,
   DetectionResult,
   DirValidation,
+  DnaPasteInfo,
   DynastyData,
   DynastyPatch,
   EditorInfo,
@@ -30,6 +31,23 @@ export interface Ck3ToolsApi {
   ) => Promise<SaveResult>
   listCharacterFiles: (modPath: string) => Promise<string[]>
   createCharacter: (modPath: string, file: string, detail: CharacterDetail) => Promise<SaveResult>
+  /** File options and locks for the "Paste from Ruler Designer" dialog */
+  getDnaPasteInfo: (modPath: string, file: string, id: string) => Promise<DnaPasteInfo>
+  /**
+   * Convert a Ruler Designer DNA export into scripted-character files: the DNA
+   * block, the hair/beard portrait modifier, and the history wiring
+   * (`dna =` plus the has_scripted_appearance flag).
+   */
+  applyRulerDesignerDna: (
+    gameDir: string | null,
+    modPath: string,
+    replacePaths: string[],
+    file: string,
+    id: string,
+    paste: string,
+    dnaFile: string,
+    modifierFile: string | null
+  ) => Promise<SaveResult>
   getDynastyData: (
     gameDir: string | null,
     modPath: string | null,

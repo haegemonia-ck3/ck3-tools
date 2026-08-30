@@ -94,6 +94,14 @@ function listTraits(gameDir: string | null, modPath: string | null, replacePaths
   return [...keys].sort()
 }
 
+function listDnas(gameDir: string | null, modPath: string | null, replacePaths: string[]): string[] {
+  const keys = new Set<string>()
+  for (const file of effectiveFiles(gameDir, modPath, replacePaths, 'common/dna_data')) {
+    for (const key of topLevelKeys(file)) keys.add(key)
+  }
+  return [...keys].sort()
+}
+
 /**
  * Top-level id -> its `name` scalar, for definitions that point at a
  * localization key rather than carrying the display name inline (dynasties and
@@ -157,7 +165,9 @@ export function getReferenceData(
     faiths: entries(faiths, (id) => id),
     traits: entries(traits, traitLocKey),
     dynasties: entries([...dynastyNames.keys()].sort(), (id) => dynastyNames.get(id) ?? null),
-    houses: entries([...houseNames.keys()].sort(), (id) => houseNames.get(id) ?? null)
+    houses: entries([...houseNames.keys()].sort(), (id) => houseNames.get(id) ?? null),
+    // DNAs have no localization — the id is the whole story
+    dnas: listDnas(gameDir, modPath, replacePaths).map((id) => ({ id, name: null }))
   }
 }
 
@@ -166,7 +176,8 @@ const KIND_DIRS: Record<RefKind, string[]> = {
   culture: ['common/culture/cultures'],
   faith: ['common/religion/religion_types'],
   trait: ['common/traits'],
-  dynasty: ['common/dynasties', 'common/dynasty_houses']
+  dynasty: ['common/dynasties', 'common/dynasty_houses'],
+  dna: ['common/dna_data']
 }
 
 function lineOf(text: string, offset: number): number {

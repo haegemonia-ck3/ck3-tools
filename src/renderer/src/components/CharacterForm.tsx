@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react'
+import { ClipboardPaste, Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
   CharacterDetail,
@@ -169,6 +169,11 @@ interface Props {
   identitySlot?: React.ReactNode
   /** Rendered at the end of Family (the edit panel's children list) */
   childrenSlot?: React.ReactNode
+  /**
+   * Open the "Paste from Ruler Designer" dialog. Only the edit panel provides
+   * it — the paste rewires files for a character that already exists on disk.
+   */
+  onPasteDna?: () => void
 }
 
 /**
@@ -192,7 +197,8 @@ export default function CharacterForm({
   badDeath,
   markRequired = false,
   identitySlot,
-  childrenSlot
+  childrenSlot,
+  onPasteDna
 }: Props): React.JSX.Element {
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft.traits)
@@ -614,6 +620,33 @@ export default function CharacterForm({
               </label>
             ))}
           </div>
+        </div>
+      </FieldSet>
+
+      <FieldSet className="gap-3.5">
+        <FieldLegend variant="label" className="mb-0">Appearance</FieldLegend>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <FieldLabel>DNA</FieldLabel>
+            {onPasteDna && (
+              <Button
+                variant="outline"
+                size="sm"
+                title="Convert a Ruler Designer DNA export into this character's scripted appearance"
+                onClick={onPasteDna}
+              >
+                <ClipboardPaste />
+                Paste from Ruler Designer
+              </Button>
+            )}
+          </div>
+          <ReferenceInput
+            value={draft.dna}
+            onChange={(v) => set({ dna: v })}
+            options={refData?.dnas ?? []}
+            placeholder="none"
+            locate={(v) => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'dna', v)}
+          />
         </div>
       </FieldSet>
     </>

@@ -13,6 +13,7 @@ import type { CharacterSearch } from '../router'
 import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
 import DateFormatToggle from './DateFormatToggle'
 import ReferenceDisplay from './ReferenceDisplay'
+import RulerDesignerDnaDialog from './RulerDesignerDnaDialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -39,7 +40,8 @@ function withDefaults(detail: CharacterDetail): CharacterDetail {
     house: detail.house ?? null,
     female: detail.female ?? null,
     sexuality: detail.sexuality ?? null,
-    spouses: detail.spouses ?? []
+    spouses: detail.spouses ?? [],
+    dna: detail.dna ?? null
   }
 }
 
@@ -101,6 +103,7 @@ export default function CharacterDetailPanel({
   const [stale, setStale] = useState(false)
   /** Show file years instead of the mod calendar's era years in the date fields */
   const [showRawDates, setShowRawDates] = useState(false)
+  const [dnaDialogOpen, setDnaDialogOpen] = useState(false)
 
   /** Debounced draft persist waiting to fire; flushed before switching characters */
   const pendingPersist = useRef<(() => void) | null>(null)
@@ -231,6 +234,20 @@ export default function CharacterDetailPanel({
     onCreateChild(prefill)
   }
 
+  /**
+   * The paste dialog writes the DNA/modifier files and the history wiring
+   * itself, so afterwards the on-disk truth moved: re-read it, take it as the
+   * new baseline, and carry only the fresh `dna` into the draft — any other
+   * unsaved edits stay unsaved.
+   */
+  const dnaApplied = async (): Promise<void> => {
+    const d = await window.ck3tools.getCharacter(modPath, file, original.id)
+    if (!d) return
+    setOriginal(d)
+    setDraft((prev) => (prev ? { ...prev, dna: d.dna } : prev))
+    setStale(false)
+  }
+
   /** Mother ids resolve to a display name through the mod-wide character list */
   const charName = new Map(characters.map((c) => [c.id, c.name]))
 
@@ -357,6 +374,18 @@ export default function CharacterDetailPanel({
             </div>
           }
           childrenSlot={childrenSlot}
+          onPasteDna={() => setDnaDialogOpen(true)}
+        />
+
+        <RulerDesignerDnaDialog
+          open={dnaDialogOpen}
+          onOpenChange={setDnaDialogOpen}
+          modPath={modPath}
+          gameDir={gameDir}
+          replacePaths={replacePaths}
+          characterFile={file}
+          characterId={original.id}
+          onApplied={dnaApplied}
         />
 
         {error && (

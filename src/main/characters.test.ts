@@ -468,6 +468,7 @@ describe('createCharacter', () => {
     },
     female: null,
     sexuality: null,
+    dna: null,
     ...over
   })
 

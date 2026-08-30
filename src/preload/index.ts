@@ -5,6 +5,7 @@ import type {
   CharacterSummary,
   DetectionResult,
   DirValidation,
+  DnaPasteInfo,
   DynastyData,
   DynastyPatch,
   EditorInfo,
@@ -35,6 +36,29 @@ const api = {
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveCharacter', modPath, file, originalId, detail),
   listCharacterFiles: (modPath: string): Promise<string[]> =>
     ipcRenderer.invoke('ck3:listCharacterFiles', modPath),
+  getDnaPasteInfo: (modPath: string, file: string, id: string): Promise<DnaPasteInfo> =>
+    ipcRenderer.invoke('ck3:getDnaPasteInfo', modPath, file, id),
+  applyRulerDesignerDna: (
+    gameDir: string | null,
+    modPath: string,
+    replacePaths: string[],
+    file: string,
+    id: string,
+    paste: string,
+    dnaFile: string,
+    modifierFile: string | null
+  ): Promise<SaveResult> =>
+    ipcRenderer.invoke(
+      'ck3:applyRulerDesignerDna',
+      gameDir,
+      modPath,
+      replacePaths,
+      file,
+      id,
+      paste,
+      dnaFile,
+      modifierFile
+    ),
   createCharacter: (modPath: string, file: string, detail: CharacterDetail): Promise<SaveResult> =>
     ipcRenderer.invoke('ck3:createCharacter', modPath, file, detail),
   getDynastyData: (

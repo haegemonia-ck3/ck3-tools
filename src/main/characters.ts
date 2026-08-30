@@ -208,7 +208,8 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     spouses: pairSpouses(scanSpouseEvents(body)),
     stats,
     female: scalars.get('female') ?? null,
-    sexuality: scalars.get('sexuality') ?? null
+    sexuality: scalars.get('sexuality') ?? null,
+    dna: scalars.get('dna') ?? null
   }
 }
 
@@ -531,6 +532,7 @@ export function saveCharacter(
     set(['name'], detail.name, true)
     set(['female'], detail.female)
     set(['sexuality'], detail.sexuality)
+    set(['dna'], detail.dna)
     set(['dynasty'], detail.dynasty)
     set(['dynasty_house'], detail.house)
     set(['culture'], detail.culture)
@@ -553,6 +555,52 @@ export function saveCharacter(
       text.slice(block.start + originalId.length, block.bodyStart) +
       newBody +
       text.slice(block.bodyEnd)
+    writeFileSync(path, updated, 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * Wire a pasted DNA into the character's history entry: set the `dna =` scalar
+ * and (when the appearance is pinned by portrait modifiers) add
+ * `add_character_flag = has_scripted_appearance` to the birth block, which is
+ * what suppresses the base game's random hair/beard selection. Both edits are
+ * surgical; a character already carrying them is left byte-for-byte alone.
+ */
+export function setCharacterDna(
+  modPath: string,
+  file: string,
+  id: string,
+  dnaKey: string,
+  addScriptedAppearanceFlag: boolean
+): SaveResult {
+  try {
+    const path = join(charactersDir(modPath), file)
+    if (!existsSync(path)) return { ok: false, error: `File not found: ${file}` }
+    const text = readFileSync(path, 'utf-8')
+    const block = scanBlocks(text).find((b) => b.key === id)
+    if (!block) return { ok: false, error: `Character ${id} not found in ${file}` }
+
+    const ed = makeEditor(text.slice(block.bodyStart, block.bodyEnd))
+    setScalar(ed, ['dna'], dnaKey, { insertAt: firstDateBlockLine(ed) })
+    if (addScriptedAppearanceFlag) {
+      const hasFlag = ed.lines.some((l) =>
+        /add_character_flag\s*=\s*has_scripted_appearance([^A-Za-z0-9_]|$)/.test(splitComment(l)[0])
+      )
+      const birth = findDateBlocks(ed.lines.join('\n'), 'birth')[0] ?? null
+      if (!hasFlag && birth) {
+        insertDatedStatement(
+          ed,
+          cleanDate(birth.key),
+          'add_character_flag = has_scripted_appearance'
+        )
+      }
+    }
+
+    const updated =
+      text.slice(0, block.bodyStart) + ed.lines.join('\n') + text.slice(block.bodyEnd)
     writeFileSync(path, updated, 'utf-8')
     return { ok: true }
   } catch (err) {
@@ -629,6 +677,7 @@ export function createCharacter(
     push('name', detail.name, true)
     push('female', detail.female)
     push('sexuality', detail.sexuality)
+    push('dna', detail.dna)
     push('dynasty', detail.dynasty)
     push('dynasty_house', detail.house)
     push('culture', detail.culture)

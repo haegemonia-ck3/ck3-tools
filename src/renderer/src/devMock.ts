@@ -52,7 +52,8 @@ const characters: CharacterDetail[] = [
       prowess: 6
     },
     female: null,
-    sexuality: null
+    sexuality: null,
+    dna: null
   },
   {
     id: '218',
@@ -77,7 +78,8 @@ const characters: CharacterDetail[] = [
       prowess: 3
     },
     female: null,
-    sexuality: null
+    sexuality: null,
+    dna: null
   },
   {
     id: '1002',
@@ -102,7 +104,8 @@ const characters: CharacterDetail[] = [
       prowess: 1
     },
     female: 'yes',
-    sexuality: null
+    sexuality: null,
+    dna: null
   },
   {
     id: '77',
@@ -127,7 +130,8 @@ const characters: CharacterDetail[] = [
       prowess: null
     },
     female: null,
-    sexuality: null
+    sexuality: null,
+    dna: null
   },
   {
     id: '3410',
@@ -152,7 +156,8 @@ const characters: CharacterDetail[] = [
       prowess: 8
     },
     female: null,
-    sexuality: null
+    sexuality: null,
+    dna: null
   },
   {
     id: '3411',
@@ -178,7 +183,8 @@ const characters: CharacterDetail[] = [
       prowess: 2
     },
     female: 'yes',
-    sexuality: null
+    sexuality: null,
+    dna: null
   }
 ]
 
@@ -337,6 +343,20 @@ const mock: Ck3ToolsApi = {
     return { ok: true }
   },
   listCharacterFiles: async () => [...new Set(characters.map((c) => c.file))].sort(),
+  getDnaPasteInfo: async (_modPath, _file, id) => ({
+    dnaKey: `${id}_dna`,
+    dnaFiles: ['00_mock_dna.txt'],
+    modifierFiles: ['mock_scripted_appearances.txt'],
+    lockedDnaFile: null,
+    lockedModifierFile: null
+  }),
+  applyRulerDesignerDna: async (_g, _modPath, _r, file, id, _paste, dnaFile) => {
+    const c = characters.find((x) => x.file === file && x.id === id)
+    if (!c) return { ok: false, error: `Character ${id} not found in ${file}` }
+    c.dna = `${id}_dna`
+    console.info(`[devMock] applyRulerDesignerDna → ${dnaFile}`)
+    return { ok: true }
+  },
   createCharacter: async (_modPath, file, detail) => {
     if (characters.some((c) => c.id === detail.id)) {
       return { ok: false, error: `ID ${detail.id} already exists in the mod` }
@@ -407,7 +427,8 @@ const mock: Ck3ToolsApi = {
     faiths: named({ orthodox: 'Orthodoxy', catholic: 'Catholicism', asatru: null }),
     traits: named({ brave: 'Brave', ambitious: 'Ambitious', craven: 'Craven', shy: null }),
     dynasties: named({ dynn_Mock: 'Mockidae', dynn_Other: null }),
-    houses: named({ house_Mockington: 'Mockington', house_Other: null })
+    houses: named({ house_Mockington: 'Mockington', house_Other: null }),
+    dnas: named({ '163112_halfdan_whiteshirt': null, mock_dna: null })
   }),
   locateRef: async (_g, _m, _r, kind, id) =>
     id.includes('missing')
