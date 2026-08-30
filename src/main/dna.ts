@@ -3,6 +3,7 @@ import { join } from 'path'
 import { getCharacter, setCharacterDna } from './characters'
 import { scanBlocks, scanScalars } from './pdx'
 import { effectiveFiles } from './refdata'
+import { listTxtFiles } from './scriptFile'
 import type { DnaPasteInfo, SaveResult } from '@shared/types'
 
 /**
@@ -30,13 +31,6 @@ const MODIFIER_DIR = ['gfx', 'portraits', 'portrait_modifiers'] as const
 const RULER_DESIGNER_ONLY_GENES = new Set(['clothes'])
 
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-function listTxtFiles(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.txt'))
-    .sort((a, b) => a.localeCompare(b))
-}
 
 /** `character:<id>` appearing as a value, the way modifier weights reference one. */
 const characterRef = (id: string): RegExp =>

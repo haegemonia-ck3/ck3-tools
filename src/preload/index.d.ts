@@ -16,7 +16,9 @@ import type {
   ModInfo,
   NewCulture,
   NewDynasty,
+  NewFaith,
   NewHouse,
+  NewReligion,
   RefKind,
   RefLocation,
   ReferenceData,
@@ -105,6 +107,11 @@ export interface Ck3ToolsApi {
     religionId: string,
     patch: ReligionPatch
   ) => Promise<SaveResult>
+  /** The mod's .txt files under common/religion/religion_types, for the create picker */
+  listReligionFiles: (modPath: string) => Promise<string[]>
+  createReligion: (modPath: string, file: string, def: NewReligion) => Promise<SaveResult>
+  /** Nests the new faith into `religionId`'s faiths block; the religion must be mod-defined */
+  createFaith: (modPath: string, religionId: string, def: NewFaith) => Promise<SaveResult>
   /** Faith icons from gfx/interface/icons/faith, keyed by the `icon =` value */
   getFaithIcons: (
     gameDir: string | null,

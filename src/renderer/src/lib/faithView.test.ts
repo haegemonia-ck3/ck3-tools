@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   adherentsOfReligion,
-  buildRows,
+  buildFaithRows,
+  buildReligionRows,
   doctrineSlots,
   faithsOfReligion,
   setGroupPicks,
@@ -56,7 +57,7 @@ const data = (over: Partial<ReligionData> = {}): ReligionData => ({
   ...over
 })
 
-describe('buildRows', () => {
+describe('buildFaithRows / buildReligionRows', () => {
   const sample = data({
     religions: [religion('hellenism', { localizedName: 'Hellenism' })],
     faiths: [faith('olympian', 'hellenism'), faith('delian', 'Hellenism')],
@@ -69,20 +70,27 @@ describe('buildRows', () => {
   })
 
   it('rolls faith adherents up to their religion, matching ids case-insensitively', () => {
-    const rows = buildRows(sample)
-    const hellenism = rows.find((r) => r.kind === 'religion')!
-    expect(hellenism).toMatchObject({ id: 'hellenism', faiths: 2, adherents: 3, parent: 'rf_pagan' })
-    expect(rows.find((r) => r.id === 'olympian')).toMatchObject({
+    const religionRows = buildReligionRows(sample)
+    expect(religionRows).toHaveLength(1)
+    expect(religionRows[0]).toMatchObject({
+      id: 'hellenism',
+      faiths: 2,
+      adherents: 3,
+      family: 'rf_pagan'
+    })
+    const faithRows = buildFaithRows(sample)
+    expect(faithRows.find((r) => r.id === 'olympian')).toMatchObject({
       adherents: 2,
-      parent: 'hellenism',
+      religion: 'hellenism',
       color: '#112233',
       defined: true
     })
   })
 
-  it('gives a referenced-but-undefined faith a row of its own', () => {
-    const lost = buildRows(sample).find((r) => r.id === 'lost_faith')!
-    expect(lost).toMatchObject({ kind: 'faith', defined: false, inMod: false, adherents: 1, file: null })
+  it('gives a professed-but-undefined faith a row of its own, but no religion row', () => {
+    const lost = buildFaithRows(sample).find((r) => r.id === 'lost_faith')!
+    expect(lost).toMatchObject({ defined: false, inMod: false, adherents: 1, file: null, religion: null })
+    expect(buildReligionRows(sample).some((r) => r.id === 'lost_faith')).toBe(false)
   })
 })
 

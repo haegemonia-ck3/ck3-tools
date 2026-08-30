@@ -26,7 +26,14 @@ import {
   saveDynasty,
   saveHouse
 } from './dynasties'
-import { getReligionData, saveFaith, saveReligion } from './religions'
+import {
+  createFaith,
+  createReligion,
+  getReligionData,
+  listReligionFiles,
+  saveFaith,
+  saveReligion
+} from './religions'
 import { getFaithIcons, listFaithIcons } from './faithIcons'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
@@ -43,7 +50,9 @@ import type {
   HousePatch,
   NewCulture,
   NewDynasty,
+  NewFaith,
   NewHouse,
+  NewReligion,
   RefKind,
   ReligionPatch
 } from '@shared/types'
@@ -171,6 +180,13 @@ function registerIpc(): void {
     'ck3:saveReligion',
     (_e, modPath: string, file: string, religionId: string, patch: ReligionPatch) =>
       saveReligion(modPath, file, religionId, patch)
+  )
+  ipcMain.handle('ck3:listReligionFiles', (_e, modPath: string) => listReligionFiles(modPath))
+  ipcMain.handle('ck3:createReligion', (_e, modPath: string, file: string, def: NewReligion) =>
+    createReligion(modPath, file, def)
+  )
+  ipcMain.handle('ck3:createFaith', (_e, modPath: string, religionId: string, def: NewFaith) =>
+    createFaith(modPath, religionId, def)
   )
   ipcMain.handle(
     'ck3:getFaithIcons',

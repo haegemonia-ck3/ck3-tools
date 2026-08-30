@@ -23,11 +23,10 @@ import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import DebouncedInput from '../components/DebouncedInput'
-import FaithCreatePanel from '../components/FaithCreatePanel'
-import FaithDetailPanel from '../components/FaithDetailPanel'
 import ReferenceDisplay from '../components/ReferenceDisplay'
 import ReferenceInput from '../components/ReferenceInput'
-import { Swatch } from '../components/Swatch'
+import ReligionCreatePanel from '../components/ReligionCreatePanel'
+import ReligionDetailPanel from '../components/ReligionDetailPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -47,14 +46,14 @@ import {
 } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { buildFaithRows, normId } from '@/lib/faithView'
-import type { FaithListRow } from '@/lib/faithView'
+import { buildReligionRows, normId } from '@/lib/faithView'
+import type { ReligionListRow } from '@/lib/faithView'
 import type { ReligionData } from '@shared/types'
-import type { FaithSearch } from '../router'
+import type { ReligionSearch } from '../router'
 
 /** Which control a column renders in the filter row under its header. */
-interface FaithColumnMeta {
-  filter: 'text' | 'religion' | 'none'
+interface ReligionColumnMeta {
+  filter: 'text' | 'family' | 'none'
 }
 
 const features = tableFeatures({
@@ -63,13 +62,13 @@ const features = tableFeatures({
   globalFilteringFeature,
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
-  // Faceting feeds the religion picker the values actually present in the
-  // data; its facets ignore its own filter, so its options stay put while the
-  // other columns narrow them.
+  // Faceting feeds the family picker the values actually present in the data;
+  // its facets ignore its own filter, so its options stay put while the other
+  // columns narrow them.
   facetedRowModel: createFacetedRowModel(),
   facetedUniqueValues: createFacetedUniqueValues(),
   sortedRowModel: createSortedRowModel(),
-  columnMeta: {} as FaithColumnMeta,
+  columnMeta: {} as ReligionColumnMeta,
   filterFns,
   sortFns
 })
@@ -83,13 +82,13 @@ function numericAware(a: string | null, b: string | null): number {
   return a.localeCompare(b, undefined, { numeric: true })
 }
 
-const bySortableString: SortFn<Features, FaithListRow> = (
-  rowA: Row<Features, FaithListRow>,
-  rowB: Row<Features, FaithListRow>,
+const bySortableString: SortFn<Features, ReligionListRow> = (
+  rowA: Row<Features, ReligionListRow>,
+  rowB: Row<Features, ReligionListRow>,
   columnId: string
 ) => numericAware(rowA.getValue<string | null>(columnId), rowB.getValue<string | null>(columnId))
 
-const columnHelper = createColumnHelper<Features, FaithListRow>()
+const columnHelper = createColumnHelper<Features, ReligionListRow>()
 
 const columns = columnHelper.columns([
   columnHelper.accessor('id', {
@@ -97,12 +96,7 @@ const columns = columnHelper.columns([
     sortFn: bySortableString,
     filterFn: 'includesString',
     meta: { filter: 'text' },
-    cell: (info) => (
-      <span className="flex items-center gap-2">
-        <Swatch hex={info.row.original.color} className="size-3 shrink-0" />
-        <span className="truncate font-mono">{info.getValue()}</span>
-      </span>
-    )
+    cell: (info) => <span className="font-mono">{info.getValue()}</span>
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -112,12 +106,7 @@ const columns = columnHelper.columns([
     cell: (info) => (
       <>
         {info.getValue() ?? <em className="text-muted-foreground">—</em>}
-        {!info.row.original.defined && (
-          <Badge variant="outline" className="ml-2 text-[10px]">
-            undefined
-          </Badge>
-        )}
-        {info.row.original.defined && !info.row.original.inMod && (
+        {!info.row.original.inMod && (
           <Badge variant="outline" className="ml-2 text-[10px]">
             game
           </Badge>
@@ -125,12 +114,18 @@ const columns = columnHelper.columns([
       </>
     )
   }),
-  columnHelper.accessor('religion', {
-    header: 'Religion',
+  columnHelper.accessor('family', {
+    header: 'Family',
     sortFn: bySortableString,
     filterFn: 'equalsString',
-    meta: { filter: 'religion' }
-    // Cell rendering is overridden in the body: it needs the navigate handler.
+    meta: { filter: 'family' }
+    // Cell rendering is overridden in the body: it shows the localized name.
+  }),
+  columnHelper.accessor('faiths', {
+    header: 'Faiths',
+    meta: { filter: 'none' },
+    enableColumnFilter: false,
+    cell: (info) => info.getValue()
   }),
   columnHelper.accessor('adherents', {
     header: 'Adherents',
@@ -141,8 +136,8 @@ const columns = columnHelper.columns([
 ])
 
 interface ColumnFilterProps {
-  column: Column<Features, FaithListRow>
-  /** Display name for a religion id, so the picker can offer "Name (id)" */
+  column: Column<Features, ReligionListRow>
+  /** Display name for a family id, so the picker can offer "Name (id)" */
   nameOf: (id: string) => string | null
 }
 
@@ -150,7 +145,7 @@ interface ColumnFilterProps {
 function ColumnFilter({ column, nameOf }: ColumnFilterProps): React.JSX.Element | null {
   const kind = column.columnDef.meta?.filter ?? 'text'
   const value = (column.getFilterValue() as string | undefined) ?? ''
-  const facets = kind === 'religion' ? column.getFacetedUniqueValues() : null
+  const facets = kind === 'family' ? column.getFacetedUniqueValues() : null
 
   const options = useMemo(
     () =>
@@ -188,21 +183,22 @@ function ColumnFilter({ column, nameOf }: ColumnFilterProps): React.JSX.Element 
   )
 }
 
-export default function FaithEditorPage(): React.JSX.Element {
+export default function ReligionEditorPage(): React.JSX.Element {
   const { settings, selectedMod } = useApp()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const navigate = useNavigate()
   const [data, setData] = useState<ReligionData | null>(null)
   const [loading, setLoading] = useState(false)
-  const [iconNames, setIconNames] = useState<string[]>([])
+  /** The mod's religion files, for the create panel's target picker */
+  const [defFiles, setDefFiles] = useState<string[]>([])
   /** Hide the base game's definitions, leaving only what the mod defines */
   const [modOnly, setModOnly] = useState(false)
   // Which row is open lives in the URL, not in state, so opening one pushes a
   // history entry and the mouse "back" button returns to the list. `create`
-  // opens the new-faith panel instead of a row.
-  const search = useSearch({ from: '/faiths' })
+  // opens the new-religion panel instead of a row.
+  const search = useSearch({ from: '/religions' })
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: 'faith-editor-detail',
+    id: 'religion-editor-detail',
     panelIds: ['list', 'detail'],
     onlySaveAfterUserInteractions: true
   })
@@ -211,8 +207,8 @@ export default function FaithEditorPage(): React.JSX.Element {
   const gameDir = settings?.gameDir ?? null
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
 
-  const go = (next: FaithSearch, replace = false): void => {
-    void navigate({ to: '/faiths', search: next, replace })
+  const go = (next: ReligionSearch, replace = false): void => {
+    void navigate({ to: '/religions', search: next, replace })
   }
 
   /** Give the list and the form the full width: fold the tools sidebar away. */
@@ -226,8 +222,8 @@ export default function FaithEditorPage(): React.JSX.Element {
     collapseSidebar()
   }
 
-  const openCreate = (religion?: string): void => {
-    go({ create: true, religion })
+  const openCreate = (): void => {
+    go({ create: true })
     collapseSidebar()
   }
 
@@ -237,8 +233,8 @@ export default function FaithEditorPage(): React.JSX.Element {
     go({}, true)
   }
 
-  const openReligion = (id: string): void => {
-    void navigate({ to: '/religions', search: { id } })
+  const openFaith = (id: string): void => {
+    void navigate({ to: '/faiths', search: { id } })
   }
 
   const reload = async (): Promise<void> => {
@@ -249,6 +245,7 @@ export default function FaithEditorPage(): React.JSX.Element {
     setLoading(true)
     try {
       setData(await window.ck3tools.getReligionData(gameDir, modPath, replacePaths))
+      setDefFiles(await window.ck3tools.listReligionFiles(modPath))
     } finally {
       setLoading(false)
     }
@@ -265,29 +262,24 @@ export default function FaithEditorPage(): React.JSX.Element {
       prevModPath.current = modPath
       closeRow()
     }
-    if (!modPath) {
-      setIconNames([])
-      return
-    }
-    window.ck3tools.listFaithIcons(gameDir, modPath, replacePaths).then(setIconNames)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
 
-  /** Display name for a religion id, matched lowercased like every other id. */
-  const religionName = useMemo(() => {
+  /** Display name for a family id, matched lowercased like every other id. */
+  const familyName = useMemo(() => {
     const names = new Map<string, string>()
-    for (const r of data?.religions ?? []) {
-      if (r.localizedName !== null) names.set(normId(r.id), r.localizedName)
+    for (const f of data?.families ?? []) {
+      if (f.name !== null) names.set(normId(f.id), f.name)
     }
     return (id: string): string | null => names.get(normId(id)) ?? null
   }, [data])
 
-  const allRows = useMemo(() => (data ? buildFaithRows(data) : []), [data])
+  const allRows = useMemo(() => (data ? buildReligionRows(data) : []), [data])
 
   // Biggest congregations first. The table's own sorting layers on top when a
   // header is clicked.
   const rows = useMemo(() => {
-    const visible = modOnly ? allRows.filter((r) => r.inMod || !r.defined) : allRows
+    const visible = modOnly ? allRows.filter((r) => r.inMod) : allRows
     return [...visible].sort((a, b) => b.adherents - a.adherents || numericAware(a.id, b.id))
   }, [allRows, modOnly])
 
@@ -299,7 +291,7 @@ export default function FaithEditorPage(): React.JSX.Element {
       String(row.getValue(columnId) ?? '')
         .toLowerCase()
         .includes(String(filterValue).toLowerCase()),
-    getRowId: (r: FaithListRow) => normId(r.id)
+    getRowId: (r: ReligionListRow) => normId(r.id)
   })
 
   const globalFilter = (table.state.globalFilter as string | undefined) ?? ''
@@ -311,25 +303,26 @@ export default function FaithEditorPage(): React.JSX.Element {
     table.setGlobalFilter('')
   }
 
-  // Resolve the id in the URL against the scan: a faith (defined or merely
-  // professed) opens here; a religion's id belongs to the Religion Editor and
-  // is handed over; anything else falls back to the list with a toast.
+  // Resolve the id in the URL against the scan: a religion opens here; a
+  // faith's id belongs to the Faith Editor and is handed over; anything else
+  // falls back to the list with a toast.
   const selected: string | null = useMemo(() => {
     if (!search.id || !data) return null
     const key = normId(search.id)
-    const isFaith =
-      data.faiths.some((f) => normId(f.id) === key) ||
-      data.adherents.some((a) => normId(a.faith) === key)
-    return isFaith ? search.id : null
+    return data.religions.some((r) => normId(r.id) === key) ? search.id : null
   }, [search.id, data])
 
   useEffect(() => {
     if (!search.id || !data || selected) return
-    if (data.religions.some((r) => normId(r.id) === normId(search.id!))) {
-      void navigate({ to: '/religions', search: { id: search.id }, replace: true })
+    const key = normId(search.id)
+    const isFaith =
+      data.faiths.some((f) => normId(f.id) === key) ||
+      data.adherents.some((a) => normId(a.faith) === key)
+    if (isFaith) {
+      void navigate({ to: '/faiths', search: { id: search.id }, replace: true })
       return
     }
-    toast.error(`"${search.id}" isn't a faith in ${selectedMod?.name ?? 'this mod'}`)
+    toast.error(`"${search.id}" isn't a religion in ${selectedMod?.name ?? 'this mod'}`)
     closeRow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.id, data, selected])
@@ -342,7 +335,7 @@ export default function FaithEditorPage(): React.JSX.Element {
     return (
       <div className="max-w-4xl space-y-5 p-7">
         <header>
-          <h1 className="text-2xl font-semibold">Faith Editor</h1>
+          <h1 className="text-2xl font-semibold">Religion Editor</h1>
         </header>
         <ModPicker />
       </div>
@@ -352,20 +345,19 @@ export default function FaithEditorPage(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col gap-3 p-7 pt-6">
       <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Faith Editor</h1>
+        <h1 className="text-2xl font-semibold">Religion Editor</h1>
       </header>
 
       {!loading && allRows.length === 0 && (
         <Card>
           <CardContent className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              No faiths found for {selectedMod.name} in{' '}
-              <code className="font-mono">common/religion/religion_types</code>, and no character
-              professes one.
+              No religions found for {selectedMod.name} in{' '}
+              <code className="font-mono">common/religion/religion_types</code>.
             </p>
-            <Button size="sm" className="shrink-0" onClick={() => openCreate()}>
+            <Button size="sm" className="shrink-0" onClick={openCreate}>
               <Plus />
-              New faith
+              New religion
             </Button>
           </CardContent>
         </Card>
@@ -382,9 +374,9 @@ export default function FaithEditorPage(): React.JSX.Element {
         {allRows.length > 0 && (
           <ResizablePanel id="list" minSize={360} className="flex min-h-0 flex-col gap-2">
             <div className="flex items-center gap-3">
-              <Button size="sm" onClick={() => openCreate()}>
+              <Button size="sm" onClick={openCreate}>
                 <Plus />
-                New faith
+                New religion
               </Button>
               <ToggleGroup
                 type="single"
@@ -402,7 +394,7 @@ export default function FaithEditorPage(): React.JSX.Element {
                 <DebouncedInput
                   className="w-64"
                   type="search"
-                  placeholder="Filter by id, name, or religion…"
+                  placeholder="Filter by id, name, or family…"
                   value={globalFilter}
                   onChange={(v) => table.setGlobalFilter(v)}
                 />
@@ -437,7 +429,7 @@ export default function FaithEditorPage(): React.JSX.Element {
                               {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ??
                                 ''}
                             </button>
-                            <ColumnFilter column={header.column} nameOf={religionName} />
+                            <ColumnFilter column={header.column} nameOf={familyName} />
                           </div>
                         </TableHead>
                       ))}
@@ -450,7 +442,9 @@ export default function FaithEditorPage(): React.JSX.Element {
                       key={row.id}
                       className={cn(
                         'cursor-pointer',
-                        selected !== null && normId(selected) === normId(row.original.id) && 'bg-muted'
+                        selected !== null &&
+                          normId(selected) === normId(row.original.id) &&
+                          'bg-muted'
                       )}
                       onClick={() => openRow(row.original.id)}
                     >
@@ -459,22 +453,21 @@ export default function FaithEditorPage(): React.JSX.Element {
                           key={cell.id}
                           className={cn(
                             'max-w-70 truncate',
-                            cell.column.id === 'religion'
+                            cell.column.id === 'family'
                               ? 'max-w-50'
                               : cell.column.id === 'id'
                                 ? 'max-w-60'
                                 : undefined
                           )}
                         >
-                          {cell.column.id === 'religion' ? (
+                          {cell.column.id === 'family' ? (
                             <ReferenceDisplay
-                              value={row.original.religion}
+                              value={row.original.family}
                               name={
-                                row.original.religion === null
+                                row.original.family === null
                                   ? null
-                                  : religionName(row.original.religion)
+                                  : familyName(row.original.family)
                               }
-                              onNavigate={openReligion}
                             />
                           ) : (
                             flexRender(cell.column.columnDef.cell, cell.getContext())
@@ -501,29 +494,25 @@ export default function FaithEditorPage(): React.JSX.Element {
               className="flex min-h-0 flex-col"
             >
               {selected ? (
-                <FaithDetailPanel
+                <ReligionDetailPanel
                   id={selected}
                   data={data}
                   modPath={modPath}
                   gameDir={gameDir}
                   replacePaths={replacePaths}
-                  iconNames={iconNames}
-                  onOpenReligion={openReligion}
+                  onOpenFaith={openFaith}
+                  onAddFaith={() =>
+                    void navigate({ to: '/faiths', search: { create: true, religion: selected } })
+                  }
                   onOpenCharacter={openCharacter}
                   onSaved={() => void reload()}
                   onClose={closeRow}
                 />
               ) : (
-                <FaithCreatePanel
-                  // Remount when a fresh deep link brings a different prefill
-                  key={search.religion ?? ''}
+                <ReligionCreatePanel
                   modPath={modPath}
-                  gameDir={gameDir}
-                  replacePaths={replacePaths}
                   data={data}
-                  iconNames={iconNames}
-                  prefillReligion={search.religion ?? null}
-                  onOpenReligion={openReligion}
+                  files={defFiles}
                   onCreated={(id) => {
                     // Reload first: the row the URL is about to point at has to
                     // exist in the scan, or the deep-link guard bounces it back

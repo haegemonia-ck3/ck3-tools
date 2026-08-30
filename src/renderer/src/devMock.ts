@@ -648,13 +648,17 @@ const mock: Ck3ToolsApi = {
     houses: [...new Set(houses.filter((h) => h.inMod).map((h) => h.file))].sort()
   }),
   createDynasty: async (_modPath, file, def) => {
-    const taken = [...dynasties, ...houses].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    const taken = [...dynasties, ...houses]
+      .filter((x) => x.inMod)
+      .find((x) => x.id.toLowerCase() === def.id.toLowerCase())
     if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
     dynasties.push({ ...def, file, inMod: true, localizedName: null })
     return { ok: true }
   },
   createHouse: async (_modPath, file, def) => {
-    const taken = [...dynasties, ...houses].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    const taken = [...dynasties, ...houses]
+      .filter((x) => x.inMod)
+      .find((x) => x.id.toLowerCase() === def.id.toLowerCase())
     if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
     houses.push({ ...def, file, inMod: true, localizedName: null })
     return { ok: true }
@@ -724,6 +728,37 @@ const mock: Ck3ToolsApi = {
     const r = religions.find((x) => x.file === file && x.id === religionId)
     if (!r) return { ok: false, error: `Religion ${religionId} not found in ${file}` }
     Object.assign(r, patch)
+    return { ok: true }
+  },
+  listReligionFiles: async () =>
+    [...new Set(religions.filter((r) => r.inMod).map((r) => r.file))].sort(),
+  createReligion: async (_modPath, file, def) => {
+    if (!def.family?.trim()) return { ok: false, error: 'Family is required' }
+    // Mod definitions only, like the real backend: shadowing a game id is legal
+    const clash = [...religions, ...faiths]
+      .filter((x) => x.inMod)
+      .find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (clash) return { ok: false, error: `ID ${def.id} already exists in ${clash.file}` }
+    religions.push({ ...def, file, inMod: true, localizedName: null })
+    return { ok: true }
+  },
+  createFaith: async (_modPath, religionId, def) => {
+    const parent = religions.find((r) => r.id.toLowerCase() === religionId.toLowerCase())
+    if (!parent?.inMod) {
+      return { ok: false, error: `Religion ${religionId} isn't defined in the mod` }
+    }
+    const clash = [...religions, ...faiths]
+      .filter((x) => x.inMod)
+      .find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (clash) return { ok: false, error: `ID ${def.id} already exists in ${clash.file}` }
+    faiths.push({
+      ...def,
+      file: parent.file,
+      inMod: true,
+      religion: parent.id,
+      color: def.color === null ? null : { hex: def.color, raw: def.color, editable: true },
+      localizedName: null
+    })
     return { ok: true }
   },
   getFaithIcons: async (_g, _m, _r, icons) => Object.fromEntries(icons.map((i) => [i, null])),
