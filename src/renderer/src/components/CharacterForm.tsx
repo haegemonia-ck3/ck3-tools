@@ -327,7 +327,7 @@ export default function CharacterForm({
             </ToggleGroup>
           )}
         </FieldLegend>
-        <div className="flex gap-2.5 *:flex-1">
+        <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {dateField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
             placeholder: 'Y.M.D',
