@@ -1,5 +1,5 @@
 /**
- * Pure selection/derivation helpers for the Faith Editor.
+ * Pure selection/derivation helpers for the Faith and Religion Editors.
  *
  * Ids are matched case-insensitively while raw spellings are preserved for
  * display and writing, like everywhere else in the app. Characters may profess
@@ -12,22 +12,32 @@ import type { DoctrineGroup, FaithAdherent, ReligionData, RefEntry } from '@shar
 export const normId = (id: string): string => id.trim().toLowerCase()
 
 export interface FaithListRow {
-  kind: 'religion' | 'faith'
   /** Definition spelling when defined, else the spelling of the first reference */
   id: string
   /** Localized display name, or null when localization has none */
   name: string | null
-  /** A faith's religion, a religion's family */
-  parent: string | null
-  /** Swatch as "#rrggbb"; religions have none of their own */
+  /** Parent religion id as written; null only for an undefined faith */
+  religion: string | null
+  /** Swatch as "#rrggbb" */
   color: string | null
-  /** Characters in the mod's history professing this faith (a religion sums its faiths') */
+  /** Characters in the mod's history professing this faith */
   adherents: number
-  /** Religions only: how many faiths the definition carries */
-  faiths: number
   defined: boolean
   inMod: boolean
   file: string | null
+}
+
+export interface ReligionListRow {
+  id: string
+  name: string | null
+  /** `family =` value as written */
+  family: string | null
+  /** How many faiths the definition carries */
+  faiths: number
+  /** Sum of its faiths' adherents */
+  adherents: number
+  inMod: boolean
+  file: string
 }
 
 /** Adherent count per faith, keyed by normalized faith id. */
@@ -56,48 +66,22 @@ export function adherentsOfReligion(data: ReligionData, religionId: string): Fai
   return data.adherents.filter((a) => ids.has(normId(a.faith)))
 }
 
-/** Every religion and faith the scan found, plus faiths only the history references. */
-export function buildRows(data: ReligionData): FaithListRow[] {
+/** Every faith the scan found, plus faiths only the history references. */
+export function buildFaithRows(data: ReligionData): FaithListRow[] {
   const counts = adherentCounts(data.adherents)
-  const rows: FaithListRow[] = []
+  const rows: FaithListRow[] = data.faiths.map((f) => ({
+    id: f.id,
+    name: f.localizedName,
+    religion: f.religion,
+    color: f.color?.hex ?? null,
+    adherents: counts.get(normId(f.id)) ?? 0,
+    defined: true,
+    inMod: f.inMod,
+    file: f.file
+  }))
 
-  const faithsPerReligion = new Map<string, number>()
-  const adherentsPerReligion = new Map<string, number>()
-  for (const f of data.faiths) {
-    const r = normId(f.religion)
-    faithsPerReligion.set(r, (faithsPerReligion.get(r) ?? 0) + 1)
-    adherentsPerReligion.set(r, (adherentsPerReligion.get(r) ?? 0) + (counts.get(normId(f.id)) ?? 0))
-  }
-
-  for (const r of data.religions) {
-    rows.push({
-      kind: 'religion',
-      id: r.id,
-      name: r.localizedName,
-      parent: r.family,
-      color: null,
-      adherents: adherentsPerReligion.get(normId(r.id)) ?? 0,
-      faiths: faithsPerReligion.get(normId(r.id)) ?? 0,
-      defined: true,
-      inMod: r.inMod,
-      file: r.file
-    })
-  }
-  for (const f of data.faiths) {
-    rows.push({
-      kind: 'faith',
-      id: f.id,
-      name: f.localizedName,
-      parent: f.religion,
-      color: f.color?.hex ?? null,
-      adherents: counts.get(normId(f.id)) ?? 0,
-      faiths: 0,
-      defined: true,
-      inMod: f.inMod,
-      file: f.file
-    })
-  }
-
+  // A professed faith defined nowhere the scan can see still gets a row, so
+  // its adherents stay reachable — just without editable metadata
   const defined = new Set(data.faiths.map((f) => normId(f.id)))
   const dangling = new Map<string, string>() // norm -> first raw spelling
   for (const a of data.adherents) {
@@ -106,19 +90,41 @@ export function buildRows(data: ReligionData): FaithListRow[] {
   }
   for (const [key, raw] of dangling) {
     rows.push({
-      kind: 'faith',
       id: raw,
       name: null,
-      parent: null,
+      religion: null,
       color: null,
       adherents: counts.get(key) ?? 0,
-      faiths: 0,
       defined: false,
       inMod: false,
       file: null
     })
   }
   return rows
+}
+
+/** Every religion the scan found, with faith and rolled-up adherent counts. */
+export function buildReligionRows(data: ReligionData): ReligionListRow[] {
+  const counts = adherentCounts(data.adherents)
+  const faithsPerReligion = new Map<string, number>()
+  const adherentsPerReligion = new Map<string, number>()
+  for (const f of data.faiths) {
+    const r = normId(f.religion)
+    faithsPerReligion.set(r, (faithsPerReligion.get(r) ?? 0) + 1)
+    adherentsPerReligion.set(
+      r,
+      (adherentsPerReligion.get(r) ?? 0) + (counts.get(normId(f.id)) ?? 0)
+    )
+  }
+  return data.religions.map((r) => ({
+    id: r.id,
+    name: r.localizedName,
+    family: r.family,
+    faiths: faithsPerReligion.get(normId(r.id)) ?? 0,
+    adherents: adherentsPerReligion.get(normId(r.id)) ?? 0,
+    inMod: r.inMod,
+    file: r.file
+  }))
 }
 
 /**

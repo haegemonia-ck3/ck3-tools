@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
-import { getReligionData, saveFaith, saveReligion } from './religions'
+import {
+  createFaith,
+  createReligion,
+  getReligionData,
+  listReligionFiles,
+  saveFaith,
+  saveReligion
+} from './religions'
 
 // Synthetic game/mod layout in a temp dir — never touches real CK3 files
 const root = mkdtempSync(join(tmpdir(), 'ck3-tools-religions-'))
@@ -412,5 +419,212 @@ describe('saveReligion', () => {
     expect(readFileSync(join(modPath, 'common/religion/religion_types/bare.txt'), 'utf-8')).toContain(
       '\tpiety_icon_group = "pagan"'
     )
+  })
+})
+describe('createReligion', () => {
+  const path = join(modPath, 'common/religion/religion_types/HAAO_new.txt')
+  const def = (over = {}) => ({
+    id: 'illyrian_religion',
+    family: 'rf_pagan',
+    graphicalFaith: 'pagan_gfx',
+    pietyIconGroup: 'pagan',
+    doctrines: ['doctrine_no_head'],
+    ...over
+  })
+
+  it('appends a new block with an empty faiths list to a fresh file', () => {
+    expect(createReligion(modPath, 'HAAO_new.txt', def())).toEqual({ ok: true })
+    expect(readFileSync(path, 'utf-8')).toBe(
+      [
+        'illyrian_religion = {',
+        '\tfamily = rf_pagan',
+        '\tgraphical_faith = pagan_gfx',
+        '\tpiety_icon_group = "pagan"',
+        '\tdoctrine = doctrine_no_head',
+        '',
+        '\tfaiths = {',
+        '\t}',
+        '}',
+        ''
+      ].join('\n')
+    )
+    // The scan picks the new religion up, editable
+    const created = load().religions.find((r) => r.id === 'illyrian_religion')!
+    expect(created).toMatchObject({ inMod: true, family: 'rf_pagan', file: 'HAAO_new.txt' })
+  })
+
+  it('appends to an existing file without touching its bytes', () => {
+    const target = join(modPath, 'common/religion/religion_types/HAAO_hellenic.txt')
+    const before = readFileSync(target, 'utf-8')
+    expect(createReligion(modPath, 'HAAO_hellenic.txt', def())).toEqual({ ok: true })
+    const after = readFileSync(target, 'utf-8')
+    expect(after.startsWith(before)).toBe(true)
+    expect(after).toContain('illyrian_religion = {')
+  })
+
+  it('skips blank optional fields', () => {
+    createReligion(modPath, 'HAAO_new.txt', def({ graphicalFaith: null, pietyIconGroup: '  ', doctrines: [] }))
+    const text = readFileSync(path, 'utf-8')
+    expect(text).not.toContain('graphical_faith')
+    expect(text).not.toContain('piety_icon_group')
+    expect(text).not.toContain('doctrine =')
+  })
+
+  it('rejects a missing family, a bad id, a clash, and a bad file name', () => {
+    expect(createReligion(modPath, 'x.txt', def({ family: null }))).toEqual({
+      ok: false,
+      error: 'Family is required'
+    })
+    expect(createReligion(modPath, 'x.txt', def({ id: 'has space' })).ok).toBe(false)
+    expect(createReligion(modPath, 'x.txt', def({ id: 'Hellenism_Religion' }))).toEqual({
+      ok: false,
+      error: 'ID Hellenism_Religion already exists in HAAO_hellenic.txt'
+    })
+    // A faith id can't become a religion id either — deep links resolve both
+    expect(createReligion(modPath, 'x.txt', def({ id: 'olympian' }))).toEqual({
+      ok: false,
+      error: 'ID olympian is already a faith, defined in HAAO_hellenic.txt'
+    })
+    expect(createReligion(modPath, 'sub/dir.txt', def()).ok).toBe(false)
+    // Only mod ids block: shadowing the game's judaism_religion is legal
+    expect(createReligion(modPath, 'x.txt', def({ id: 'judaism_religion' }))).toEqual({ ok: true })
+  })
+})
+
+describe('createFaith', () => {
+  const path = join(modPath, 'common/religion/religion_types/HAAO_hellenic.txt')
+  const def = (over = {}) => ({
+    id: 'ionian_faith',
+    color: '#3366cc',
+    icon: 'delos_palm',
+    reformedIcon: null,
+    religiousHead: null,
+    holySites: ['delphi'],
+    doctrines: ['tenet_hero_cult'],
+    ...over
+  })
+
+  it('nests the new faith into the religion, keeping every original byte', () => {
+    const before = readFileSync(path, 'utf-8')
+    expect(createFaith(modPath, 'hellenism_religion', def())).toEqual({ ok: true })
+    const after = readFileSync(path, 'utf-8')
+    const block = [
+      '\t\tionian_faith = {',
+      '\t\t\tcolor = { 51 102 204 }',
+      '\t\t\ticon = delos_palm',
+      '\t\t\tholy_site = delphi',
+      '\t\t\tdoctrine = tenet_hero_cult',
+      '\t\t}'
+    ].join('\n')
+    expect(after).toContain(block)
+    // Removing exactly the inserted lines (with the blank line before them)
+    // recovers the original file
+    expect(after.replace('\n\n' + block, '')).toBe(before)
+    // The scan reads it back
+    const created = load().faiths.find((f) => f.id === 'ionian_faith')!
+    expect(created).toMatchObject({
+      religion: 'hellenism_religion',
+      inMod: true,
+      icon: 'delos_palm',
+      holySites: ['delphi'],
+      doctrines: ['tenet_hero_cult']
+    })
+    expect(created.color).toMatchObject({ hex: '#3366cc', editable: true })
+  })
+
+  it('creates the faiths block when the religion has none', () => {
+    writeFixture(
+      modPath,
+      'common/religion/religion_types/bare.txt',
+      ['bare_religion = {', '\tfamily = rf_pagan', '}', ''].join('\n')
+    )
+    expect(createFaith(modPath, 'bare_religion', def())).toEqual({ ok: true })
+    const text = readFileSync(join(modPath, 'common/religion/religion_types/bare.txt'), 'utf-8')
+    expect(text).toBe(
+      [
+        'bare_religion = {',
+        '\tfamily = rf_pagan',
+        '',
+        '\tfaiths = {',
+        '\t\tionian_faith = {',
+        '\t\t\tcolor = { 51 102 204 }',
+        '\t\t\ticon = delos_palm',
+        '\t\t\tholy_site = delphi',
+        '\t\t\tdoctrine = tenet_hero_cult',
+        '\t\t}',
+        '\t}',
+        '}',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('matches a CRLF file’s line endings and space indentation', () => {
+    writeFixture(
+      modPath,
+      'common/religion/religion_types/crlf.txt',
+      ['crlf_religion = {', '  family = rf_pagan', '  faiths = {', '  }', '}', ''].join('\r\n')
+    )
+    expect(createFaith(modPath, 'crlf_religion', def({ holySites: [], doctrines: [] }))).toEqual({
+      ok: true
+    })
+    const text = readFileSync(join(modPath, 'common/religion/religion_types/crlf.txt'), 'utf-8')
+    expect(text).toBe(
+      [
+        'crlf_religion = {',
+        '  family = rf_pagan',
+        '  faiths = {',
+        '    ionian_faith = {',
+        '      color = { 51 102 204 }',
+        '      icon = delos_palm',
+        '    }',
+        '  }',
+        '}',
+        ''
+      ].join('\r\n')
+    )
+  })
+
+  it('rejects clashes, cross-kind ids, and a religion the mod does not define', () => {
+    expect(createFaith(modPath, 'hellenism_religion', def({ id: 'Olympian' }))).toEqual({
+      ok: false,
+      error: 'ID Olympian already exists in HAAO_hellenic.txt'
+    })
+    expect(createFaith(modPath, 'hellenism_religion', def({ id: 'hellenism_religion' }))).toEqual({
+      ok: false,
+      error: 'ID hellenism_religion is already a religion, defined in HAAO_hellenic.txt'
+    })
+    const gameParent = createFaith(modPath, 'judaism_religion', def())
+    expect(!gameParent.ok && gameParent.error).toContain(
+      "isn't defined in the mod"
+    )
+    // Shadowing a game faith id is legal
+    expect(createFaith(modPath, 'hellenism_religion', def({ id: 'rabbinism' }))).toEqual({
+      ok: true
+    })
+  })
+
+  it('a created faith round-trips through a no-op save byte-for-byte', () => {
+    createFaith(modPath, 'hellenism_religion', def())
+    const before = readFileSync(path, 'utf-8')
+    const f = load().faiths.find((x) => x.id === 'ionian_faith')!
+    expect(
+      saveFaith(modPath, f.file, f.religion, f.id, {
+        color: f.color?.hex ?? null,
+        icon: f.icon,
+        reformedIcon: f.reformedIcon,
+        religiousHead: f.religiousHead,
+        doctrines: [...f.doctrines],
+        holySites: [...f.holySites]
+      })
+    ).toEqual({ ok: true })
+    expect(readFileSync(path, 'utf-8')).toBe(before)
+  })
+})
+
+describe('listReligionFiles', () => {
+  it('lists only the mod folder, sorted, and tolerates a missing folder', () => {
+    expect(listReligionFiles(modPath)).toEqual(['HAAO_hellenic.txt'])
+    expect(listReligionFiles(join(modPath, 'nope'))).toEqual([])
   })
 })

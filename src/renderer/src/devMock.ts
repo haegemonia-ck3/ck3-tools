@@ -706,6 +706,32 @@ const mock: Ck3ToolsApi = {
     Object.assign(r, patch)
     return { ok: true }
   },
+  listReligionFiles: async () =>
+    [...new Set(religions.filter((r) => r.inMod).map((r) => r.file))].sort(),
+  createReligion: async (_modPath, file, def) => {
+    if (!def.family?.trim()) return { ok: false, error: 'Family is required' }
+    const clash = [...religions, ...faiths].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (clash) return { ok: false, error: `ID ${def.id} already exists in ${clash.file}` }
+    religions.push({ ...def, file, inMod: true, localizedName: null })
+    return { ok: true }
+  },
+  createFaith: async (_modPath, religionId, def) => {
+    const parent = religions.find((r) => r.id.toLowerCase() === religionId.toLowerCase())
+    if (!parent?.inMod) {
+      return { ok: false, error: `Religion ${religionId} isn't defined in the mod` }
+    }
+    const clash = [...religions, ...faiths].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (clash) return { ok: false, error: `ID ${def.id} already exists in ${clash.file}` }
+    faiths.push({
+      ...def,
+      file: parent.file,
+      inMod: true,
+      religion: parent.id,
+      color: def.color === null ? null : { hex: def.color, raw: def.color, editable: true },
+      localizedName: null
+    })
+    return { ok: true }
+  },
   getFaithIcons: async (_g, _m, _r, icons) => Object.fromEntries(icons.map((i) => [i, null])),
   listFaithIcons: async () => ['delos_palm', 'hellenic', 'hellenic_reformed', 'orthodox'],
   getTraitIcons: async (_g, _m, _r, traits) =>

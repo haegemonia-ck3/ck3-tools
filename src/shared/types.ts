@@ -483,6 +483,27 @@ export interface ReligionPatch {
 }
 
 /**
+ * A brand-new religion definition: an id for the top-level block plus the
+ * same editable fields a patch carries. `family` is mandatory (the game
+ * requires one); null or blank fields are simply not written. The block is
+ * created with an empty `faiths = { }` ready to take faiths.
+ */
+export interface NewReligion extends ReligionPatch {
+  /** Top-level key of the new block, e.g. "hellenism_religion" */
+  id: string
+}
+
+/**
+ * A brand-new faith definition. Unlike every other created entity it is NOT a
+ * top-level block: it nests into its religion's `faiths = { … }` block, so
+ * creation targets a religion (which must be defined in the mod) rather than
+ * a file.
+ */
+export interface NewFaith extends FaithPatch {
+  id: string
+}
+
+/**
  * A brand-new dynasty definition: an id for the block plus the same editable
  * fields a patch carries. Null (or blank) fields are simply not written.
  */

@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
 import { makeEditor, setRepeatedScalar, setScalar } from './lineEditor'
+import { KEY_CHARS, appendBlock, isTxtFileName } from './scriptFile'
 import { readLocalization } from './localization'
 import { annotateLines, scanBlocks, scanRepeatedScalarCI, scanScalarsCI } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
@@ -10,6 +11,8 @@ import type {
   FaithColor,
   FaithDef,
   FaithPatch,
+  NewFaith,
+  NewReligion,
   RefEntry,
   ReligionData,
   ReligionDef,
@@ -531,6 +534,211 @@ export function saveReligion(
     setScalar(ed, ['piety_icon_group'], patch.pietyIconGroup, { quoteNew: true, ignoreCase: true })
     setRepeatedScalar(ed, 'doctrine', patch.doctrines, { ignoreCase: true })
     writeFileSync(path, spliceBody(text, religion, ed.lines.join('\n')), 'utf-8')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// ---------- Creating ----------
+
+/** .txt files under the mod's religion_types folder, for the create panel's picker. */
+export function listReligionFiles(modPath: string): string[] {
+  const dir = join(modPath, ...RELIGION_DIR.split('/'))
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.txt'))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * Every religion and faith id the mod itself defines, normalized, mapped to
+ * the file it lives in. Only the mod's own files: shadowing a base-game id is
+ * a legal way to override it, so that stays the caller's call.
+ */
+function modDefinitions(modPath: string): {
+  religions: Map<string, string>
+  faiths: Map<string, string>
+} {
+  const religions = new Map<string, string>()
+  const faiths = new Map<string, string>()
+  for (const path of effectiveFiles(null, modPath, [], RELIGION_DIR)) {
+    let text: string
+    try {
+      text = readFileSync(path, 'utf-8')
+    } catch {
+      continue
+    }
+    const file = basename(path)
+    for (const religion of scanBlocks(text)) {
+      if (!religions.has(norm(religion.key))) religions.set(norm(religion.key), file)
+      const body = text.slice(religion.bodyStart, religion.bodyEnd)
+      const list = faithsBlock(body)
+      if (list === null) continue
+      for (const faith of scanBlocks(body.slice(list.bodyStart, list.bodyEnd))) {
+        if (!faiths.has(norm(faith.key))) faiths.set(norm(faith.key), file)
+      }
+    }
+  }
+  return { religions, faiths }
+}
+
+/**
+ * Reject an id the mod already uses. Religions and faiths are separate
+ * databases in the game, but the editor resolves a deep-linked id against
+ * both, so a cross-kind clash is ambiguous here and rejected too.
+ */
+function newIdError(modPath: string, kind: 'religion' | 'faith', rawId: string): string | null {
+  const id = rawId.trim()
+  if (!id) return 'ID must not be empty'
+  if (!KEY_CHARS.test(id)) return `Invalid ID "${id}" (letters, digits, _ . - ' only)`
+  const defs = modDefinitions(modPath)
+  for (const other of ['religion', 'faith'] as const) {
+    const clash = (other === 'religion' ? defs.religions : defs.faiths).get(norm(id))
+    if (clash === undefined) continue
+    return other === kind
+      ? `ID ${id} already exists in ${clash}`
+      : `ID ${id} is already a ${other}, defined in ${clash}`
+  }
+  return null
+}
+
+/** "#rrggbb" -> "{ r g b }" in 0-255 integers, the unambiguous triple form. */
+function colorTriple(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  return `{ ${r} ${g} ${b} }`
+}
+
+/**
+ * The scalar and repeated lines of a new faith body, unindented — the caller
+ * prefixes each line with where the block lands.
+ */
+function newFaithLines(def: NewFaith): string[] {
+  const lines: string[] = []
+  if (def.color !== null && /^#[0-9a-fA-F]{6}$/.test(def.color)) {
+    lines.push(`color = ${colorTriple(def.color)}`)
+  }
+  const scalar = (key: string, value: string | null): void => {
+    if (value !== null && value.trim() !== '') lines.push(`${key} = ${value.trim()}`)
+  }
+  scalar('icon', def.icon)
+  scalar('reformed_icon', def.reformedIcon)
+  scalar('religious_head', def.religiousHead)
+  for (const site of def.holySites) lines.push(`holy_site = ${site}`)
+  for (const doctrine of def.doctrines) lines.push(`doctrine = ${doctrine}`)
+  return lines
+}
+
+/**
+ * Append a brand-new religion block to one of the mod's files (created if
+ * missing), with an empty `faiths = { }` ready to take faiths. Existing
+ * content is preserved byte-for-byte; the block follows a separating blank
+ * line, in the file's own line-ending style.
+ */
+export function createReligion(modPath: string, file: string, def: NewReligion): SaveResult {
+  try {
+    const idError = newIdError(modPath, 'religion', def.id)
+    if (idError !== null) return { ok: false, error: idError }
+    if (!isTxtFileName(file)) {
+      return { ok: false, error: `Invalid file name "${file}" (expected a .txt file name)` }
+    }
+    if (!def.family?.trim()) return { ok: false, error: 'Family is required' }
+
+    const id = def.id.trim()
+    const lines = [`${id} = {`, `\tfamily = ${def.family.trim()}`]
+    if (def.graphicalFaith?.trim()) lines.push(`\tgraphical_faith = ${def.graphicalFaith.trim()}`)
+    if (def.pietyIconGroup?.trim()) {
+      lines.push(`\tpiety_icon_group = "${def.pietyIconGroup.trim()}"`)
+    }
+    for (const doctrine of def.doctrines) lines.push(`\tdoctrine = ${doctrine}`)
+    lines.push('', '\tfaiths = {', '\t}', '}')
+    appendBlock(join(modPath, ...RELIGION_DIR.split('/')), file, lines)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** Leading whitespace of the line `offset` sits on. */
+function lineIndentAt(text: string, offset: number): string {
+  const lineStart = text.lastIndexOf('\n', offset - 1) + 1
+  return text.slice(lineStart).match(/^[ \t]*/)![0]
+}
+
+/**
+ * Nest a brand-new faith block into `religionId`'s `faiths = { … }` block —
+ * created at the end of the religion's body when it doesn't exist yet. The
+ * religion must be defined in the mod: game files can't be edited, and CK3
+ * offers no way to extend a religion's faith list from outside its block, so
+ * a game religion has to be copied into the mod first.
+ *
+ * Everything outside the splice point survives byte-for-byte; inserted lines
+ * follow the file's own indentation unit and line-ending style.
+ */
+export function createFaith(modPath: string, religionId: string, def: NewFaith): SaveResult {
+  try {
+    const idError = newIdError(modPath, 'faith', def.id)
+    if (idError !== null) return { ok: false, error: idError }
+
+    let found: { path: string; text: string; religion: BlockSpan } | null = null
+    for (const path of effectiveFiles(null, modPath, [], RELIGION_DIR)) {
+      let text: string
+      try {
+        text = readFileSync(path, 'utf-8')
+      } catch {
+        continue
+      }
+      const religion = scanBlocks(text).find((b) => norm(b.key) === norm(religionId))
+      if (religion) {
+        found = { path, text, religion }
+        break
+      }
+    }
+    if (found === null) {
+      return {
+        ok: false,
+        error: `Religion ${religionId} isn't defined in the mod — copy a game religion into the mod before adding faiths to it`
+      }
+    }
+
+    const { path, text, religion } = found
+    const eol = text.includes('\r\n') ? '\r\n' : '\n'
+    const body = text.slice(religion.bodyStart, religion.bodyEnd)
+    // One indentation level, as the file writes it (religion children sit one
+    // level in); faiths' children sit two, their scalars three
+    const unit = makeEditor(body).indent
+    const id = def.id.trim()
+    const block = [
+      `${unit}${unit}${id} = {`,
+      ...newFaithLines(def).map((l) => `${unit}${unit}${unit}${l}`),
+      `${unit}${unit}}`
+    ]
+
+    const list = faithsBlock(body)
+    let newBody: string
+    if (list !== null) {
+      // Splice before the faiths block's closing brace, after its last content
+      const inner = body.slice(list.bodyStart, list.bodyEnd)
+      const trailing = inner.match(/\s*$/)![0]
+      const content = inner.slice(0, inner.length - trailing.length)
+      const closingIndent = trailing.includes('\n')
+        ? trailing.slice(trailing.lastIndexOf('\n') + 1)
+        : lineIndentAt(body, list.start)
+      const sep = content === '' ? eol : eol + eol
+      const newInner = content + sep + block.join(eol) + eol + closingIndent
+      newBody = body.slice(0, list.bodyStart) + newInner + body.slice(list.bodyEnd)
+    } else {
+      // No faiths block at all — append one at the end of the religion's body
+      const trailing = body.match(/\s*$/)![0]
+      const content = body.slice(0, body.length - trailing.length)
+      const closingIndent = trailing.includes('\n')
+        ? trailing.slice(trailing.lastIndexOf('\n') + 1)
+        : lineIndentAt(text, religion.start)
+      const faithsLines = [`${unit}faiths = {`, ...block, `${unit}}`]
+      const sep = content === '' ? eol : eol + eol
+      newBody = content + sep + faithsLines.join(eol) + eol + closingIndent
+    }
+    writeFileSync(path, spliceBody(text, religion, newBody), 'utf-8')
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

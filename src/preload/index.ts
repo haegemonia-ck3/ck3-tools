@@ -16,7 +16,9 @@ import type {
   HousePatch,
   ModInfo,
   NewDynasty,
+  NewFaith,
   NewHouse,
+  NewReligion,
   RefKind,
   RefLocation,
   ReferenceData,
@@ -131,6 +133,12 @@ const api = {
     religionId: string,
     patch: ReligionPatch
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveReligion', modPath, file, religionId, patch),
+  listReligionFiles: (modPath: string): Promise<string[]> =>
+    ipcRenderer.invoke('ck3:listReligionFiles', modPath),
+  createReligion: (modPath: string, file: string, def: NewReligion): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createReligion', modPath, file, def),
+  createFaith: (modPath: string, religionId: string, def: NewFaith): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createFaith', modPath, religionId, def),
   getFaithIcons: (
     gameDir: string | null,
     modPath: string | null,

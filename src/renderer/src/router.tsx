@@ -11,6 +11,7 @@ import CharacterEditorPage from './pages/CharacterEditorPage'
 import CultureEditorPage from './pages/CultureEditorPage'
 import DynastyEditorPage from './pages/DynastyEditorPage'
 import FaithEditorPage from './pages/FaithEditorPage'
+import ReligionEditorPage from './pages/ReligionEditorPage'
 
 /**
  * Deep-link target for the character editor (e.g. from a family-tree node).
@@ -52,12 +53,25 @@ export interface DynastySearch {
 
 /**
  * Deep-link target for the faith editor (e.g. a character's Faith field, or a
- * religion's faith list). `kind` says which list to open the id in; the page
- * falls back to the other list when the id isn't found there.
+ * religion's faith list). An id that turns out to be a religion is handed over
+ * to the Religion Editor. With `create` set, the page opens the new-faith
+ * panel instead of a row, and `religion` prefills the parent — so "Add faith"
+ * on a religion can pass itself.
  */
 export interface FaithSearch {
   id?: string
-  kind?: 'religion' | 'faith'
+  create?: boolean
+  religion?: string
+}
+
+/**
+ * Deep-link target for the religion editor (e.g. a faith's Religion field).
+ * An id that turns out to be a faith is handed over to the Faith Editor.
+ * With `create` set, the page opens the new-religion panel instead of a row.
+ */
+export interface ReligionSearch {
+  id?: string
+  create?: boolean
 }
 
 /**
@@ -130,7 +144,18 @@ const faithsRoute = createRoute({
   component: FaithEditorPage,
   validateSearch: (search: Record<string, unknown>): FaithSearch => ({
     id: typeof search.id === 'string' ? search.id : undefined,
-    kind: search.kind === 'religion' || search.kind === 'faith' ? search.kind : undefined
+    create: search.create === true || search.create === 'true' ? true : undefined,
+    religion: typeof search.religion === 'string' ? search.religion : undefined
+  })
+})
+
+const religionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/religions',
+  component: ReligionEditorPage,
+  validateSearch: (search: Record<string, unknown>): ReligionSearch => ({
+    id: typeof search.id === 'string' ? search.id : undefined,
+    create: search.create === true || search.create === 'true' ? true : undefined
   })
 })
 
@@ -149,6 +174,7 @@ const routeTree = rootRoute.addChildren([
   charactersRoute,
   dynastiesRoute,
   faithsRoute,
+  religionsRoute,
   culturesRoute
 ])
 
