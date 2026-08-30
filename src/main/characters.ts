@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import {
   endOfBodyIndex,
@@ -10,6 +10,7 @@ import {
   SCALAR_LINE
 } from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
+import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
 import type { LineEditor } from './lineEditor'
 import type {
   CharacterDetail,
@@ -610,9 +611,6 @@ export function setCharacterDna(
 
 // ---------- Creating ----------
 
-/** Same charset the block scanner and line editor accept for keys. */
-const ID_CHARS = /^[A-Za-z0-9_.\-']+$/
-
 export function listCharacterFiles(modPath: string): string[] {
   const dir = charactersDir(modPath)
   if (!existsSync(dir)) return []
@@ -634,14 +632,10 @@ export function createCharacter(
   try {
     const id = detail.id.trim()
     if (!id) return { ok: false, error: 'ID must not be empty' }
-    if (!ID_CHARS.test(id)) {
+    if (!KEY_CHARS.test(id)) {
       return { ok: false, error: `Invalid ID "${id}" (letters, digits, _ . - ' only)` }
     }
-    if (
-      !file.toLowerCase().endsWith('.txt') ||
-      file.length <= 4 ||
-      !/^[^\\/:*?"<>|]+$/.test(file)
-    ) {
+    if (!isTxtFileName(file)) {
       return { ok: false, error: `Invalid file name "${file}" (expected a .txt file name)` }
     }
     const required: [string, string | null][] = [
@@ -662,11 +656,6 @@ export function createCharacter(
     if (spouseError) return { ok: false, error: spouseError }
     const clash = listCharacters(modPath).find((c) => c.id === id)
     if (clash) return { ok: false, error: `ID ${id} already exists in ${clash.file}` }
-
-    const dir = charactersDir(modPath)
-    const path = join(dir, file)
-    const existing = existsSync(path) ? readFileSync(path, 'utf-8') : null
-    const eol = existing !== null && existing.includes('\r\n') ? '\r\n' : '\n'
 
     const t = '\t'
     const lines: string[] = [`${id} = {`]
@@ -706,13 +695,7 @@ export function createCharacter(
       lines.push(`${t}${date} = {`, ...statements.map((x) => `${t}${t}${x}`), `${t}}`)
     }
     lines.push('}')
-    const block = lines.join(eol) + eol
-
-    let prefix = existing ?? ''
-    if (prefix !== '' && !prefix.endsWith('\n')) prefix += eol
-    if (prefix !== '' && !/(\r?\n){2}$/.test(prefix)) prefix += eol
-    if (existing === null) mkdirSync(dir, { recursive: true })
-    writeFileSync(path, prefix + block, 'utf-8')
+    appendBlock(charactersDir(modPath), file, lines)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

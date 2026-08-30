@@ -5,16 +5,26 @@ import { makeEditor, setScalar } from './lineEditor'
 import { readLocalization } from './localization'
 import { annotateLines, scanBlocks } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
+import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
 import type { BlockSpan } from './pdx'
 import type {
   DynastyCharacter,
   DynastyData,
   DynastyDef,
+  DynastyFiles,
   DynastyPatch,
   HouseDef,
   HousePatch,
+  NewDynasty,
+  NewHouse,
   SaveResult
 } from '@shared/types'
+
+/** Where each kind of definition lives, relative to the mod's content root. */
+const DEF_DIR = {
+  dynasty: 'common/dynasties',
+  house: 'common/dynasty_houses'
+} as const
 
 /** Id comparison key: real files reference `Phokus` as `phokus`, `7` as `"7"`. */
 function norm(id: string): string {
@@ -204,11 +214,11 @@ export function getDynastyData(
   replacePaths: string[]
 ): DynastyData {
   const characters = modPath ? listDynastyCharacters(modPath) : []
-  const dynastyRaw = readDefs(effectiveFiles(gameDir, modPath, replacePaths, 'common/dynasties'), modPath)
-  const houseRaw = readDefs(
-    effectiveFiles(gameDir, modPath, replacePaths, 'common/dynasty_houses'),
+  const dynastyRaw = readDefs(
+    effectiveFiles(gameDir, modPath, replacePaths, DEF_DIR.dynasty),
     modPath
   )
+  const houseRaw = readDefs(effectiveFiles(gameDir, modPath, replacePaths, DEF_DIR.house), modPath)
 
   // Game definitions are only shown when mod content points at them. Houses
   // layer first so that a game house pulled in by a mod character can in turn
@@ -250,11 +260,38 @@ export function getDynastyData(
   }))
   return { dynasties, houses, characters }
 }
-
 // ---------- Saving ----------
 
 /** [written key, new value, quote style for a newly inserted line] */
 type FieldPatch = [string, string | null, boolean]
+
+/**
+ * The written form of each editable field. `name`/`prefix`/`motto` point at
+ * localization keys and are quoted the way the game files write them; the
+ * `culture`/`dynasty` references are bare ids.
+ */
+function dynastyFields(patch: DynastyPatch): FieldPatch[] {
+  return [
+    ['name', patch.name, true],
+    ['prefix', patch.prefix, true],
+    ['motto', patch.motto, true],
+    ['culture', patch.culture, false]
+  ]
+}
+
+function houseFields(patch: HousePatch): FieldPatch[] {
+  return [
+    ['name', patch.name, true],
+    ['prefix', patch.prefix, true],
+    ['motto', patch.motto, true],
+    ['dynasty', patch.dynasty, false]
+  ]
+}
+
+/** Absolute path of one of the mod's definition files. */
+function defPath(modPath: string, kind: 'dynasty' | 'house', file: string): string {
+  return join(modPath, ...DEF_DIR[kind].split('/'), file)
+}
 
 function saveDef(path: string, file: string, id: string, fields: FieldPatch[]): SaveResult {
   try {
@@ -280,19 +317,107 @@ export function saveDynasty(
   id: string,
   patch: DynastyPatch
 ): SaveResult {
-  return saveDef(join(modPath, 'common', 'dynasties', file), file, id, [
-    ['name', patch.name, true],
-    ['prefix', patch.prefix, true],
-    ['motto', patch.motto, true],
-    ['culture', patch.culture, false]
-  ])
+  return saveDef(defPath(modPath, 'dynasty', file), file, id, dynastyFields(patch))
 }
 
 export function saveHouse(modPath: string, file: string, id: string, patch: HousePatch): SaveResult {
-  return saveDef(join(modPath, 'common', 'dynasty_houses', file), file, id, [
-    ['name', patch.name, true],
-    ['prefix', patch.prefix, true],
-    ['motto', patch.motto, true],
-    ['dynasty', patch.dynasty, false]
-  ])
+  return saveDef(defPath(modPath, 'house', file), file, id, houseFields(patch))
+}
+
+// ---------- Creating ----------
+
+function listTxt(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.txt'))
+    .sort((a, b) => a.localeCompare(b))
+}
+
+/** The mod's own definition files — the targets a new block can be written to. */
+export function listDynastyFiles(modPath: string): DynastyFiles {
+  return {
+    dynasties: listTxt(join(modPath, ...DEF_DIR.dynasty.split('/'))),
+    houses: listTxt(join(modPath, ...DEF_DIR.house.split('/')))
+  }
+}
+
+/**
+ * Every id the mod itself defines under `kind`, normalized, mapped to the file
+ * it lives in. Only the mod's own files: shadowing a base-game id is a legal
+ * way to override it, so that stays the caller's call.
+ */
+function modDefFiles(modPath: string, kind: 'dynasty' | 'house'): Map<string, string> {
+  const ids = new Map<string, string>()
+  for (const path of effectiveFiles(null, modPath, [], DEF_DIR[kind])) {
+    let text: string
+    try {
+      text = readFileSync(path, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const block of scanBlocks(text)) {
+      if (!ids.has(norm(block.key))) ids.set(norm(block.key), basename(path))
+    }
+  }
+  return ids
+}
+
+/**
+ * Append a brand-new definition block to one of the mod's files (created if
+ * missing). Existing content is preserved byte-for-byte; the block follows a
+ * separating blank line, in the file's own line-ending style.
+ */
+function createDef(
+  modPath: string,
+  kind: 'dynasty' | 'house',
+  file: string,
+  rawId: string,
+  fields: FieldPatch[]
+): SaveResult {
+  try {
+    const id = rawId.trim()
+    if (!id) return { ok: false, error: 'ID must not be empty' }
+    if (!KEY_CHARS.test(id)) {
+      return { ok: false, error: `Invalid ID "${id}" (letters, digits, _ . - ' only)` }
+    }
+    if (!isTxtFileName(file)) {
+      return { ok: false, error: `Invalid file name "${file}" (expected a .txt file name)` }
+    }
+    // Dynasties and houses are separate databases in the game, but the editor
+    // resolves an id against both lists, so a cross-kind clash is ambiguous here
+    for (const other of ['dynasty', 'house'] as const) {
+      const clash = modDefFiles(modPath, other).get(norm(id))
+      if (clash === undefined) continue
+      return {
+        ok: false,
+        error:
+          other === kind
+            ? `ID ${id} already exists in ${clash}`
+            : `ID ${id} is already a ${other}, defined in ${clash}`
+      }
+    }
+
+    const lines = [`${id} = {`]
+    for (const [key, value, quoteNew] of fields) {
+      if (value === null || value.trim() === '') continue
+      lines.push(`\t${key} = ${quoteNew ? `"${value}"` : value}`)
+    }
+    lines.push('}')
+    appendBlock(join(modPath, ...DEF_DIR[kind].split('/')), file, lines)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export function createDynasty(modPath: string, file: string, def: NewDynasty): SaveResult {
+  if (!def.name?.trim()) return { ok: false, error: 'Name is required' }
+  return createDef(modPath, 'dynasty', file, def.id, dynastyFields(def))
+}
+
+export function createHouse(modPath: string, file: string, def: NewHouse): SaveResult {
+  if (!def.name?.trim()) return { ok: false, error: 'Name is required' }
+  // A house with no parent dynasty is rejected by the game itself
+  if (!def.dynasty?.trim()) return { ok: false, error: 'Dynasty is required' }
+  return createDef(modPath, 'house', file, def.id, houseFields(def))
 }

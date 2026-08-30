@@ -17,14 +17,29 @@ import {
   saveCharacter
 } from './characters'
 import { applyRulerDesignerDna, getDnaPasteInfo } from './dna'
-import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
+import {
+  createDynasty,
+  createHouse,
+  getDynastyData,
+  listDynastyFiles,
+  saveDynasty,
+  saveHouse
+} from './dynasties'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
 import { getFlatIcons } from './icons'
 import { getSkillIcons } from './skillIcons'
 import { getCoatsOfArms } from './coatOfArms'
 import { detectEditors, openInEditor } from './editor'
-import type { AppSettings, CharacterDetail, DynastyPatch, HousePatch, RefKind } from '@shared/types'
+import type {
+  AppSettings,
+  CharacterDetail,
+  DynastyPatch,
+  HousePatch,
+  NewDynasty,
+  NewHouse,
+  RefKind
+} from '@shared/types'
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -127,6 +142,13 @@ function registerIpc(): void {
     'ck3:saveHouse',
     (_e, modPath: string, file: string, id: string, patch: HousePatch) =>
       saveHouse(modPath, file, id, patch)
+  )
+  ipcMain.handle('ck3:listDynastyFiles', (_e, modPath: string) => listDynastyFiles(modPath))
+  ipcMain.handle('ck3:createDynasty', (_e, modPath: string, file: string, def: NewDynasty) =>
+    createDynasty(modPath, file, def)
+  )
+  ipcMain.handle('ck3:createHouse', (_e, modPath: string, file: string, def: NewHouse) =>
+    createHouse(modPath, file, def)
   )
   ipcMain.handle(
     'ck3:getTraitIcons',

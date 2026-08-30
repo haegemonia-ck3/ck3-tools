@@ -236,6 +236,28 @@ export interface HousePatch {
 }
 
 /**
+ * A brand-new dynasty definition: an id for the block plus the same editable
+ * fields a patch carries. Null (or blank) fields are simply not written.
+ */
+export interface NewDynasty extends DynastyPatch {
+  /** Top-level key of the new block, e.g. "dynn_Komnenos" or "25061" */
+  id: string
+}
+
+/** A brand-new house definition; `dynasty` (the parent) is mandatory. */
+export interface NewHouse extends HousePatch {
+  id: string
+}
+
+/** The .txt files a new dynasty or house definition can be written to. */
+export interface DynastyFiles {
+  /** File names within common/dynasties */
+  dynasties: string[]
+  /** File names within common/dynasty_houses */
+  houses: string[]
+}
+
+/**
  * A reference id paired with its display name. `name` is the localized name
  * when one could be resolved (cultures/faiths key off the id, traits off
  * `trait_<id>`, dynasties/houses off their `name` scalar), and null for
