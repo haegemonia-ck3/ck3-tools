@@ -241,11 +241,21 @@ export default function CharacterDetailPanel({
    * unsaved edits stay unsaved.
    */
   const dnaApplied = async (): Promise<void> => {
-    const d = await window.ck3tools.getCharacter(modPath, file, original.id)
-    if (!d) return
-    setOriginal(d)
-    setDraft((prev) => (prev ? { ...prev, dna: d.dna } : prev))
-    setStale(false)
+    try {
+      const d = await window.ck3tools.getCharacter(modPath, file, original.id)
+      if (!d) {
+        setError('The DNA was applied, but the character could not be re-read from its file.')
+        return
+      }
+      setOriginal(d)
+      setDraft((prev) => (prev ? { ...prev, dna: d.dna } : prev))
+      setStale(false)
+    } catch (err) {
+      console.error('[CharacterDetailPanel] reload after DNA paste failed:', err)
+      setError(
+        `The DNA was applied, but reloading the character failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
   }
 
   /** Mother ids resolve to a display name through the mod-wide character list */

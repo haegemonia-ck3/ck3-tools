@@ -72,11 +72,19 @@ export default function RulerDesignerDnaDialog({
     setNewDnaFile('')
     setNewModifierFile('')
     setError(null)
-    window.ck3tools.getDnaPasteInfo(modPath, characterFile, characterId).then((i) => {
-      setInfo(i)
-      setDnaChoice(i.lockedDnaFile ?? (i.dnaFiles.length === 0 ? NEW_FILE : ''))
-      setModifierChoice(i.lockedModifierFile ?? (i.modifierFiles.length === 0 ? NEW_FILE : ''))
-    })
+    window.ck3tools
+      .getDnaPasteInfo(modPath, characterFile, characterId)
+      .then((i) => {
+        setInfo(i)
+        setDnaChoice(i.lockedDnaFile ?? (i.dnaFiles.length === 0 ? NEW_FILE : ''))
+        setModifierChoice(i.lockedModifierFile ?? (i.modifierFiles.length === 0 ? NEW_FILE : ''))
+      })
+      .catch((err) => {
+        console.error('[RulerDesignerDnaDialog] loading file info failed:', err)
+        setError(
+          `Couldn't read the mod's DNA/modifier files: ${err instanceof Error ? err.message : String(err)}`
+        )
+      })
   }, [open, modPath, characterFile, characterId])
 
   /** Resolve a picker to the file that will be written; typed names get .txt. */
@@ -113,6 +121,11 @@ export default function RulerDesignerDnaDialog({
       toast.success(`DNA ${info!.dnaKey} written to ${dnaFile}`)
       onOpenChange(false)
       onApplied()
+    } catch (err) {
+      // An invoke that REJECTS (handler crash, stale preload) rather than
+      // returning { ok: false } would otherwise vanish without a trace
+      console.error('[RulerDesignerDnaDialog] apply failed:', err)
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setApplying(false)
     }

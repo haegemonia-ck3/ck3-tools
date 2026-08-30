@@ -189,6 +189,29 @@ describe('applyRulerDesignerDna', () => {
     expect(readFileSync(historyPath, 'utf-8')).not.toContain('has_scripted_appearance')
   })
 
+  it('appends a new group to a comment-only modifier file (the mod-shipped example.txt case)', () => {
+    mkdirSync(join(modPath, 'gfx', 'portraits', 'portrait_modifiers'), { recursive: true })
+    const comments = '# The choice is made based on a weighted random\n#my_group = {\n#}\n'
+    writeFileSync(pmPath, comments, 'utf-8')
+    expect(apply()).toEqual({ ok: true })
+    const pm = readFileSync(pmPath, 'utf-8')
+    expect(pm.startsWith(comments)).toBe(true)
+    expect(pm).toContain('my_modifiers = {')
+    expect(pm).toContain('\tusage = game')
+    expect(pm).toContain('219_scripted_appearance = {')
+  })
+
+  it('never adds the entry to a customization group — a new group is appended instead', () => {
+    mkdirSync(join(modPath, 'gfx', 'portraits', 'portrait_modifiers'), { recursive: true })
+    const custom = 'custom_beards = {\n\tusage = customization\n\tinterface_position = 1\n}\n'
+    writeFileSync(pmPath, custom, 'utf-8')
+    expect(apply()).toEqual({ ok: true })
+    const pm = readFileSync(pmPath, 'utf-8')
+    expect(pm.startsWith(custom)).toBe(true)
+    expect(pm).toContain('my_modifiers = {')
+    expect(pm).toContain('219_scripted_appearance = {')
+  })
+
   it('fails before touching files when an accessory is unknown', () => {
     const bad = PASTE.replace('male_hair_mena_02', 'male_hair_does_not_exist')
     const result = apply(bad)

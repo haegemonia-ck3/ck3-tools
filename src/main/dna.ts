@@ -211,14 +211,16 @@ function modifierEntryLines(entryKey: string, characterId: string, picks: Access
  * Put the character's accessory entry into a portrait-modifier file. Any
  * existing entries for the character (in any group of the file) are removed
  * first, and the new entry lands in the group that held them — or the file's
- * first group, or a brand-new group named after the file.
+ * first `usage = game` / `selection_behavior = max` group, or a brand-new
+ * group named after the file (also covering a missing or comment-only file,
+ * and one whose groups serve another purpose, like barbershop customization).
  */
 function writeModifierEntry(
   modPath: string,
   file: string,
   characterId: string,
   picks: AccessoryPick[]
-): SaveResult {
+): void {
   const dir = join(modPath, ...MODIFIER_DIR)
   mkdirSync(dir, { recursive: true })
   const path = join(dir, file)
@@ -226,23 +228,27 @@ function writeModifierEntry(
   const entryKey = `${characterId}_scripted_appearance`
   const ref = characterRef(characterId)
 
-  if (!existsSync(path)) {
-    const group = file
+  const newGroupLines = (name: string): string[] => [
+    `${name} = {`,
+    '\tusage = game',
+    '\tselection_behavior = max',
+    '\tpriority = 2',
+    '',
+    ...modifierEntryLines(entryKey, characterId, picks),
+    '}'
+  ]
+  const groupName = (taken: Set<string>): string => {
+    let name = file
       .replace(/\.txt$/i, '')
       .replace(/[^A-Za-z0-9_]/g, '_')
       .toLowerCase()
-    const eol = '\n'
-    const lines = [
-      `${group} = {`,
-      '\tusage = game',
-      '\tselection_behavior = max',
-      '\tpriority = 2',
-      '',
-      ...modifierEntryLines(entryKey, characterId, picks),
-      '}'
-    ]
-    writeFileSync(path, lines.join(eol) + eol, 'utf-8')
-    return { ok: true }
+    while (taken.has(name)) name += '_scripted'
+    return name
+  }
+
+  if (!existsSync(path)) {
+    writeFileSync(path, newGroupLines(groupName(new Set())).join('\n') + '\n', 'utf-8')
+    return
   }
 
   let text = readFileSync(path, 'utf-8')
@@ -272,20 +278,39 @@ function writeModifierEntry(
   }
 
   const groups = scanBlocks(text)
-  const group = (targetGroup !== null ? groups.find((g) => g.key === targetGroup) : null) ?? groups[0]
+  const group =
+    (targetGroup !== null ? groups.find((g) => g.key === targetGroup) : null) ??
+    groups.find((g) => {
+      const scalars = scanScalars(text.slice(g.bodyStart, g.bodyEnd))
+      return scalars.get('usage') === 'game' && scalars.get('selection_behavior') === 'max'
+    })
   if (!group) {
-    return { ok: false, error: `${file} has no top-level modifier group to add the entry to` }
+    let prefix = text
+    if (prefix !== '' && !prefix.endsWith('\n')) prefix += eol
+    if (prefix !== '' && !/(\r?\n){2}$/.test(prefix)) prefix += eol
+    const name = groupName(new Set(groups.map((g) => g.key)))
+    writeFileSync(path, prefix + newGroupLines(name).join(eol) + eol, 'utf-8')
+    return
   }
   const body = text.slice(group.bodyStart, group.bodyEnd)
   const newBody =
     body.replace(/\s+$/, '') + eol + eol + modifierEntryLines(entryKey, characterId, picks).join(eol) + eol
   writeFileSync(path, text.slice(0, group.bodyStart) + newBody + text.slice(group.bodyEnd), 'utf-8')
-  return { ok: true }
 }
 
 // ---------- The dialog's info + apply entry points ----------
 
 export function getDnaPasteInfo(modPath: string, file: string, id: string): DnaPasteInfo {
+  try {
+    return getDnaPasteInfoInner(modPath, file, id)
+  } catch (err) {
+    // Rethrown so the renderer's invoke rejects and the dialog can show it
+    console.error(`[ck3-tools] getDnaPasteInfo failed for ${id} in ${file}:`, err)
+    throw err
+  }
+}
+
+function getDnaPasteInfoInner(modPath: string, file: string, id: string): DnaPasteInfo {
   const detail = getCharacter(modPath, file, id)
   const dnaKey = detail?.dna ?? `${id}_dna`
   const dnaFiles = listTxtFiles(join(modPath, ...DNA_DIR))
@@ -325,6 +350,35 @@ export function getDnaPasteInfo(modPath: string, file: string, id: string): DnaP
 const FILE_NAME = /^[^\\/:*?"<>|]+\.txt$/i
 
 export function applyRulerDesignerDna(
+  gameDir: string | null,
+  modPath: string,
+  replacePaths: string[],
+  file: string,
+  id: string,
+  paste: string,
+  dnaFile: string,
+  modifierFile: string | null
+): SaveResult {
+  const result = applyRulerDesignerDnaInner(
+    gameDir,
+    modPath,
+    replacePaths,
+    file,
+    id,
+    paste,
+    dnaFile,
+    modifierFile
+  )
+  if (!result.ok) {
+    console.error(
+      `[ck3-tools] Ruler Designer DNA paste failed for ${id} in ${file} ` +
+        `(dna file: ${dnaFile}, modifier file: ${modifierFile ?? 'none'}): ${result.error}`
+    )
+  }
+  return result
+}
+
+function applyRulerDesignerDnaInner(
   gameDir: string | null,
   modPath: string,
   replacePaths: string[],
@@ -380,13 +434,12 @@ export function applyRulerDesignerDna(
     const genes = parsed.genes.filter((g) => !dropped.has(g.key))
 
     const dnaKey = detail.dna ?? `${id}_dna`
+    if (picks.length > 0) writeModifierEntry(modPath, modifierFile!, id, picks)
     writeDnaBlock(modPath, dnaFile, dnaKey, genes)
-    if (picks.length > 0) {
-      const result = writeModifierEntry(modPath, modifierFile!, id, picks)
-      if (!result.ok) return result
-    }
     return setCharacterDna(modPath, file, id, dnaKey, picks.length > 0)
   } catch (err) {
+    // The wrapper logs the message; the stack only exists here
+    console.error('[ck3-tools] Ruler Designer DNA paste threw:', err)
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
