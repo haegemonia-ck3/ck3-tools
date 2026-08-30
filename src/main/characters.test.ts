@@ -318,8 +318,8 @@ describe('spouses', () => {
 
   it('pairs add/remove effects into marriages', () => {
     expect(load().spouses).toEqual([
-      { id: '301', marriage: '1020.5.6', divorce: '1030.2.3', matrilineal: false },
-      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true }
+      { id: '301', marriage: '1020.5.6', divorce: '1030.2.3', matrilineal: false, concubine: false },
+      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true, concubine: false }
     ])
   })
 
@@ -336,7 +336,7 @@ describe('spouses', () => {
     const detail = load()
     const spouses = [
       ...detail.spouses,
-      { id: '303', marriage: '1040.7.8', divorce: null, matrilineal: false }
+      { id: '303', marriage: '1040.7.8', divorce: null, matrilineal: false, concubine: false }
     ]
     expect(saveCharacter(modPath, sfile, '300', { ...detail, spouses })).toEqual({ ok: true })
     expect(text()).toContain(
@@ -349,7 +349,7 @@ describe('spouses', () => {
     const detail = load()
     const spouses = [
       ...detail.spouses,
-      { id: '304', marriage: '1000.1.1', divorce: null, matrilineal: false }
+      { id: '304', marriage: '1000.1.1', divorce: null, matrilineal: false, concubine: false }
     ]
     expect(saveCharacter(modPath, sfile, '300', { ...detail, spouses })).toEqual({ ok: true })
     expect(text()).toContain(
@@ -375,7 +375,7 @@ describe('spouses', () => {
     // The shared block keeps its other statement
     expect(text()).toContain(['\t1030.2.3 = {', '\t\tadd_matrilineal_spouse = "302"', '\t}'].join('\n'))
     expect(load().spouses).toEqual([
-      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true }
+      { id: '302', marriage: '1030.2.3', divorce: null, matrilineal: true, concubine: false }
     ])
   })
 
@@ -396,14 +396,15 @@ describe('spouses', () => {
       id: '301',
       marriage: '1021.1.1',
       divorce: '1030.2.3',
-      matrilineal: false
+      matrilineal: false,
+      concubine: false
     })
   })
 
   it('switches a marriage to matrilineal', () => {
     const detail = load()
     const spouses = detail.spouses.map((s) =>
-      s.id === '301' ? { ...s, matrilineal: true } : s
+      s.id === '301' ? { ...s, matrilineal: true, concubine: false } : s
     )
     expect(saveCharacter(modPath, sfile, '300', { ...detail, spouses })).toEqual({ ok: true })
     expect(text()).toContain(['\t1020.5.6 = {', '\t\tadd_matrilineal_spouse = 301', '\t}'].join('\n'))
@@ -414,13 +415,13 @@ describe('spouses', () => {
     expect(
       saveCharacter(modPath, sfile, '300', {
         ...detail,
-        spouses: [{ id: '305', marriage: 'nope', divorce: null, matrilineal: false }]
+        spouses: [{ id: '305', marriage: 'nope', divorce: null, matrilineal: false, concubine: false }]
       })
     ).toEqual({ ok: false, error: 'Invalid marriage date "nope" (expected Y.M.D)' })
     expect(
       saveCharacter(modPath, sfile, '300', {
         ...detail,
-        spouses: [{ id: '  ', marriage: '1020.5.6', divorce: null, matrilineal: false }]
+        spouses: [{ id: '  ', marriage: '1020.5.6', divorce: null, matrilineal: false, concubine: false }]
       })
     ).toEqual({ ok: false, error: 'Every spouse needs a character id' })
     expect(text()).toBe(SPOUSES)
@@ -434,12 +435,133 @@ describe('spouses', () => {
         ...detail,
         spouses: [
           ...detail.spouses,
-          { id: '306', marriage: '1045.1.1', divorce: null, matrilineal: false }
+          { id: '306', marriage: '1045.1.1', divorce: null, matrilineal: false, concubine: false }
         ]
       })
     ).toEqual({ ok: true })
     expect(text()).toContain('\r\n\t1045.1.1 = {\r\n\t\tadd_spouse = 306\r\n\t}\r\n')
     expect(text()).not.toMatch(/[^\r]\n/)
+  })
+})
+
+describe('concubines', () => {
+  const cfile = 'concubine_characters.txt'
+  const cpath = join(modPath, 'history', 'characters', cfile)
+  const CONCUBINES = [
+    '400 = {',
+    '\tname = "Halfdan"',
+    '\t1000.1.1 = {',
+    '\t\tbirth = yes',
+    '\t}',
+    '\t1020.5.6 = {',
+    '\t\tadd_spouse = 401',
+    '\t\tadd_concubine = 402 # a prize',
+    '\t}',
+    '\t1030.2.3 = {',
+    '\t\tremove_concubine = 402',
+    '\t\tadd_concubine = "403"',
+    '\t}',
+    '}',
+    ''
+  ].join('\n')
+
+  beforeEach(() => writeFileSync(cpath, CONCUBINES, 'utf-8'))
+
+  const load = (): CharacterDetail => getCharacter(modPath, cfile, '400')!
+  const text = (): string => readFileSync(cpath, 'utf-8')
+
+  it('pairs add/remove concubine effects alongside marriages', () => {
+    expect(load().spouses).toEqual([
+      { id: '401', marriage: '1020.5.6', divorce: null, matrilineal: false, concubine: false },
+      { id: '402', marriage: '1020.5.6', divorce: '1030.2.3', matrilineal: false, concubine: true },
+      { id: '403', marriage: '1030.2.3', divorce: null, matrilineal: false, concubine: true }
+    ])
+  })
+
+  it('never lets a remove_spouse close a concubinage of the same id', () => {
+    writeFileSync(
+      cpath,
+      [
+        '410 = {',
+        '\t1020.1.1 = {',
+        '\t\tadd_concubine = 411',
+        '\t}',
+        '\t1025.1.1 = {',
+        '\t\tremove_spouse = 411',
+        '\t}',
+        '}',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+    expect(getCharacter(modPath, cfile, '410')!.spouses).toEqual([
+      { id: '411', marriage: '1020.1.1', divorce: null, matrilineal: false, concubine: true },
+      { id: '411', marriage: null, divorce: '1025.1.1', matrilineal: false, concubine: false }
+    ])
+  })
+
+  it('round-trips an untouched list byte-for-byte', () => {
+    expect(saveCharacter(modPath, cfile, '400', load())).toEqual({ ok: true })
+    expect(text()).toBe(CONCUBINES)
+  })
+
+  it('adds a concubine into the date block for the start date', () => {
+    const detail = load()
+    const spouses = [
+      ...detail.spouses,
+      { id: '404', marriage: '1030.2.3', divorce: null, matrilineal: false, concubine: true }
+    ]
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(
+      ['\t1030.2.3 = {', '\t\tadd_concubine = 404', '\t\tremove_concubine = 402'].join('\n')
+    )
+  })
+
+  it('ends a concubinage with remove_concubine', () => {
+    const detail = load()
+    const spouses = detail.spouses.map((s) => (s.id === '403' ? { ...s, divorce: '1040.1.1' } : s))
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(['\t1040.1.1 = {', '\t\tremove_concubine = 403', '\t}'].join('\n'))
+  })
+
+  it('switches a marriage to a concubinage, dropping matrilineal', () => {
+    const detail = load()
+    const spouses = detail.spouses.map((s) =>
+      s.id === '401' ? { ...s, matrilineal: true, concubine: true } : s
+    )
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(
+      ['\t1020.5.6 = {', '\t\tadd_concubine = 401', '\t\tadd_concubine = 402 # a prize', '\t}'].join(
+        '\n'
+      )
+    )
+    expect(load().spouses.find((s) => s.id === '401')).toEqual({
+      id: '401',
+      marriage: '1020.5.6',
+      divorce: null,
+      matrilineal: false,
+      concubine: true
+    })
+  })
+
+  it('removing a concubinage leaves other statements in its blocks alone', () => {
+    const detail = load()
+    const spouses = detail.spouses.filter((s) => s.id !== '402')
+    expect(saveCharacter(modPath, cfile, '400', { ...detail, spouses })).toEqual({ ok: true })
+    expect(text()).toContain(['\t1020.5.6 = {', '\t\tadd_spouse = 401', '\t}'].join('\n'))
+    expect(text()).toContain(['\t1030.2.3 = {', '\t\tadd_concubine = "403"', '\t}'].join('\n'))
+    expect(text()).not.toContain('402')
+  })
+
+  it('requires a start date on a new concubine row', () => {
+    const detail = load()
+    expect(
+      saveCharacter(modPath, cfile, '400', {
+        ...detail,
+        spouses: [{ id: '405', marriage: null, divorce: null, matrilineal: false, concubine: true }]
+      })
+    ).toEqual({ ok: false, error: 'Concubine 405 needs a start date' })
+    expect(text()).toBe(CONCUBINES)
   })
 })
 
@@ -556,8 +678,8 @@ describe('createCharacter', () => {
       id: '9003',
       death: '1080.1.1',
       spouses: [
-        { id: '219', marriage: '1030.4.5', divorce: '1040.6.7', matrilineal: false },
-        { id: '218', marriage: '1040.6.7', divorce: null, matrilineal: true }
+        { id: '219', marriage: '1030.4.5', divorce: '1040.6.7', matrilineal: false, concubine: false },
+        { id: '218', marriage: '1040.6.7', divorce: null, matrilineal: true, concubine: false }
       ]
     })
     expect(createCharacter(modPath, 'spouse_create.txt', detail)).toEqual({ ok: true })
@@ -581,6 +703,23 @@ describe('createCharacter', () => {
       ].join('\n')
     )
     expect(getCharacter(modPath, 'spouse_create.txt', '9003')!.spouses).toEqual(detail.spouses)
+  })
+
+  it('writes concubine effects with the concubine keywords', () => {
+    const detail = newDetail({
+      id: '9004',
+      spouses: [
+        { id: '218', marriage: '1030.4.5', divorce: '1040.6.7', matrilineal: false, concubine: true }
+      ]
+    })
+    expect(createCharacter(modPath, 'concubine_create.txt', detail)).toEqual({ ok: true })
+    const text = readFileSync(
+      join(modPath, 'history', 'characters', 'concubine_create.txt'),
+      'utf-8'
+    )
+    expect(text).toContain(['\t1030.4.5 = {', '\t\tadd_concubine = 218', '\t}'].join('\n'))
+    expect(text).toContain(['\t1040.6.7 = {', '\t\tremove_concubine = 218', '\t}'].join('\n'))
+    expect(getCharacter(modPath, 'concubine_create.txt', '9004')!.spouses).toEqual(detail.spouses)
   })
 
   it('rejects a duplicate id anywhere in the mod', () => {

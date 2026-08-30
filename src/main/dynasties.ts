@@ -47,7 +47,8 @@ function findDated(body: string, blocks: BlockSpan[], statement: 'birth' | 'deat
   return block ? block.key.replace(/\.$/, '') : null
 }
 
-const SPOUSE = /(^|[\s{])(?:add_matrilineal_spouse|add_spouse)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
+const SPOUSE =
+  /(^|[\s{])(?:add_matrilineal_spouse|add_spouse|add_concubine)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
 
 function collectSpouses(body: string, blocks: BlockSpan[]): string[] {
   const spouses: string[] = []

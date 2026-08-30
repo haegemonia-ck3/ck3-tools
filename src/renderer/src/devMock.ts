@@ -46,7 +46,7 @@ const characters: CharacterDetail[] = [
     father: '218',
     mother: null,
     traits: ['brave', 'ambitious'],
-    spouses: [{ id: '1002', marriage: '1070.3.4', divorce: null, matrilineal: false }],
+    spouses: [{ id: '1002', marriage: '1070.3.4', divorce: null, matrilineal: false, concubine: false }],
     stats: {
       diplomacy: 4,
       martial: 7,

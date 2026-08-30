@@ -65,14 +65,17 @@ function dateSortKey(date: string): number {
 
 // Marriages live as dated effects rather than scalars: `add_spouse` (or
 // `add_matrilineal_spouse`) in the wedding year's block, `remove_spouse` in
-// the divorce year's.
+// the divorce year's. Concubines (Islam's "consorts" are the same effect
+// under a different localization) use the parallel `add_concubine` /
+// `remove_concubine` pair; there is no matrilineal variant for them.
 const SPOUSE_STATEMENT =
-  /(^|[\s{])(add_matrilineal_spouse|add_spouse|remove_spouse)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
+  /(^|[\s{])(add_matrilineal_spouse|add_spouse|remove_spouse|add_concubine|remove_concubine)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
 
 interface SpouseEvent {
   kind: 'add' | 'remove'
   id: string
   matrilineal: boolean
+  concubine: boolean
   /** Date of the block the statement sits in, cleaned of a trailing dot */
   date: string
 }
@@ -102,9 +105,10 @@ function scanSpouseEvents(body: string): SpouseEventHit[] {
       while ((m = SPOUSE_STATEMENT.exec(code)) !== null) {
         const keyword = m[2].toLowerCase()
         hits.push({
-          kind: keyword === 'remove_spouse' ? 'remove' : 'add',
+          kind: keyword.startsWith('remove') ? 'remove' : 'add',
           id: m[3] ?? m[4],
           matrilineal: keyword === 'add_matrilineal_spouse',
+          concubine: keyword.endsWith('concubine'),
           date: cleanDate(block.key),
           block: index,
           start: block.bodyStart + at + m.index + m[1].length,
@@ -116,7 +120,10 @@ function scanSpouseEvents(body: string): SpouseEventHit[] {
   return hits
 }
 
-/** Pair add/remove effects into marriages; a remove closes the latest open one. */
+/**
+ * Pair add/remove effects into marriages; a remove closes the latest open one
+ * of its own kind (remove_spouse never ends a concubinage or vice versa).
+ */
 function pairSpouses(events: SpouseEvent[]): CharacterSpouse[] {
   const spouses: CharacterSpouse[] = []
   for (const event of events) {
@@ -125,13 +132,24 @@ function pairSpouses(events: SpouseEvent[]): CharacterSpouse[] {
         id: event.id,
         marriage: event.date,
         divorce: null,
-        matrilineal: event.matrilineal
+        matrilineal: event.matrilineal,
+        concubine: event.concubine
       })
       continue
     }
-    const open = [...spouses].reverse().find((s) => s.id === event.id && s.divorce === null)
+    const open = [...spouses]
+      .reverse()
+      .find((s) => s.id === event.id && s.concubine === event.concubine && s.divorce === null)
     if (open) open.divorce = event.date
-    else spouses.push({ id: event.id, marriage: null, divorce: event.date, matrilineal: false })
+    else {
+      spouses.push({
+        id: event.id,
+        marriage: null,
+        divorce: event.date,
+        matrilineal: false,
+        concubine: event.concubine
+      })
+    }
   }
   return spouses
 }
@@ -142,11 +160,19 @@ function spouseEvents(spouses: CharacterSpouse[]): SpouseEvent[] {
   for (const spouse of spouses) {
     const id = spouse.id.trim()
     if (!id) continue
+    // A concubine has no matrilineal variant, so the flag is dropped there
+    const concubine = spouse.concubine === true
     if (spouse.marriage) {
-      events.push({ kind: 'add', id, matrilineal: spouse.matrilineal, date: spouse.marriage })
+      events.push({
+        kind: 'add',
+        id,
+        matrilineal: !concubine && spouse.matrilineal,
+        concubine,
+        date: spouse.marriage
+      })
     }
     if (spouse.divorce) {
-      events.push({ kind: 'remove', id, matrilineal: false, date: spouse.divorce })
+      events.push({ kind: 'remove', id, matrilineal: false, concubine, date: spouse.divorce })
     }
   }
   return events
@@ -155,15 +181,21 @@ function spouseEvents(spouses: CharacterSpouse[]): SpouseEvent[] {
 function statementFor(event: SpouseEvent): string {
   const keyword =
     event.kind === 'remove'
-      ? 'remove_spouse'
-      : event.matrilineal
-        ? 'add_matrilineal_spouse'
-        : 'add_spouse'
+      ? event.concubine
+        ? 'remove_concubine'
+        : 'remove_spouse'
+      : event.concubine
+        ? 'add_concubine'
+        : event.matrilineal
+          ? 'add_matrilineal_spouse'
+          : 'add_spouse'
   return `${keyword} = ${event.id}`
 }
 
 const eventKey = (e: SpouseEvent): string =>
-  `${e.kind}|${e.id}|${cleanDate(e.date)}|${e.kind === 'add' && e.matrilineal ? 'm' : ''}`
+  `${e.kind}|${e.id}|${cleanDate(e.date)}|${e.kind === 'add' && e.matrilineal ? 'm' : ''}${
+    e.concubine ? 'c' : ''
+  }`
 
 /** Reject a spouse list that can't be written; null when it's fine. */
 function validateSpouses(spouses: CharacterSpouse[]): string | null {
@@ -178,7 +210,9 @@ function validateSpouses(spouses: CharacterSpouse[]): string | null {
       }
     }
     if (!spouse.marriage && !spouse.divorce) {
-      return `Spouse ${spouse.id.trim()} needs a marriage date`
+      return spouse.concubine
+        ? `Concubine ${spouse.id.trim()} needs a start date`
+        : `Spouse ${spouse.id.trim()} needs a marriage date`
     }
   }
   return null

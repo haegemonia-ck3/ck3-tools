@@ -40,7 +40,8 @@ function withDefaults(detail: CharacterDetail): CharacterDetail {
     house: detail.house ?? null,
     female: detail.female ?? null,
     sexuality: detail.sexuality ?? null,
-    spouses: detail.spouses ?? [],
+    // Spouse rows saved before the concubine flag existed miss that key too
+    spouses: (detail.spouses ?? []).map((s) => ({ ...s, concubine: s.concubine === true })),
     dna: detail.dna ?? null
   }
 }

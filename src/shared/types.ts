@@ -104,20 +104,24 @@ export interface CharacterStats {
 }
 
 /**
- * A marriage recorded on a character, as the dated `add_spouse` /
- * `remove_spouse` effects that express it in the history file. `matrilineal`
- * selects `add_matrilineal_spouse`; a null `divorce` means the marriage is
- * never dissolved, and a null `marriage` a lone `remove_spouse` with no
- * matching add (real files carry these).
+ * A marriage or concubinage recorded on a character, as the dated
+ * `add_spouse` / `remove_spouse` (or `add_concubine` / `remove_concubine`)
+ * effects that express it in the history file. `matrilineal` selects
+ * `add_matrilineal_spouse`; a null `divorce` means the union is never
+ * dissolved, and a null `marriage` a lone remove with no matching add (real
+ * files carry these). `concubine` selects the concubine effect pair — the
+ * game's one secondary-union mechanism ("consort" under Islam is the same
+ * effect with different localization); it has no matrilineal variant.
  */
 export interface CharacterSpouse {
   /** Spouse character id, as written in the file */
   id: string
-  /** Date of the add_spouse effect, e.g. "1070.3.4" */
+  /** Date of the add_spouse/add_concubine effect, e.g. "1070.3.4" */
   marriage: string | null
-  /** Date of the remove_spouse effect; null while the marriage stands */
+  /** Date of the remove_spouse/remove_concubine effect; null while the union stands */
   divorce: string | null
   matrilineal: boolean
+  concubine: boolean
 }
 
 export interface CharacterDetail {
@@ -207,7 +211,7 @@ export interface DynastyCharacter {
   dynasty: string | null
   /** Raw `dynasty_house =` value, if present */
   house: string | null
-  /** Spouse character ids from dated add_spouse/add_matrilineal_spouse lines */
+  /** Partner ids from dated add_spouse/add_matrilineal_spouse/add_concubine lines */
   spouses: string[]
 }
 

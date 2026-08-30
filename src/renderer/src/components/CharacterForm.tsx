@@ -397,8 +397,9 @@ export default function CharacterForm({
 
   /**
    * Marriages are dated effects rather than fields, so each row edits one
-   * `add_spouse` / `remove_spouse` pair: who, when it started, and when (if
-   * ever) it ended. Rows keep file order; `matrilineal` picks the other
+   * `add_spouse` / `remove_spouse` pair (`add_concubine` / `remove_concubine`
+   * for concubine rows): who, when it started, and when (if ever) it ended.
+   * Rows keep file order; `matrilineal` picks the other
    * add_ effect and is kept so a file that uses it round-trips.
    */
   const spouses = draft.spouses ?? []
@@ -408,7 +409,7 @@ export default function CharacterForm({
   const spousesField = (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <FieldLabel>Spouses · {spouses.length}</FieldLabel>
+        <FieldLabel>Spouses & concubines · {spouses.length}</FieldLabel>
         <Button
           variant="outline"
           size="sm"
@@ -416,7 +417,7 @@ export default function CharacterForm({
             set({
               spouses: [
                 ...spouses,
-                { id: '', marriage: null, divorce: null, matrilineal: false }
+                { id: '', marriage: null, divorce: null, matrilineal: false, concubine: false }
               ]
             })
           }
@@ -443,37 +444,66 @@ export default function CharacterForm({
                 placeholder="character"
                 onNavigate={onNavigate}
               />
-              <div className="col-start-1 row-start-2 flex items-center gap-2 @sm:col-start-2 @sm:row-start-1">
-                <Checkbox
-                  id={`spouse-matrilineal-${index}`}
-                  checked={spouse.matrilineal}
-                  onCheckedChange={(checked) =>
-                    setSpouse(index, { matrilineal: checked === true })
-                  }
-                />
-                <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+              <div className="col-start-1 row-start-2 flex items-center gap-4 @sm:col-start-2 @sm:row-start-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`spouse-matrilineal-${index}`}
+                    checked={spouse.matrilineal}
+                    disabled={spouse.concubine}
+                    onCheckedChange={(checked) =>
+                      setSpouse(index, { matrilineal: checked === true })
+                    }
+                  />
+                  <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+                </div>
+                {/* Concubinage has no matrilineal variant, so the two exclude each other */}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id={`spouse-concubine-${index}`}
+                    checked={spouse.concubine}
+                    onCheckedChange={(checked) =>
+                      setSpouse(
+                        index,
+                        checked === true
+                          ? { concubine: true, matrilineal: false }
+                          : { concubine: false }
+                      )
+                    }
+                  />
+                  <FieldLabel htmlFor={`spouse-concubine-${index}`}>Concubine</FieldLabel>
+                </div>
               </div>
               <Button
                 variant="ghost"
                 size="icon"
                 className="col-start-2 row-start-1 text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 @sm:col-start-3"
-                title="Remove this marriage"
+                title="Remove this union"
                 onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
               >
                 <X />
               </Button>
             </div>
             <div className="flex flex-col gap-2.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
-              {dateField('Married', spouse.marriage, (v) => setSpouse(index, { marriage: v }), {
-                invalid: spouse.marriage
-                  ? !isValidCK3Date(spouse.marriage)
-                  : !spouse.divorce,
-                placeholder: 'Y.M.D'
-              })}
-              {dateField('Divorced', spouse.divorce, (v) => setSpouse(index, { divorce: v }), {
-                invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
-                placeholder: 'never'
-              })}
+              {dateField(
+                spouse.concubine ? 'Since' : 'Married',
+                spouse.marriage,
+                (v) => setSpouse(index, { marriage: v }),
+                {
+                  invalid: spouse.marriage
+                    ? !isValidCK3Date(spouse.marriage)
+                    : !spouse.divorce,
+                  placeholder: 'Y.M.D'
+                }
+              )}
+              {dateField(
+                spouse.concubine ? 'Until' : 'Divorced',
+                spouse.divorce,
+                (v) => setSpouse(index, { divorce: v }),
+                {
+                  invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
+                  placeholder: 'never'
+                }
+              )}
             </div>
           </div>
         ))
