@@ -601,20 +601,18 @@ export default function CharacterForm({
           <FieldLabel>Stats</FieldLabel>
           <div className="grid grid-cols-3 gap-2">
             {STAT_LABELS.map(([key, label]) => (
-              <label
-                key={key}
-                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-              >
-                <img
-                  src={skillIconFor(key) ?? undefined}
-                  alt=""
-                  aria-hidden
-                  className="size-6 shrink-0"
-                />
-                <span className="min-w-0 flex-1 space-y-1">
-                  <span className="block">{label}</span>
+              <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
+                <span className="block">{label}</span>
+                <span className="flex items-center gap-1.5">
+                  <img
+                    src={skillIconFor(key) ?? undefined}
+                    alt=""
+                    aria-hidden
+                    className="size-6 shrink-0"
+                  />
                   <Input
                     type="number"
+                    className="min-w-0 flex-1"
                     value={draft.stats[key] ?? ''}
                     placeholder="—"
                     onChange={(e) =>
