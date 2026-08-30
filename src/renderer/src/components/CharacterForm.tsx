@@ -15,9 +15,11 @@ import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
 import ReferenceLabel, { findRef } from './ReferenceLabel'
+import Hint from './Hint'
+import FormSection from './FormSection'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { FieldLegend, FieldSet } from '@/components/ui/field'
+import { FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -102,25 +104,6 @@ function TraitOption({ trait, iconCtx }: { trait: RefEntry; iconCtx: IconContext
       )}
       <ReferenceLabel entry={trait} />
     </span>
-  )
-}
-
-/**
- * The date's other form, hung under its input on a rounded elbow:
- * "└ Raw: 3220.1.1" beneath an era-mode field, "└ Display: 780 BC" beneath a
- * raw one.
- */
-function DateHint({ label, value }: { label: string; value: string }): React.JSX.Element {
-  return (
-    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-      <span
-        aria-hidden
-        className="mt-1 ml-1 size-1.5 shrink-0 rounded-bl-[3px] border-b border-l border-current opacity-60"
-      />
-      <span className="min-w-0 truncate">
-        <span className="font-medium">{label}:</span> {value}
-      </span>
-    </p>
   )
 }
 
@@ -277,7 +260,7 @@ export default function CharacterForm({
       const display = formatCalendarDate(value, calendar)
       return textField(label, value, onChange, {
         ...opts,
-        hint: display !== null && <DateHint label="Display" value={display} />
+        hint: display !== null && <Hint label="Display" value={display} truncate />
       })
     }
     const converted = value === null ? null : toCalendarInput(value, calendar)
@@ -317,7 +300,7 @@ export default function CharacterForm({
             </SelectContent>
           </Select>
         </div>
-        {value !== null && <DateHint label="Raw" value={value} />}
+        {value !== null && <Hint label="Raw" value={value} truncate />}
       </div>
     )
   }
@@ -663,8 +646,7 @@ export default function CharacterForm({
         </div>
       </FieldSet>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">Life &amp; lineage</FieldLegend>
+      <FormSection title="Life & lineage">
         <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {dateField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
@@ -696,10 +678,9 @@ export default function CharacterForm({
             )}
           </div>
         </div>
-      </FieldSet>
+      </FormSection>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">Family</FieldLegend>
+      <FormSection title="Family">
         <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {parentField('Father', draft.father, (v) => set({ father: v }))}
           {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
@@ -707,10 +688,9 @@ export default function CharacterForm({
         {spousesField}
         {relationsField}
         {childrenSlot}
-      </FieldSet>
+      </FormSection>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">Culture &amp; traits</FieldLegend>
+      <FormSection title="Culture & traits">
         {managedField(
           'Culture',
           draft.culture,
@@ -780,10 +760,9 @@ export default function CharacterForm({
             ))}
           </div>
         </div>
-      </FieldSet>
+      </FormSection>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">Appearance</FieldLegend>
+      <FormSection title="Appearance">
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <FieldLabel>DNA</FieldLabel>
@@ -807,7 +786,7 @@ export default function CharacterForm({
             locate={(v) => window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'dna', v)}
           />
         </div>
-      </FieldSet>
+      </FormSection>
     </>
   )
 }

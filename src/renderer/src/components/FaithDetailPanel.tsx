@@ -10,11 +10,11 @@ import ReferenceDisplay from './ReferenceDisplay'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import { idOnly } from './ReferenceLabel'
 import { IconTile, Swatch } from './Swatch'
+import FormSection from './FormSection'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -238,15 +238,17 @@ export default function FaithDetailPanel({
   const holySitesField = (): React.JSX.Element => {
     const sites = draft?.holySites ?? []
     return (
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
-          Holy sites · {sites.length}
-          {sites.length > HOLY_SITE_LIMIT && (
+      <FormSection
+        title={<>Holy sites · {sites.length}</>}
+        legendClassName="flex-nowrap"
+        action={
+          sites.length > HOLY_SITE_LIMIT && (
             <Badge variant="outline" className="text-[10px] font-normal">
               over the game&apos;s limit of {HOLY_SITE_LIMIT}
             </Badge>
-          )}
-        </FieldLegend>
+          )
+        }
+      >
         <div className="flex min-h-6 flex-wrap gap-1.5">
           {sites.map((site) => (
             <ReferenceBadge
@@ -270,7 +272,7 @@ export default function FaithDetailPanel({
             limit={60}
           />
         )}
-      </FieldSet>
+      </FormSection>
     )
   }
 
@@ -326,10 +328,7 @@ export default function FaithDetailPanel({
         )}
 
         {draft && faith && (
-          <FieldSet className="gap-3.5">
-            <FieldLegend variant="label" className="mb-0">
-              Details
-            </FieldLegend>
+          <FormSection title="Details">
             <div className="flex items-start gap-4">
               <IconTile url={faith.icon === null ? null : iconFor(faith.icon)} size={72} />
               <div className="min-w-0 flex-1 space-y-3.5">
@@ -379,16 +378,13 @@ export default function FaithDetailPanel({
                 onNavigate={onOpenReligion}
               />
             </div>
-          </FieldSet>
+          </FormSection>
         )}
 
         {draft && faith && holySitesField()}
 
         {draft && faith && (
-          <FieldSet className="gap-3.5">
-            <FieldLegend variant="label" className="mb-0">
-              Doctrines &amp; tenets
-            </FieldLegend>
+          <FormSection title="Doctrines & tenets">
             <DoctrineEditor
               groups={data.groups}
               doctrines={draft.doctrines}
@@ -405,13 +401,10 @@ export default function FaithDetailPanel({
               onChange={(doctrines) => set({ doctrines })}
               locate={locateDoctrine}
             />
-          </FieldSet>
+          </FormSection>
         )}
 
-        <FieldSet className="gap-3.5">
-          <FieldLegend variant="label" className="mb-0">
-            Adherents · {adherents.length}
-          </FieldLegend>
+        <FormSection title={<>Adherents · {adherents.length}</>}>
           {adherents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No character in this mod&apos;s history professes it.
@@ -434,7 +427,7 @@ export default function FaithDetailPanel({
               ))}
             </div>
           )}
-        </FieldSet>
+        </FormSection>
 
         {error && (
           <Alert variant="destructive">

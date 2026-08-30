@@ -28,6 +28,11 @@ Electron-based suite of editing tools for Crusader Kings III: Character Editor, 
 - Do NOT create a new UI primitive or edit any file in `components/ui/` without asking the user for permission first. These files are managed by the shadcn CLI and themed by a preset; local edits can be clobbered and one-off primitives fragment the design system. App-specific composites (like `TraitPicker`) belong in `components/`, built on top of the `ui/` primitives.
 - Theme tokens (colors, radius, fonts) live in `src/renderer/src/styles.css` as CSS variables applied by the shadcn preset — use the semantic Tailwind classes (`bg-background`, `text-muted-foreground`, `border-input`, …), never hard-coded colors.
 
+## Shared composites
+
+- `FormSection` (`components/FormSection.tsx`) is a titled group of fields — a `fieldset` with a `legend` naming it and optional controls parked at the right end of that line. Every editor panel's sections go through it, so section titles wear the heading font in one place. The few sections that need a `Collapsible` wrapping legend and body together compose `SectionLegend` themselves.
+- `Hint` (`components/Hint.tsx`) is the note hung under a field on a rounded elbow: what a raw value resolves to, what a date reads as in the mod's calendar, or a plain remark. The label is optional.
+
 ## Conventions
 
 - All filesystem/CK3 access happens in the main process; the renderer is sandboxed and talks only through `window.ck3tools`. New capabilities need: handler in `src/main/index.ts` `registerIpc()`, method in preload `index.ts`, matching signature in preload `index.d.ts`.

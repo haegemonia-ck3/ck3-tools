@@ -5,11 +5,11 @@ import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import DoctrineEditor from './DoctrineEditor'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import { Swatch } from './Swatch'
+import FormSection from './FormSection'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -208,10 +208,7 @@ export default function ReligionDetailPanel({
         )}
 
         {draft && religion && (
-          <FieldSet className="gap-3.5">
-            <FieldLegend variant="label" className="mb-0">
-              Details
-            </FieldLegend>
+          <FormSection title="Details">
             <div className="space-y-1.5">
               {fieldLabel('ID')}
               <Input type="text" value={religion.id} disabled readOnly className="font-mono" />
@@ -246,14 +243,11 @@ export default function ReligionDetailPanel({
             {textField('Piety icon group', draft.pietyIconGroup, (v) =>
               set({ pietyIconGroup: v })
             )}
-          </FieldSet>
+          </FormSection>
         )}
 
         {draft && religion && (
-          <FieldSet className="gap-3.5">
-            <FieldLegend variant="label" className="mb-0">
-              Doctrines &amp; tenets
-            </FieldLegend>
+          <FormSection title="Doctrines & tenets">
             <DoctrineEditor
               groups={data.groups}
               doctrines={draft.doctrines}
@@ -262,13 +256,14 @@ export default function ReligionDetailPanel({
               onChange={(doctrines) => set({ doctrines })}
               locate={locateDoctrine}
             />
-          </FieldSet>
+          </FormSection>
         )}
 
-        <FieldSet className="gap-3.5">
-          <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
-            Faiths · {faiths.length}
-            {editable && (
+        <FormSection
+          title={<>Faiths · {faiths.length}</>}
+          legendClassName="flex-nowrap"
+          action={
+            editable && (
               <Button
                 variant="outline"
                 size="xs"
@@ -278,8 +273,9 @@ export default function ReligionDetailPanel({
                 <Plus />
                 Add
               </Button>
-            )}
-          </FieldLegend>
+            )
+          }
+        >
           {faiths.length === 0 ? (
             <p className="text-sm text-muted-foreground">This religion defines no faiths.</p>
           ) : (
@@ -306,12 +302,9 @@ export default function ReligionDetailPanel({
               ))}
             </div>
           )}
-        </FieldSet>
+        </FormSection>
 
-        <FieldSet className="gap-3.5">
-          <FieldLegend variant="label" className="mb-0">
-            Adherents · {adherents.length}
-          </FieldLegend>
+        <FormSection title={<>Adherents · {adherents.length}</>}>
           {adherents.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No character in this mod&apos;s history professes any of its faiths.
@@ -337,7 +330,7 @@ export default function ReligionDetailPanel({
               ))}
             </div>
           )}
-        </FieldSet>
+        </FormSection>
 
         {error && (
           <Alert variant="destructive">

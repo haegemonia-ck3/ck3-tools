@@ -11,6 +11,8 @@ import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import CoatOfArms from './CoatOfArms'
 import DateFormatToggle from './DateFormatToggle'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
+import Hint from './Hint'
+import FormSection from './FormSection'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,7 +22,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible'
-import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -238,15 +239,7 @@ export default function DynastyDetailPanel({
 
   /** The resolved display form, hung under a field on a rounded elbow. */
   const hintRow = (label: string, value: string): React.JSX.Element => (
-    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-      <span
-        aria-hidden
-        className="mt-1 ml-1 size-1.5 shrink-0 rounded-bl-[3px] border-b border-l border-current opacity-60"
-      />
-      <span className="min-w-0 truncate">
-        <span className="font-medium">{label}:</span> {value}
-      </span>
-    </p>
+    <Hint label={label} value={value} truncate />
   )
 
   const memberRow = (c: DynastyCharacter): React.JSX.Element => (
@@ -422,10 +415,7 @@ export default function DynastyDetailPanel({
         )}
 
         {draft && def && (
-          <FieldSet className="gap-3.5">
-            <FieldLegend variant="label" className="mb-0">
-              Details
-            </FieldLegend>
+          <FormSection title="Details">
             <div className="flex items-start gap-4">
               <CoatOfArms ids={coaIds} size={112} className="shrink-0" />
               <div className="min-w-0 flex-1 space-y-3.5">
@@ -475,15 +465,12 @@ export default function DynastyDetailPanel({
                 />
               </div>
             )}
-          </FieldSet>
+          </FormSection>
         )}
 
-        <FieldSet className="gap-3.5">
-          <FieldLegend
-            variant="label"
-            className="mb-0 flex w-full flex-wrap items-center justify-between gap-1.5"
-          >
-            Members · {members.length}
+        <FormSection
+          title={<>Members · {members.length}</>}
+          action={
             <span className="flex flex-wrap items-center gap-1.5">
               <Button
                 variant="outline"
@@ -520,7 +507,8 @@ export default function DynastyDetailPanel({
                 </ToggleGroup>
               )}
             </span>
-          </FieldLegend>
+          }
+        >
           {members.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No characters belong to this {kind}.
@@ -530,7 +518,7 @@ export default function DynastyDetailPanel({
           ) : (
             <div>{members.map(memberRow)}</div>
           )}
-        </FieldSet>
+        </FormSection>
 
         {error && (
           <Alert variant="destructive">

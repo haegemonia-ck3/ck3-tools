@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, ChevronRight, CornerDownRight, CornerLeftUp, Plus } from 'lucide-react'
 import type { CalendarConfig, CultureCharacter, CultureData, CultureDef } from '@shared/types'
+import FormSection, { SectionLegend } from './FormSection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -9,7 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible'
-import { FieldLegend, FieldSet } from '@/components/ui/field'
+import { FieldSet } from '@/components/ui/field'
 import { cn } from '@/lib/utils'
 import { formatCalendarYear } from '@/lib/ck3Date'
 import {
@@ -130,10 +131,7 @@ export default function CultureRelationsPanel({
       </div>
 
       <div ref={body} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
-        <FieldSet className="gap-2">
-          <FieldLegend variant="label" className="mb-0">
-            Parents · {parents.length}
-          </FieldLegend>
+        <FormSection className="gap-2" title={<>Parents · {parents.length}</>}>
           {parents.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground">
               None — this culture descends from no other.
@@ -161,14 +159,13 @@ export default function CultureRelationsPanel({
               )
             )
           )}
-        </FieldSet>
+        </FormSection>
 
-        <FieldSet className="gap-2">
-          <FieldLegend
-            variant="label"
-            className="mb-0 flex w-full items-center justify-between gap-2"
-          >
-            <span>Descendants · {children.length}</span>
+        <FormSection
+          className="gap-2"
+          legendClassName="flex-nowrap gap-2"
+          title={<span>Descendants · {children.length}</span>}
+          action={
             <Button
               variant="outline"
               size="xs"
@@ -178,7 +175,8 @@ export default function CultureRelationsPanel({
               <Plus />
               Derive
             </Button>
-          </FieldLegend>
+          }
+        >
           {children.length === 0 ? (
             <p className="px-2 text-sm text-muted-foreground">
               No culture names this one as a parent.
@@ -193,14 +191,13 @@ export default function CultureRelationsPanel({
               />
             ))
           )}
-        </FieldSet>
+        </FormSection>
 
+        {/* The Collapsible has to wrap legend and body alike, so this section
+            composes the legend itself rather than using FormSection */}
         <FieldSet className="gap-2">
           <Collapsible open={membersOpen} onOpenChange={setMembersOpen}>
-            <FieldLegend
-              variant="label"
-              className="mb-1 flex w-full items-center justify-between gap-2"
-            >
+            <SectionLegend className="flex w-full items-center justify-between gap-2">
               <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md text-left hover:text-foreground">
                 <ChevronRight
                   className={cn('size-3 shrink-0 transition-transform', membersOpen && 'rotate-90')}
@@ -216,7 +213,7 @@ export default function CultureRelationsPanel({
                 <Plus />
                 Add
               </Button>
-            </FieldLegend>
+            </SectionLegend>
             <CollapsibleContent>
               {members.length === 0 ? (
                 <p className="px-2 text-sm text-muted-foreground">

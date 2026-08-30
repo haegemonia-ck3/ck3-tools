@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
 import { useApp } from '../AppContext'
+import Hint from '../components/Hint'
 import ModPicker from '../components/ModPicker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -205,7 +206,7 @@ export default function SettingsPage(): React.JSX.Element {
                 Show the app in the fonts the selected mod loads — its StandardGameFont for
                 text, its TitleFont for headings.
               </FieldDescription>
-              <p className="text-xs text-muted-foreground">{fonts}</p>
+              <Hint value={fonts} />
             </FieldContent>
             <Switch
               id="use-mod-fonts"

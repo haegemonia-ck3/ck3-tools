@@ -13,9 +13,10 @@ import { FieldLabel } from './CharacterForm'
 import ReferenceBadge from './ReferenceBadge'
 import ReferenceInput from './ReferenceInput'
 import ReferenceLabel, { findRef } from './ReferenceLabel'
+import Hint from './Hint'
+import FormSection from './FormSection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -48,31 +49,6 @@ const GFX: { key: keyof CulturePatch; pool: 'coa' | 'building' | 'clothing' | 'u
 
 /** A culture with no `created` exists from the start of the game. */
 const CREATED_PLACEHOLDER = 'never — exists from the start'
-
-/**
- * A note hung under a field on a rounded elbow — the resolved form of a date,
- * how a colour is spelled in the file, why a parent was seeded. The same
- * affordance the character editor uses for era-converted dates.
- */
-export function Hint({
-  label,
-  value
-}: {
-  label: string
-  value: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-      <span
-        aria-hidden
-        className="mt-1 ml-1 size-1.5 shrink-0 rounded-bl-[3px] border-b border-l border-current opacity-60"
-      />
-      <span className="min-w-0">
-        <span className="font-medium">{label}:</span> {value}
-      </span>
-    </p>
-  )
-}
 
 interface Props {
   draft: CulturePatch
@@ -395,19 +371,13 @@ export default function CultureForm({
 
   return (
     <>
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">
-          Identity
-        </FieldLegend>
+      <FormSection title="Identity">
         {identitySlot}
         {colorField()}
         {createdField()}
-      </FieldSet>
+      </FormSection>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">
-          Pillars
-        </FieldLegend>
+      <FormSection title="Pillars">
         {PILLARS.map((p) => (
           <Fragment key={p.key}>
             {refField(
@@ -420,12 +390,9 @@ export default function CultureForm({
             )}
           </Fragment>
         ))}
-      </FieldSet>
+      </FormSection>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">
-          Traditions &amp; lineage
-        </FieldLegend>
+      <FormSection title="Traditions & lineage">
         {listField(
           'traditions',
           'Traditions',
@@ -445,12 +412,9 @@ export default function CultureForm({
           (v) => set({ nameList: v }),
           data.nameLists
         )}
-      </FieldSet>
+      </FormSection>
 
-      <FieldSet className="gap-3.5">
-        <FieldLegend variant="label" className="mb-0">
-          Graphics
-        </FieldLegend>
+      <FormSection title="Graphics">
         {GFX.map((g) => (
           <Fragment key={g.key}>
             {listField(
@@ -474,7 +438,7 @@ export default function CultureForm({
           {notes?.houseCoaFrame}
         </div>
         {ethnicitiesField()}
-      </FieldSet>
+      </FormSection>
     </>
   )
 }
