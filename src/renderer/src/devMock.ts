@@ -12,8 +12,10 @@ import type {
   CultureDef,
   DynastyCharacter,
   DynastyDef,
+  FaithDef,
   HouseDef,
-  RefEntry
+  RefEntry,
+  ReligionDef
 } from '@shared/types'
 
 /** `{ id: name }` as reference entries; a null name means "no localization". */
@@ -171,7 +173,7 @@ const characters: CharacterDetail[] = [
     birth: '1048.9.9',
     death: null,
     culture: 'norse',
-    faith: 'asatru',
+    faith: 'lost_faith',
     father: null,
     mother: null,
     traits: ['ambitious', 'craven'],
@@ -406,6 +408,101 @@ const dynastyCharacters: DynastyCharacter[] = [
   dc({ id: 'L1', name: 'Lowborn Larry', birth: '3050.1.1' })
 ]
 
+
+// ---------- Religions & faiths ----------
+
+const religions: ReligionDef[] = [
+  {
+    id: 'christianity_religion',
+    file: 'mock_christian.txt',
+    inMod: false,
+    family: 'rf_abrahamic',
+    graphicalFaith: 'catholic_gfx',
+    pietyIconGroup: null,
+    doctrines: ['doctrine_spiritual_head', 'doctrine_monogamy'],
+    localizedName: 'Christianity'
+  },
+  {
+    id: 'hellenism_religion',
+    file: 'mock_hellenic.txt',
+    inMod: true,
+    family: 'rf_pagan',
+    graphicalFaith: 'pagan_gfx',
+    pietyIconGroup: 'pagan',
+    doctrines: ['doctrine_no_head', 'doctrine_monogamy'],
+    localizedName: 'Hellenism'
+  },
+  {
+    id: 'germanic_religion',
+    file: 'mock_germanic.txt',
+    inMod: true,
+    family: 'rf_pagan',
+    graphicalFaith: 'pagan_gfx',
+    pietyIconGroup: null,
+    doctrines: ['doctrine_no_head'],
+    localizedName: null
+  }
+]
+
+const faith = (
+  id: string,
+  religion: string,
+  file: string,
+  over: Partial<FaithDef> = {}
+): FaithDef => ({
+  id,
+  file,
+  inMod: file !== 'mock_christian.txt',
+  religion,
+  color: { hex: '#8a5a3c', raw: '{ 0.54 0.35 0.24 }', editable: true },
+  icon: null,
+  reformedIcon: null,
+  religiousHead: null,
+  doctrines: [],
+  holySites: [],
+  localizedName: null,
+  ...over
+})
+
+const faiths: FaithDef[] = [
+  faith('orthodox', 'christianity_religion', 'mock_christian.txt', {
+    // A named-colour reference: shown with its swatch, but not rewritable
+    color: { hex: '#6a4fbb', raw: 'mock_purple', editable: false },
+    icon: 'orthodox',
+    religiousHead: 'k_orthodox',
+    doctrines: ['tenet_communion', 'doctrine_spiritual_head'],
+    holySites: ['mock_jerusalem'],
+    localizedName: 'Orthodoxy'
+  }),
+  faith('catholic', 'christianity_religion', 'mock_christian.txt', {
+    color: { hex: '#b9a24a', raw: '{ 0.73 0.64 0.29 }', editable: true },
+    icon: 'orthodox',
+    localizedName: 'Catholicism'
+  }),
+  faith('olympian', 'hellenism_religion', 'mock_hellenic.txt', {
+    color: { hex: '#a3312a', raw: '{ 0.64 0.19 0.16 }', editable: true },
+    icon: 'hellenic',
+    doctrines: ['tenet_hero_cult', 'tenet_astrology', 'doctrine_no_head'],
+    holySites: ['mock_delphi', 'mock_olympia'],
+    localizedName: 'Olympian'
+  }),
+  // No localization, and no adherents yet: a faith mid-authoring
+  faith('delian', 'hellenism_religion', 'mock_hellenic.txt', {
+    color: { hex: '#1f96af', raw: '{ 31 150 175 }', editable: true },
+    icon: 'delos_palm',
+    reformedIcon: 'hellenic_reformed',
+    religiousHead: 'd_mock_delos',
+    doctrines: ['tenet_adaptive', 'tenet_hero_cult'],
+    holySites: ['mock_delphi']
+  }),
+  faith('asatru', 'germanic_religion', 'mock_germanic.txt', {
+    // No colour line at all
+    color: null,
+    doctrines: ['tenet_adaptive'],
+    localizedName: null
+  })
+]
+
 const mock: Ck3ToolsApi = {
   getSettings: async () => structuredClone(settings),
   setSettings: async (patch) => Object.assign(settings, patch) && structuredClone(settings),
@@ -526,6 +623,91 @@ const mock: Ck3ToolsApi = {
     Object.assign(h, patch)
     return { ok: true }
   },
+  listDynastyFiles: async () => ({
+    dynasties: [...new Set(dynasties.filter((d) => d.inMod).map((d) => d.file))].sort(),
+    houses: [...new Set(houses.filter((h) => h.inMod).map((h) => h.file))].sort()
+  }),
+  createDynasty: async (_modPath, file, def) => {
+    const taken = [...dynasties, ...houses].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
+    dynasties.push({ ...def, file, inMod: true, localizedName: null })
+    return { ok: true }
+  },
+  createHouse: async (_modPath, file, def) => {
+    const taken = [...dynasties, ...houses].find((x) => x.id.toLowerCase() === def.id.toLowerCase())
+    if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
+    houses.push({ ...def, file, inMod: true, localizedName: null })
+    return { ok: true }
+  },
+  getReligionData: async () => ({
+    religions: structuredClone(religions),
+    faiths: structuredClone(faiths),
+    groups: [
+      {
+        id: 'doctrine_head_of_faith',
+        category: 'main_group',
+        picks: 1,
+        name: 'Head of Faith',
+        doctrines: named({
+          doctrine_no_head: 'No Head of Faith',
+          doctrine_spiritual_head: 'Spiritual Head of Faith',
+          doctrine_temporal_head: null
+        })
+      },
+      {
+        id: 'doctrine_marriage_type',
+        category: 'marriage',
+        picks: 1,
+        name: 'Marriage Type',
+        doctrines: named({ doctrine_monogamy: 'Monogamous', doctrine_polygamy: 'Polygamous' })
+      },
+      {
+        id: 'doctrine_core_tenets',
+        category: 'core_tenets',
+        picks: 3,
+        name: 'Core Tenets',
+        doctrines: named({
+          tenet_hero_cult: 'Hero Cult',
+          tenet_astrology: 'Astrology',
+          tenet_adaptive: 'Adaptive',
+          tenet_communion: 'Communion',
+          tenet_unnamed: null
+        })
+      }
+    ],
+    ungroupedDoctrines: named({ special_doctrine_mock: null }),
+    holySites: named({
+      mock_delphi: 'Delphi',
+      mock_olympia: 'Olympia',
+      mock_jerusalem: 'Jerusalem',
+      mock_unnamed: null
+    }),
+    families: named({ rf_pagan: 'Pagan', rf_abrahamic: 'Abrahamic', rf_mock: null }),
+    adherents: characters
+      .filter((c) => c.faith !== null)
+      .map((c) => ({ id: c.id, file: c.file, name: c.name, faith: c.faith as string }))
+  }),
+  saveFaith: async (_modPath, file, _religionId, faithId, patch) => {
+    const f = faiths.find((x) => x.file === file && x.id === faithId)
+    if (!f) return { ok: false, error: `Faith ${faithId} not found in ${file}` }
+    Object.assign(f, {
+      icon: patch.icon,
+      reformedIcon: patch.reformedIcon,
+      religiousHead: patch.religiousHead,
+      doctrines: patch.doctrines,
+      holySites: patch.holySites,
+      color: f.color && patch.color ? { ...f.color, hex: patch.color } : f.color
+    })
+    return { ok: true }
+  },
+  saveReligion: async (_modPath, file, religionId, patch) => {
+    const r = religions.find((x) => x.file === file && x.id === religionId)
+    if (!r) return { ok: false, error: `Religion ${religionId} not found in ${file}` }
+    Object.assign(r, patch)
+    return { ok: true }
+  },
+  getFaithIcons: async (_g, _m, _r, icons) => Object.fromEntries(icons.map((i) => [i, null])),
+  listFaithIcons: async () => ['delos_palm', 'hellenic', 'hellenic_reformed', 'orthodox'],
   getTraitIcons: async (_g, _m, _r, traits) =>
     Object.fromEntries(traits.map((t) => [t, null])),
   // Initial-letter stand-ins for the game's silhouettes: opaque black on

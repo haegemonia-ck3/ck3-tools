@@ -1,15 +1,17 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import {
   endOfBodyIndex,
   eolSuffix,
   makeEditor,
   refresh,
+  setRepeatedScalar,
   setScalar,
   splitComment,
-  SCALAR_LINE
+  withEol
 } from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
+import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
 import type { LineEditor } from './lineEditor'
 import type {
   CharacterDetail,
@@ -274,34 +276,10 @@ function firstDateBlockLine(ed: LineEditor): number {
   return ed.lines.length
 }
 
-/**
- * Terminate inserted lines with \r in CRLF bodies (join adds only the \n).
- * A line appended at the very end gets none — nothing follows it.
- */
-function withEol(ed: LineEditor, lines: string[], at: number): string[] {
-  const cr = eolSuffix(ed)
-  if (cr === '') return lines
-  const appendAtEnd = at >= ed.lines.length
-  return lines.map((l, i) => (appendAtEnd && i === lines.length - 1 ? l : l + cr))
-}
-
 function setTraits(ed: LineEditor, traits: string[]): void {
-  // Remove existing depth-0 trait lines, remembering where the first one was
-  let insertAt = -1
-  for (let i = ed.lines.length - 1; i >= 0; i--) {
-    if (ed.depths[i] !== 0) continue
-    const code = ed.lines[i].split('#')[0]
-    const m = code.match(SCALAR_LINE)
-    if (m && m[2] === 'trait') {
-      ed.lines.splice(i, 1)
-      insertAt = i
-    }
-  }
-  refresh(ed)
-  if (traits.length === 0) return
-  if (insertAt < 0) insertAt = firstDateBlockLine(ed)
-  ed.lines.splice(insertAt, 0, ...withEol(ed, traits.map((t) => `${ed.indent}trait = ${t}`), insertAt))
-  refresh(ed)
+  // New trait lines go above the first date block, where the rest of a
+  // character's scalars live
+  setRepeatedScalar(ed, 'trait', traits, { insertAt: firstDateBlockLine(ed) })
 }
 
 /** Rename/add/remove the date block containing a birth/death statement. */
@@ -610,9 +588,6 @@ export function setCharacterDna(
 
 // ---------- Creating ----------
 
-/** Same charset the block scanner and line editor accept for keys. */
-const ID_CHARS = /^[A-Za-z0-9_.\-']+$/
-
 export function listCharacterFiles(modPath: string): string[] {
   const dir = charactersDir(modPath)
   if (!existsSync(dir)) return []
@@ -634,14 +609,10 @@ export function createCharacter(
   try {
     const id = detail.id.trim()
     if (!id) return { ok: false, error: 'ID must not be empty' }
-    if (!ID_CHARS.test(id)) {
+    if (!KEY_CHARS.test(id)) {
       return { ok: false, error: `Invalid ID "${id}" (letters, digits, _ . - ' only)` }
     }
-    if (
-      !file.toLowerCase().endsWith('.txt') ||
-      file.length <= 4 ||
-      !/^[^\\/:*?"<>|]+$/.test(file)
-    ) {
+    if (!isTxtFileName(file)) {
       return { ok: false, error: `Invalid file name "${file}" (expected a .txt file name)` }
     }
     const required: [string, string | null][] = [
@@ -662,11 +633,6 @@ export function createCharacter(
     if (spouseError) return { ok: false, error: spouseError }
     const clash = listCharacters(modPath).find((c) => c.id === id)
     if (clash) return { ok: false, error: `ID ${id} already exists in ${clash.file}` }
-
-    const dir = charactersDir(modPath)
-    const path = join(dir, file)
-    const existing = existsSync(path) ? readFileSync(path, 'utf-8') : null
-    const eol = existing !== null && existing.includes('\r\n') ? '\r\n' : '\n'
 
     const t = '\t'
     const lines: string[] = [`${id} = {`]
@@ -706,13 +672,7 @@ export function createCharacter(
       lines.push(`${t}${date} = {`, ...statements.map((x) => `${t}${t}${x}`), `${t}}`)
     }
     lines.push('}')
-    const block = lines.join(eol) + eol
-
-    let prefix = existing ?? ''
-    if (prefix !== '' && !prefix.endsWith('\n')) prefix += eol
-    if (prefix !== '' && !/(\r?\n){2}$/.test(prefix)) prefix += eol
-    if (existing === null) mkdirSync(dir, { recursive: true })
-    writeFileSync(path, prefix + block, 'utf-8')
+    appendBlock(charactersDir(modPath), file, lines)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

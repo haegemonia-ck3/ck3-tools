@@ -70,7 +70,7 @@ function FlatIcon({
   )
 }
 
-/** The uppercase micro-label used over every field in the character panels. */
+/** The uppercase micro-label used over every field in the editor panels. */
 export function FieldLabel({
   children,
   required,
@@ -163,6 +163,8 @@ interface Props {
   onOpenLineage: (kind: 'dynasty' | 'house', id: string) => void
   /** Open a culture in the Culture Editor */
   onOpenCulture: (id: string) => void
+  /** Open a faith in the Faith Editor */
+  onOpenFaith: (id: string) => void
   badBirth: boolean
   badDeath: boolean
   /** Mark the game-mandatory fields with an asterisk (create mode) */
@@ -196,6 +198,7 @@ export default function CharacterForm({
   onNavigate,
   onOpenLineage,
   onOpenCulture,
+  onOpenFaith,
   badBirth,
   badDeath,
   markRequired = false,
@@ -345,6 +348,31 @@ export default function CharacterForm({
         placeholder="none"
         onNavigate={(v) => onOpenLineage(kind, v)}
         followTitle="Open in Dynasty & House Editor"
+      />
+    </div>
+  )
+
+  /** Faith is managed data too, and opens in the Faith Editor. */
+  /**
+   * Culture and faith are managed data: their follow button switches to the
+   * editor that owns them rather than opening the definition file.
+   */
+  const managedField = (
+    label: 'Culture' | 'Faith',
+    value: string | null,
+    onChange: (v: string | null) => void,
+    options: RefEntry[],
+    onNavigate: (id: string) => void
+  ): React.JSX.Element => (
+    <div className="space-y-1.5">
+      <FieldLabel required={markRequired}>{label}</FieldLabel>
+      <ReferenceInput
+        value={value}
+        onChange={onChange}
+        options={options}
+        placeholder="none"
+        onNavigate={onNavigate}
+        followTitle={`Open in ${label} Editor`}
       />
     </div>
   )
@@ -553,24 +581,19 @@ export default function CharacterForm({
 
       <FieldSet className="gap-3.5">
         <FieldLegend variant="label" className="mb-0">Culture &amp; traits</FieldLegend>
-        <div className="space-y-1.5">
-          <FieldLabel required={markRequired}>Culture</FieldLabel>
-          <ReferenceInput
-            value={draft.culture}
-            onChange={(v) => set({ culture: v })}
-            options={refData?.cultures ?? []}
-            placeholder="none"
-            onNavigate={onOpenCulture}
-            followTitle="Open in Culture Editor"
-          />
-        </div>
-        {refField(
+        {managedField(
+          'Culture',
+          draft.culture,
+          (v) => set({ culture: v }),
+          refData?.cultures ?? [],
+          onOpenCulture
+        )}
+        {managedField(
           'Faith',
-          'faith',
           draft.faith,
           (v) => set({ faith: v }),
           refData?.faiths ?? [],
-          markRequired
+          onOpenFaith
         )}
         <div className="space-y-1.5">
           <FieldLabel>Traits</FieldLabel>

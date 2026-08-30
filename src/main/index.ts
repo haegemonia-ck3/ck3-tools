@@ -18,7 +18,16 @@ import {
 } from './characters'
 import { applyRulerDesignerDna, getDnaPasteInfo } from './dna'
 import { getCultureData, saveCulture } from './cultures'
-import { getDynastyData, saveDynasty, saveHouse } from './dynasties'
+import {
+  createDynasty,
+  createHouse,
+  getDynastyData,
+  listDynastyFiles,
+  saveDynasty,
+  saveHouse
+} from './dynasties'
+import { getReligionData, saveFaith, saveReligion } from './religions'
+import { getFaithIcons, listFaithIcons } from './faithIcons'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
 import { getFlatIcons } from './icons'
@@ -30,8 +39,12 @@ import type {
   CharacterDetail,
   CulturePatch,
   DynastyPatch,
+  FaithPatch,
   HousePatch,
-  RefKind
+  NewDynasty,
+  NewHouse,
+  RefKind,
+  ReligionPatch
 } from '@shared/types'
 
 function createWindow(): void {
@@ -135,6 +148,38 @@ function registerIpc(): void {
     'ck3:saveHouse',
     (_e, modPath: string, file: string, id: string, patch: HousePatch) =>
       saveHouse(modPath, file, id, patch)
+  )
+  ipcMain.handle('ck3:listDynastyFiles', (_e, modPath: string) => listDynastyFiles(modPath))
+  ipcMain.handle('ck3:createDynasty', (_e, modPath: string, file: string, def: NewDynasty) =>
+    createDynasty(modPath, file, def)
+  )
+  ipcMain.handle('ck3:createHouse', (_e, modPath: string, file: string, def: NewHouse) =>
+    createHouse(modPath, file, def)
+  )
+  ipcMain.handle(
+    'ck3:getReligionData',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[]) =>
+      getReligionData(gameDir, modPath, replacePaths)
+  )
+  ipcMain.handle(
+    'ck3:saveFaith',
+    (_e, modPath: string, file: string, religionId: string, faithId: string, patch: FaithPatch) =>
+      saveFaith(modPath, file, religionId, faithId, patch)
+  )
+  ipcMain.handle(
+    'ck3:saveReligion',
+    (_e, modPath: string, file: string, religionId: string, patch: ReligionPatch) =>
+      saveReligion(modPath, file, religionId, patch)
+  )
+  ipcMain.handle(
+    'ck3:getFaithIcons',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], icons: string[]) =>
+      getFaithIcons(gameDir, modPath, replacePaths, icons)
+  )
+  ipcMain.handle(
+    'ck3:listFaithIcons',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[]) =>
+      listFaithIcons(gameDir, modPath, replacePaths)
   )
   ipcMain.handle(
     'ck3:getCultureData',

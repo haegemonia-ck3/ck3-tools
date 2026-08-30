@@ -88,3 +88,14 @@ export function useSkillIcons(
 ): (skill: string) => string | null | undefined {
   return useIcons('skill', (g, m, r, k) => window.ck3tools.getSkillIcons(g, m, r, k), ctx, skills)
 }
+
+/**
+ * Faith icons, keyed by the bare name a faith's `icon =` line gives. Full-color
+ * (they are the game's faith emblems), so drawn directly.
+ */
+export function useFaithIcons(
+  ctx: IconContext,
+  icons: string[]
+): (icon: string) => string | null | undefined {
+  return useIcons('faith', (g, m, r, k) => window.ck3tools.getFaithIcons(g, m, r, k), ctx, icons)
+}

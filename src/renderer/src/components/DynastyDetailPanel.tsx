@@ -69,6 +69,8 @@ interface Props {
   onOpenCharacter: (id: string) => void
   /** Open the character editor's create panel with this dynasty/house prefilled */
   onAddMember: () => void
+  /** Dynasties only: open the new-house panel with this dynasty as the parent */
+  onAddHouse: () => void
   /** Switch the editor to another dynasty/house row */
   onOpenRow: (kind: 'dynasty' | 'house', id: string) => void
   /** Open a culture in the Culture Editor */
@@ -101,6 +103,7 @@ export default function DynastyDetailPanel({
   onMemberClick,
   onOpenCharacter,
   onAddMember,
+  onAddHouse,
   onOpenRow,
   onOpenCulture,
   onSaved,
@@ -476,9 +479,12 @@ export default function DynastyDetailPanel({
         )}
 
         <FieldSet className="gap-3.5">
-          <FieldLegend variant="label" className="mb-0 flex w-full items-center justify-between">
+          <FieldLegend
+            variant="label"
+            className="mb-0 flex w-full flex-wrap items-center justify-between gap-1.5"
+          >
             Members · {members.length}
-            <span className="flex items-center gap-1.5">
+            <span className="flex flex-wrap items-center gap-1.5">
               <Button
                 variant="outline"
                 size="xs"
@@ -486,8 +492,19 @@ export default function DynastyDetailPanel({
                 onClick={onAddMember}
               >
                 <Plus />
-                Add
+                Member
               </Button>
+              {kind === 'dynasty' && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  title="Create a new cadet house in this dynasty"
+                  onClick={onAddHouse}
+                >
+                  <Plus />
+                  House
+                </Button>
+              )}
               {kind === 'dynasty' && (
                 <ToggleGroup
                   type="single"

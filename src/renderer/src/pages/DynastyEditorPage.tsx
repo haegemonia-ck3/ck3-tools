@@ -17,18 +17,20 @@ import {
 } from '@tanstack/react-table'
 import type { Column, Row, SortFn } from '@tanstack/react-table'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { ArrowLeft, FilterX, House } from 'lucide-react'
+import { ArrowLeft, FilterX, House, Plus } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import DebouncedInput from '../components/DebouncedInput'
+import DynastyCreatePanel from '../components/DynastyCreatePanel'
 import DynastyDetailPanel from '../components/DynastyDetailPanel'
 import FamilyTree from '../components/FamilyTree'
 import ReferenceInput from '../components/ReferenceInput'
 import ReferenceDisplay from '../components/ReferenceDisplay'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   ResizableHandle,
@@ -46,8 +48,8 @@ import {
 } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import type { DynastyData, ReferenceData } from '@shared/types'
-import type { CharacterSearch } from '../router'
+import type { DynastyData, DynastyFiles, ReferenceData } from '@shared/types'
+import type { CharacterSearch, DynastySearch } from '../router'
 import {
   buildRows,
   buildTreeNodes,
@@ -286,15 +288,24 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const [data, setData] = useState<DynastyData | null>(null)
   const [loading, setLoading] = useState(false)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
+  /** The mod's definition files, for the create panel's target picker */
+  const [defFiles, setDefFiles] = useState<DynastyFiles | null>(null)
   const [includeHouseMembers, setIncludeHouseMembers] = useState(true)
   const [treeSelected, setTreeSelected] = useState<string | null>(null)
   const [focus, setFocus] = useState<{ id: string | null; nonce: number }>({ id: null, nonce: 0 })
   // Which row is open lives in the URL, not in state, so opening one pushes a
-  // history entry and the mouse "back" button returns to the list.
+  // history entry and the mouse "back" button returns to the list. `create`
+  // opens the new-definition panel for that kind instead of a row.
   const search = useSearch({ from: '/dynasties' })
+  const creating = search.create ?? null
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'dynasty-editor-detail',
     panelIds: ['tree', 'detail'],
+    onlySaveAfterUserInteractions: true
+  })
+  const createLayout = useDefaultLayout({
+    id: 'dynasty-editor-create',
+    panelIds: ['list', 'create'],
     onlySaveAfterUserInteractions: true
   })
 
@@ -303,33 +314,55 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
   const calendar = selectedMod?.profile?.calendar ?? null
 
-  const openRow = (kind: 'dynasty' | 'house', id: string): void => {
-    void navigate({ to: '/dynasties', search: { id, kind } })
-    // Give the tree the full width: fold the tools sidebar away if it's open.
+  const go = (next: DynastySearch, replace = false): void => {
+    void navigate({ to: '/dynasties', search: next, replace })
+  }
+
+  /** Give the tree or the form the full width: fold the tools sidebar away. */
+  const collapseSidebar = (): void => {
     if (isMobile) setOpenMobile(false)
     else setOpen(false)
+  }
+
+  const openRow = (kind: 'dynasty' | 'house', id: string): void => {
+    go({ id, kind })
+    collapseSidebar()
+  }
+
+  const openCreate = (kind: 'dynasty' | 'house', dynasty?: string): void => {
+    go({ create: kind, dynasty })
+    collapseSidebar()
   }
 
   // Closing replaces rather than pushes, so "back" from the list doesn't drop
   // straight back into the row that was just closed.
   const closeRow = (): void => {
-    void navigate({ to: '/dynasties', search: {}, replace: true })
+    go({}, true)
   }
 
-  const reload = (): void => {
+  const reload = async (): Promise<void> => {
     if (!modPath) {
       setData(null)
+      setDefFiles(null)
       return
     }
     setLoading(true)
-    window.ck3tools
-      .getDynastyData(gameDir, modPath, replacePaths)
-      .then(setData)
-      .finally(() => setLoading(false))
+    try {
+      const [next, files] = await Promise.all([
+        window.ck3tools.getDynastyData(gameDir, modPath, replacePaths),
+        window.ck3tools.listDynastyFiles(modPath)
+      ])
+      setData(next)
+      setDefFiles(files)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(reload, [modPath])
+  useEffect(() => {
+    void reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modPath])
 
   // Switching mods invalidates the open row, but only on a real change: on the
   // first render the URL may already carry a deep link that must survive.
@@ -585,6 +618,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
                 else search.dynasty = selected.id
                 void navigate({ to: '/characters', search })
               }}
+              onAddHouse={() => openCreate('house', selected.id)}
               onOpenRow={openRow}
               onOpenCulture={(id) => void navigate({ to: '/cultures', search: { id } })}
               onSaved={reload}
@@ -604,109 +638,171 @@ export default function DynastyEditorPage(): React.JSX.Element {
 
       {!loading && rows.length === 0 && (
         <Card>
-          <CardContent>
+          <CardContent className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
               No dynasties or houses found in {selectedMod.name}&apos;s{' '}
               <code className="font-mono">common/dynasties</code> folder, and no characters
               reference any.
             </p>
+            <Button size="sm" className="shrink-0" onClick={() => openCreate('dynasty')}>
+              <Plus />
+              New dynasty
+            </Button>
           </CardContent>
         </Card>
       )}
 
-      {rows.length > 0 && (
-        <div className="flex min-h-0 flex-1 flex-col gap-2">
-          <div className="flex items-center justify-end gap-3">
-            <DebouncedInput
-              className="w-72"
-              type="search"
-              placeholder="Filter by id, name, culture, or parent…"
-              value={globalFilter}
-              onChange={(v) => table.setGlobalFilter(v)}
-            />
-            {filtered && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <FilterX />
-                Clear
-              </Button>
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+        defaultLayout={createLayout.defaultLayout}
+        onLayoutChanged={createLayout.onLayoutChanged}
+      >
+        {rows.length > 0 && (
+          <ResizablePanel id="list" minSize={360} className="flex min-h-0 flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <ButtonGroup>
+                <ButtonGroupText>
+                  <Plus />
+                  New
+                </ButtonGroupText>
+                <Button size="sm" variant="outline" onClick={() => openCreate('dynasty')}>
+                  Dynasty
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => openCreate('house')}>
+                  House
+                </Button>
+              </ButtonGroup>
+              <div className="ml-auto flex items-center gap-3">
+                <DebouncedInput
+                  className="w-72"
+                  type="search"
+                  placeholder="Filter by id, name, culture, or parent…"
+                  value={globalFilter}
+                  onChange={(v) => table.setGlobalFilter(v)}
+                />
+                {filtered && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <FilterX />
+                    Clear
+                  </Button>
+                )}
+                <span className="text-xs whitespace-nowrap text-muted-foreground">
+                  {loading ? 'Loading…' : `${visibleRows.length} / ${rows.length}`}
+                </span>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
+              <Table>
+                <TableHeader>
+                {table.getHeaderGroups().map((hg) => (
+                  <TableRow key={hg.id} className="hover:bg-transparent">
+                    {hg.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className="sticky top-0 z-10 h-auto border-b bg-card py-1.5 align-top"
+                      >
+                        <div className="flex flex-col items-stretch gap-1">
+                          <button
+                            type="button"
+                            className="cursor-pointer self-start select-none hover:text-primary"
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
+                          </button>
+                          <ColumnFilter
+                            column={header.column}
+                            gameDir={gameDir}
+                            modPath={modPath}
+                            replacePaths={replacePaths}
+                            nameOf={referenceName}
+                          />
+                        </div>
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {visibleRows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer"
+                    onClick={() => openRow(row.original.kind, row.original.id)}
+                  >
+                    {row.getAllCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className={cn(
+                          'max-w-70 truncate',
+                          cell.column.id === 'culture' || cell.column.id === 'parent'
+                            ? 'max-w-50'
+                            : cell.column.id === 'id'
+                              ? 'max-w-60'
+                              : undefined
+                        )}
+                      >
+                        {cell.column.id === 'parent' ? (
+                          <ReferenceDisplay
+                            value={row.original.parent}
+                            name={
+                              row.original.parent === null
+                                ? null
+                                : referenceName('parent', row.original.parent)
+                            }
+                            onNavigate={(v) => openRow('dynasty', v)}
+                          />
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+              </Table>
+            </div>
+          </ResizablePanel>
+        )}
+        {creating && modPath && data && defFiles && (
+          <>
+            {rows.length > 0 && (
+              <ResizableHandle withHandle className="mx-2 bg-transparent hover:bg-border" />
             )}
-            <span className="text-xs whitespace-nowrap text-muted-foreground">
-              {loading ? 'Loading…' : `${visibleRows.length} / ${rows.length}`}
-            </span>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card [&_[data-slot=table-container]]:overflow-visible">
-            <Table>
-              <TableHeader>
-              {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="hover:bg-transparent">
-                  {hg.headers.map((header) => (
-                    <TableHead
-                      key={header.id}
-                      className="sticky top-0 z-10 h-auto border-b bg-card py-1.5 align-top"
-                    >
-                      <div className="flex flex-col items-stretch gap-1">
-                        <button
-                          type="button"
-                          className="cursor-pointer self-start select-none hover:text-primary"
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                          {{ asc: ' ▲', desc: ' ▼' }[header.column.getIsSorted() as string] ?? ''}
-                        </button>
-                        <ColumnFilter
-                          column={header.column}
-                          gameDir={gameDir}
-                          modPath={modPath}
-                          replacePaths={replacePaths}
-                          nameOf={referenceName}
-                        />
-                      </div>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {visibleRows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="cursor-pointer"
-                  onClick={() => openRow(row.original.kind, row.original.id)}
-                >
-                  {row.getAllCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={cn(
-                        'max-w-70 truncate',
-                        cell.column.id === 'culture' || cell.column.id === 'parent'
-                          ? 'max-w-50'
-                          : cell.column.id === 'id'
-                            ? 'max-w-60'
-                            : undefined
-                      )}
-                    >
-                      {cell.column.id === 'parent' ? (
-                        <ReferenceDisplay
-                          value={row.original.parent}
-                          name={
-                            row.original.parent === null
-                              ? null
-                              : referenceName('parent', row.original.parent)
-                          }
-                          onNavigate={(v) => openRow('dynasty', v)}
-                        />
-                      ) : (
-                        flexRender(cell.column.columnDef.cell, cell.getContext())
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-            </Table>
-          </div>
-        </div>
-      )}
+            <ResizablePanel
+              id="create"
+              defaultSize={400}
+              minSize={320}
+              maxSize={720}
+              className="flex min-h-0 flex-col"
+            >
+              <DynastyCreatePanel
+                // Remount when a fresh deep link brings a different prefill;
+                // the kind toggle deliberately isn't part of the key, so
+                // switching kinds keeps what's already typed
+                key={search.dynasty ?? ''}
+                kind={creating}
+                onKindChange={(next) => go({ create: next, dynasty: search.dynasty }, true)}
+                modPath={modPath}
+                gameDir={gameDir}
+                replacePaths={replacePaths}
+                data={data}
+                refData={refData}
+                files={defFiles}
+                prefillDynasty={search.dynasty ?? null}
+                onOpenRow={openRow}
+                onCreated={(kind, id) => {
+                  // Reload first: the row the URL is about to point at has to
+                  // exist in the scan, or the deep-link guard bounces it back
+                  void reload().then(() => go({ id, kind }, true))
+                }}
+                onClose={closeRow}
+              />
+            </ResizablePanel>
+          </>
+        )}
+      </ResizablePanelGroup>
     </div>
   )
 }

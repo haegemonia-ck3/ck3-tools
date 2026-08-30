@@ -368,6 +368,143 @@ export interface CulturePatch {
 }
 
 /**
+ * A faith's `color = …` value. CK3 writes it several ways — a `{ r g b }`
+ * triple in either 0–1 floats or 0–255 integers, an `hsv`/`hsv360` triple, or
+ * the name of a swatch from `common/named_colors` — and the editor only rewrites
+ * the plain triples. Everything else is shown, with its swatch, and left alone.
+ */
+export interface FaithColor {
+  /** Resolved swatch as "#rrggbb"; null when the value couldn't be resolved */
+  hex: string | null
+  /** The value exactly as the file wrote it, for the forms we don't rewrite */
+  raw: string
+  /** Whether saving can rewrite this value */
+  editable: boolean
+}
+
+/**
+ * A faith definition, nested two levels deep in a religion file as
+ * `<religion> = { faiths = { <faith> = { … } } }`.
+ */
+export interface FaithDef {
+  id: string
+  /** File name within common/religion/religion_types */
+  file: string
+  /** Whether the definition lives in the mod (editable) vs. the base game */
+  inMod: boolean
+  /** Id of the religion whose `faiths` block holds this faith */
+  religion: string
+  color: FaithColor | null
+  /** `icon =` value: a file name (sans .dds) under gfx/interface/icons/faith */
+  icon: string | null
+  reformedIcon: string | null
+  /** `religious_head =` landed title id, e.g. "d_karaism" */
+  religiousHead: string | null
+  /**
+   * Every `doctrine =` value in file order, tenets included. Duplicates are
+   * kept as written so an untouched save stays byte-for-byte identical.
+   */
+  doctrines: string[]
+  /** `holy_site =` values, in file order */
+  holySites: string[]
+  /** Display name from localization (faiths localize under their own id) */
+  localizedName: string | null
+}
+
+/** A religion definition: a top-level block in common/religion/religion_types. */
+export interface ReligionDef {
+  id: string
+  file: string
+  inMod: boolean
+  /** `family =` value, an id from common/religion/religion_family_types */
+  family: string | null
+  graphicalFaith: string | null
+  pietyIconGroup: string | null
+  /** Doctrines every faith of the religion inherits unless it overrides them */
+  doctrines: string[]
+  localizedName: string | null
+}
+
+/**
+ * A doctrine group from `common/religion/doctrine_group_types`: the set of
+ * mutually exclusive doctrines a faith picks from. `picks` is how many of them
+ * a faith may hold at once — one for most groups, three for core tenets.
+ */
+export interface DoctrineGroup {
+  id: string
+  /** `category =` value: "main_group", "marriage", "crimes", "clergy", "core_tenets", … */
+  category: string | null
+  /** `number_of_picks`; 1 when the group doesn't say */
+  picks: number
+  /** The group's doctrines, in file order, with display names */
+  doctrines: RefEntry[]
+  name: string | null
+}
+
+/** A character in the mod's history that professes a faith. */
+export interface FaithAdherent {
+  id: string
+  /** File name within history/characters */
+  file: string
+  name: string | null
+  /** Raw `faith =` / `religion =` value as written in the history file */
+  faith: string
+}
+
+export interface ReligionData {
+  religions: ReligionDef[]
+  faiths: FaithDef[]
+  /** Doctrine groups, mod definitions layered over the game's */
+  groups: DoctrineGroup[]
+  /** Doctrines that belong to no scanned group, so nothing is hidden from view */
+  ungroupedDoctrines: RefEntry[]
+  holySites: RefEntry[]
+  families: RefEntry[]
+  adherents: FaithAdherent[]
+}
+
+/** Editable faith fields; null clears the line, [] clears every repeat */
+export interface FaithPatch {
+  /** "#rrggbb"; ignored when the file's colour isn't a rewritable triple */
+  color: string | null
+  icon: string | null
+  reformedIcon: string | null
+  religiousHead: string | null
+  doctrines: string[]
+  holySites: string[]
+}
+
+/** Editable religion fields; null clears the line */
+export interface ReligionPatch {
+  family: string | null
+  graphicalFaith: string | null
+  pietyIconGroup: string | null
+  doctrines: string[]
+}
+
+/**
+ * A brand-new dynasty definition: an id for the block plus the same editable
+ * fields a patch carries. Null (or blank) fields are simply not written.
+ */
+export interface NewDynasty extends DynastyPatch {
+  /** Top-level key of the new block, e.g. "dynn_Komnenos" or "25061" */
+  id: string
+}
+
+/** A brand-new house definition; `dynasty` (the parent) is mandatory. */
+export interface NewHouse extends HousePatch {
+  id: string
+}
+
+/** The .txt files a new dynasty or house definition can be written to. */
+export interface DynastyFiles {
+  /** File names within common/dynasties */
+  dynasties: string[]
+  /** File names within common/dynasty_houses */
+  houses: string[]
+}
+
+/**
  * A reference id paired with its display name. `name` is the localized name
  * when one could be resolved (cultures/faiths key off the id, traits off
  * `trait_<id>`, dynasties/houses off their `name` scalar), and null for
@@ -402,6 +539,9 @@ export type RefKind =
   | 'tradition'
   | 'name_list'
   | 'ethnicity'
+  | 'religion'
+  | 'doctrine'
+  | 'holy_site'
 
 export interface RefLocation {
   /** Absolute path of the file containing the definition */

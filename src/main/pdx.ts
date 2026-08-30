@@ -183,20 +183,18 @@ export function scanRepeatedScalar(body: string, key: string): string[] {
   return values
 }
 
-// ---------- Lenient scalar scanning ----------
+// ---------- Lenient scanning ----------
 
-/**
- * A `key = value` statement anywhere in a line of depth-0 code. Unlike
- * scanScalars this is not anchored to the whole line, so it also reads
- * single-line bodies holding several statements.
- */
+// A `key = value` statement anywhere in a line of depth-0 code. Unlike
+// scanScalars this is not anchored to the whole line, so it also reads
+// single-line bodies holding several statements.
 const STATEMENT = /(^|\s)([A-Za-z0-9_.\-']+)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/g
 
 /**
  * The depth-0 code of a line — comments and the contents of inline sub-blocks
  * removed — given the brace depth at the line's start.
  */
-export function topLevelCode(line: string, startDepth: number): string {
+function topLevelCode(line: string, startDepth: number): string {
   let out = ''
   let depth = startDepth
   let inQuote = false
@@ -230,11 +228,7 @@ export function topLevelCode(line: string, startDepth: number): string {
   return out
 }
 
-/**
- * Depth-0 scalars with lowercased keys, first occurrence wins. Laxer than
- * scanScalars: real files put several statements on one line and spell keys
- * with unexpected case.
- */
+/** Depth-0 scalars with lowercased keys, first occurrence wins. */
 export function scanScalarsCI(body: string): Map<string, string> {
   const scalars = new Map<string, string>()
   for (const { text, depth } of annotateLines(body)) {
@@ -244,4 +238,20 @@ export function scanScalarsCI(body: string): Map<string, string> {
     }
   }
   return scalars
+}
+
+/**
+ * Every value of a repeating depth-0 key, in file order. Matched leniently
+ * like scanScalarsCI — case-insensitive, and statements sharing a line with
+ * others are still seen (real files write `doctrine = x # why`).
+ */
+export function scanRepeatedScalarCI(body: string, key: string): string[] {
+  const wanted = key.toLowerCase()
+  const values: string[] = []
+  for (const { text, depth } of annotateLines(body)) {
+    for (const m of topLevelCode(text, depth).matchAll(STATEMENT)) {
+      if (m[2].toLowerCase() === wanted) values.push(m[3] ?? m[4])
+    }
+  }
+  return values
 }

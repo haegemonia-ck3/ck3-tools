@@ -64,6 +64,8 @@ interface Props {
   onOpenLineage: (kind: 'dynasty' | 'house', id: string) => void
   /** Open a culture in the Culture Editor */
   onOpenCulture: (id: string) => void
+  /** Open a faith in the Faith Editor */
+  onOpenFaith: (id: string) => void
   /** Open the create-character panel with these prefills (the Add child button) */
   onCreateChild: (prefill: CharacterSearch) => void
   /** Persisted unsaved edits for this character, if any; read once per open */
@@ -91,6 +93,7 @@ export default function CharacterDetailPanel({
   onNavigate,
   onOpenLineage,
   onOpenCulture,
+  onOpenFaith,
   onCreateChild,
   storedDraft,
   onDraftChange,
@@ -379,6 +382,7 @@ export default function CharacterDetailPanel({
           onNavigate={onNavigate}
           onOpenLineage={onOpenLineage}
           onOpenCulture={onOpenCulture}
+          onOpenFaith={onOpenFaith}
           badBirth={badBirth}
           badDeath={badDeath}
           identitySlot={

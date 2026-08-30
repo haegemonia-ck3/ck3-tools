@@ -8,13 +8,19 @@ import type {
   DirValidation,
   DnaPasteInfo,
   DynastyData,
+  DynastyFiles,
   DynastyPatch,
   EditorInfo,
+  FaithPatch,
   HousePatch,
   ModInfo,
+  NewDynasty,
+  NewHouse,
   RefKind,
   RefLocation,
   ReferenceData,
+  ReligionData,
+  ReligionPatch,
   SaveResult
 } from '@shared/types'
 
@@ -76,6 +82,41 @@ export interface Ck3ToolsApi {
     id: string,
     patch: CulturePatch
   ) => Promise<SaveResult>
+  /** The mod's own common/dynasties and common/dynasty_houses .txt files */
+  listDynastyFiles: (modPath: string) => Promise<DynastyFiles>
+  createDynasty: (modPath: string, file: string, def: NewDynasty) => Promise<SaveResult>
+  createHouse: (modPath: string, file: string, def: NewHouse) => Promise<SaveResult>
+  getReligionData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<ReligionData>
+  saveFaith: (
+    modPath: string,
+    file: string,
+    religionId: string,
+    faithId: string,
+    patch: FaithPatch
+  ) => Promise<SaveResult>
+  saveReligion: (
+    modPath: string,
+    file: string,
+    religionId: string,
+    patch: ReligionPatch
+  ) => Promise<SaveResult>
+  /** Faith icons from gfx/interface/icons/faith, keyed by the `icon =` value */
+  getFaithIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    icons: string[]
+  ) => Promise<Record<string, string | null>>
+  /** Every icon name a faith can point at, mod files layered over the game's */
+  listFaithIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<string[]>
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

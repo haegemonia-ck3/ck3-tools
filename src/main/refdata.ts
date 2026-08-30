@@ -183,7 +183,10 @@ const KIND_DIRS: Record<RefKind, string[]> = {
   pillar: ['common/culture/pillars'],
   tradition: ['common/culture/traditions'],
   name_list: ['common/culture/name_lists'],
-  ethnicity: ['common/ethnicities']
+  ethnicity: ['common/ethnicities'],
+  religion: ['common/religion/religion_types'],
+  doctrine: ['common/religion/doctrine_types', 'common/religion/doctrine_group_types'],
+  holy_site: ['common/religion/holy_site_types']
 }
 
 function lineOf(text: string, offset: number): number {

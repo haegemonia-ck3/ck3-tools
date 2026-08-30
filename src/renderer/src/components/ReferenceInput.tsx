@@ -64,9 +64,9 @@ interface Props {
   /** Tooltip for the follow button; defaults to wording for a definition site. */
   followTitle?: string
   /**
-   * Read-only mode: the value still shows (and the follow button still
-   * works) but nothing can be picked or cleared — for records the app can
-   * display but not write, like a base-game definition.
+   * Read-only mode for a field whose entity can't be edited (a base-game
+   * definition). The follow button stays live — going to where a value is
+   * defined is exactly what you want when you can't change it here.
    */
   disabled?: boolean
   className?: string

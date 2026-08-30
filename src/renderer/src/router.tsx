@@ -10,7 +10,7 @@ import SettingsPage from './pages/SettingsPage'
 import CharacterEditorPage from './pages/CharacterEditorPage'
 import CultureEditorPage from './pages/CultureEditorPage'
 import DynastyEditorPage from './pages/DynastyEditorPage'
-import ToolPlaceholder from './pages/ToolPlaceholder'
+import FaithEditorPage from './pages/FaithEditorPage'
 
 /**
  * Deep-link target for the character editor (e.g. from a family-tree node).
@@ -38,10 +38,26 @@ export interface CharacterSearch {
  * House field). `kind` says which list to open the id in; the page falls back
  * to the other list when the id isn't found there, so a file that puts a house
  * id under `dynasty =` still lands somewhere useful.
+ *
+ * With `create` set, the page opens the new-definition panel for that kind
+ * instead of a row, and `dynasty` acts as a prefill — so "New house" from a
+ * dynasty can pass itself as the parent.
  */
 export interface DynastySearch {
   id?: string
   kind?: 'dynasty' | 'house'
+  create?: 'dynasty' | 'house'
+  dynasty?: string
+}
+
+/**
+ * Deep-link target for the faith editor (e.g. a character's Faith field, or a
+ * religion's faith list). `kind` says which list to open the id in; the page
+ * falls back to the other list when the id isn't found there.
+ */
+export interface FaithSearch {
+  id?: string
+  kind?: 'religion' | 'faith'
 }
 
 /**
@@ -96,16 +112,26 @@ const dynastiesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/dynasties',
   component: DynastyEditorPage,
-  validateSearch: (search: Record<string, unknown>): DynastySearch => ({
-    id: typeof search.id === 'string' ? search.id : undefined,
-    kind: search.kind === 'dynasty' || search.kind === 'house' ? search.kind : undefined
-  })
+  validateSearch: (search: Record<string, unknown>): DynastySearch => {
+    const defKind = (v: unknown): 'dynasty' | 'house' | undefined =>
+      v === 'dynasty' || v === 'house' ? v : undefined
+    return {
+      id: typeof search.id === 'string' ? search.id : undefined,
+      kind: defKind(search.kind),
+      create: defKind(search.create),
+      dynasty: typeof search.dynasty === 'string' ? search.dynasty : undefined
+    }
+  }
 })
 
 const faithsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/faiths',
-  component: () => <ToolPlaceholder name="Faith Editor" />
+  component: FaithEditorPage,
+  validateSearch: (search: Record<string, unknown>): FaithSearch => ({
+    id: typeof search.id === 'string' ? search.id : undefined,
+    kind: search.kind === 'religion' || search.kind === 'faith' ? search.kind : undefined
+  })
 })
 
 const culturesRoute = createRoute({
