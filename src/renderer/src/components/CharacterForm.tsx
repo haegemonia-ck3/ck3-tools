@@ -129,7 +129,7 @@ interface Props {
   markRequired?: boolean
   /** Rendered at the top of the identity fieldset (ID display/input, file picker) */
   identitySlot?: React.ReactNode
-  /** Rendered at the end of Life & lineage (the edit panel's children list) */
+  /** Rendered at the end of Family (the edit panel's children list) */
   childrenSlot?: React.ReactNode
 }
 
@@ -464,6 +464,10 @@ export default function CharacterForm({
             )}
           </div>
         </div>
+      </FieldSet>
+
+      <FieldSet className="gap-3.5">
+        <FieldLegend variant="label" className="mb-0">Family</FieldLegend>
         <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {parentField('Father', draft.father, (v) => set({ father: v }))}
           {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
