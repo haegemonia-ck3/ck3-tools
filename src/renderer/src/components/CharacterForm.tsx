@@ -6,12 +6,11 @@ import type {
   ReferenceData
 } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
-import { useTraitIcons } from '../useTraitIcons'
-import type { IconContext } from '../useTraitIcons'
+import { useFlatIcons, useTraitIcons } from '../useGameIcons'
+import type { IconContext } from '../useGameIcons'
 import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
-import { Checkbox } from '@/components/ui/checkbox'
 import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,6 +28,41 @@ import {
   toCalendarInput
 } from '@/lib/ck3Date'
 import type { CalendarEra } from '@/lib/ck3Date'
+import { cn } from '@/lib/utils'
+
+/** The `sexuality =` values the game defines, in its own display order. */
+const SEXUALITIES = ['heterosexual', 'homosexual', 'bisexual', 'asexual'] as const
+
+/** Stands in for "no `sexuality =` line": Radix selects can't hold an empty value. */
+const NO_SEXUALITY = 'none'
+
+/** Every flat icon this form draws; constant so the batch fetch runs once. */
+const FLAT_ICONS = ['male', 'female', ...SEXUALITIES]
+
+/**
+ * A game flat icon. These ship as black-on-transparent silhouettes, so draw
+ * them as a mask over `currentColor` rather than as an image — that way they
+ * follow the surrounding text color (theme, and a toggle's selected state)
+ * instead of disappearing into the dark background.
+ */
+function FlatIcon({
+  url,
+  className
+}: {
+  url: string | null | undefined
+  className?: string
+}): React.JSX.Element {
+  const mask = url ? `url(${url}) center / contain no-repeat` : undefined
+  return (
+    <span
+      aria-hidden
+      className={cn('inline-block size-4 shrink-0 bg-current', className)}
+      // Hidden rather than dropped while loading (or with no game dir set) so
+      // labels don't shift sideways once the icons arrive.
+      style={mask ? { mask, WebkitMask: mask } : { visibility: 'hidden' }}
+    />
+  )
+}
 
 /** The uppercase micro-label used over every field in the character panels. */
 export function FieldLabel({
@@ -135,6 +169,7 @@ export default function CharacterForm({
 
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft.traits)
+  const flatIconFor = useFlatIcons(iconCtx, FLAT_ICONS)
 
   const addTrait = (value: string): void => {
     const t = value.trim()
@@ -297,13 +332,51 @@ export default function CharacterForm({
       <FieldSet className="gap-3.5">
         {identitySlot}
         {textField('Name', draft.name, (v) => set({ name: v }), { required: markRequired })}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="character-female"
-            checked={/^yes$/i.test(draft.female ?? '')}
-            onCheckedChange={(checked) => set({ female: checked === true ? 'yes' : null })}
-          />
-          <FieldLabel htmlFor="character-female">Female</FieldLabel>
+        <div className="flex items-end gap-4">
+          <div className="space-y-1.5">
+            <FieldLabel>Gender</FieldLabel>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              value={/^yes$/i.test(draft.female ?? '') ? 'female' : 'male'}
+              onValueChange={(v) => v && set({ female: v === 'female' ? 'yes' : null })}
+              aria-label="Gender"
+            >
+              <ToggleGroupItem value="male">
+                <FlatIcon url={flatIconFor('male')} className="size-3.5" />
+                Male
+              </ToggleGroupItem>
+              <ToggleGroupItem value="female">
+                <FlatIcon url={flatIconFor('female')} className="size-3.5" />
+                Female
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <FieldLabel htmlFor="character-sexuality">Sexuality</FieldLabel>
+            {/* Icons live inside the items, so the trigger shows the chosen one too */}
+            <Select
+              value={draft.sexuality ?? NO_SEXUALITY}
+              onValueChange={(v) => set({ sexuality: v === NO_SEXUALITY ? null : v })}
+            >
+              <SelectTrigger id="character-sexuality" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_SEXUALITY}>
+                  <FlatIcon url={null} className="size-3.5" />
+                  Unset
+                </SelectItem>
+                {SEXUALITIES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    <FlatIcon url={flatIconFor(s)} className="size-3.5" />
+                    <span className="capitalize">{s}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </FieldSet>
 

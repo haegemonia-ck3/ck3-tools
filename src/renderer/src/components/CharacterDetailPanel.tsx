@@ -23,7 +23,12 @@ import { isValidCK3Date } from '@/lib/ck3Date'
  * as dirty against a freshly parsed character nor writes `undefined` back.
  */
 function withDefaults(detail: CharacterDetail): CharacterDetail {
-  return { ...detail, house: detail.house ?? null, female: detail.female ?? null }
+  return {
+    ...detail,
+    house: detail.house ?? null,
+    female: detail.female ?? null,
+    sexuality: detail.sexuality ?? null
+  }
 }
 
 interface Props {

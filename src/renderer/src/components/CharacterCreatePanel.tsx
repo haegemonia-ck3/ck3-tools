@@ -87,6 +87,7 @@ export default function CharacterCreatePanel({
       prowess: null
     },
     female: null,
+    sexuality: null,
     ...prefill
   }))
   const [fileChoice, setFileChoice] = useState<string>(() => {

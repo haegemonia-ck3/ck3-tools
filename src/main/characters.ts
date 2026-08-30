@@ -65,7 +65,8 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     mother: scalars.get('mother') ?? null,
     traits: scanRepeatedScalar(body, 'trait'),
     stats,
-    female: scalars.get('female') ?? null
+    female: scalars.get('female') ?? null,
+    sexuality: scalars.get('sexuality') ?? null
   }
 }
 
@@ -255,6 +256,7 @@ export function saveCharacter(
       setScalar(ed, keys, value, { quoteNew, insertAt: firstDateBlockLine(ed) })
     set(['name'], detail.name, true)
     set(['female'], detail.female)
+    set(['sexuality'], detail.sexuality)
     set(['dynasty'], detail.dynasty)
     set(['dynasty_house'], detail.house)
     set(['culture'], detail.culture)
@@ -349,6 +351,7 @@ export function createCharacter(
     }
     push('name', detail.name, true)
     push('female', detail.female)
+    push('sexuality', detail.sexuality)
     push('dynasty', detail.dynasty)
     push('dynasty_house', detail.house)
     push('culture', detail.culture)

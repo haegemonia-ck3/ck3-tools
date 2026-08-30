@@ -57,6 +57,13 @@ const api = {
     traits: string[]
   ): Promise<Record<string, string | null>> =>
     ipcRenderer.invoke('ck3:getTraitIcons', gameDir, modPath, replacePaths, traits),
+  getFlatIcons: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    names: string[]
+  ): Promise<Record<string, string | null>> =>
+    ipcRenderer.invoke('ck3:getFlatIcons', gameDir, modPath, replacePaths, names),
   getCoatsOfArms: (
     gameDir: string | null,
     modPath: string | null,
