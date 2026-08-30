@@ -390,7 +390,7 @@ export default function DynastyDetailPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
         {/* Without the details form the CoA stands alone at the top */}
         {!(draft && def) && <CoatOfArms ids={coaIds} size={112} />}
         {def === null && (
