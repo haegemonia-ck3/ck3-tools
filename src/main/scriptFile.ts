@@ -1,11 +1,20 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 /**
  * Writing brand-new top-level blocks into Paradox script files, shared by the
- * character and dynasty/house creators. Editing existing blocks goes through
- * `pdx.ts` spans and `lineEditor.ts` instead — this is only the append path.
+ * character, dynasty/house and culture creators. Editing existing blocks goes
+ * through `pdx.ts` spans and `lineEditor.ts` instead — this is only the append
+ * path.
  */
+
+/** The .txt files directly in `dir`, sorted — the targets a new block can go to. */
+export function listTxtFiles(dir: string): string[] {
+  if (!existsSync(dir)) return []
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.txt'))
+    .sort((a, b) => a.localeCompare(b))
+}
 
 /** Charset a top-level block key may use — the same one `scanBlocks` accepts. */
 export const KEY_CHARS = /^[A-Za-z0-9_.\-']+$/

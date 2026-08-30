@@ -394,6 +394,22 @@ describe('saveCulture', () => {
     expect(text).toContain('\tethos = ethos_bellicose\n')
   })
 
+  it('accepts a colour with whitespace around it, and writes it trimmed', () => {
+    // The guard and the writer must see the same string: formatColor slices
+    // fixed offsets, so an untrimmed value would come out as `rgb { NaN … }`
+    expect(save('attic', { color: '  #00ff00  ' })).toEqual({ ok: true })
+    expect(readFileSync(cultureFile, 'utf-8')).toContain('color = rgb { 0 255 0 }')
+  })
+
+  it('rejects a colour that is not a hex triple, leaving the file alone', () => {
+    const before = readFileSync(cultureFile, 'utf-8')
+    expect(save('attic', { color: '#zz' })).toEqual({
+      ok: false,
+      error: 'Invalid colour "#zz" (expected #rrggbb)'
+    })
+    expect(readFileSync(cultureFile, 'utf-8')).toBe(before)
+  })
+
   it('writes an edited named colour as an rgb triple', () => {
     expect(save('palette_named', { color: '#00ff00' })).toEqual({ ok: true })
     expect(readFileSync(cultureFile, 'utf-8')).toContain('color = rgb { 0 255 0 }')

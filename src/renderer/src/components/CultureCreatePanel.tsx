@@ -259,8 +259,10 @@ export default function CultureCreatePanel({
           value={startFrom}
           onChange={(v) => {
             setStartFrom(v)
+            // Clearing the picker only drops the annotation: `draft` is the
+            // only copy of what has been typed, so nothing here discards it.
             const source = v === null ? null : findCulture(data, v)
-            setDraft(source ? seedFrom(source) : blankDraft(data, randomCultureColor()))
+            if (source) setDraft(seedFrom(source))
             setError(null)
           }}
           options={data.cultures.map((c) => ({ id: c.id, name: c.localizedName }))}
@@ -274,21 +276,26 @@ export default function CultureCreatePanel({
     </>
   )
 
+  // Both notes describe the culture currently selected in "Start from", not
+  // the one the URL happened to open with, so they stay true as it changes.
+  const source = startFrom === null ? null : findCulture(data, startFrom)
+  const seededParent =
+    source !== null && draft.parents.some((p) => normId(p) === normId(source.id))
+
   const notes = {
     color:
-      seed?.color?.format === 'named' ? (
+      source?.color?.format === 'named' ? (
         <Hint
           label="Source"
-          value={`${seed.color.raw} is a named colour — a new culture writes rgb { … }`}
+          value={`${source.color.raw} is a named colour — a new culture writes rgb { … }`}
         />
       ) : undefined,
-    parents:
-      startFrom !== null && draft.parents.length > 0 ? (
-        <Hint
-          label="Seeded"
-          value={`descends from ${startFrom} — remove it if this isn't a derived culture`}
-        />
-      ) : undefined,
+    parents: seededParent ? (
+      <Hint
+        label="Seeded"
+        value={`descends from ${source!.id} — remove it if this isn't a derived culture`}
+      />
+    ) : undefined,
     traditions:
       draft.traditions.length > DEFAULT_MAX_TRADITIONS ? (
         <Hint

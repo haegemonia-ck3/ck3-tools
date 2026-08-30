@@ -285,6 +285,23 @@ describe('missingRequired', () => {
     ])
   })
 
+  it('rejects a bad weight on ANY row, matching what the writer validates', () => {
+    // createCulture checks every row it keeps, so a gate that only looked for
+    // one good row would enable Create on something the backend refuses
+    const rows = [
+      { weight: '100', id: 'mediterranean' },
+      { weight: 'lots', id: 'levantine' }
+    ]
+    expect(missingRequired({ ...complete(), ethnicities: rows })).toEqual(['Ethnicities'])
+    // A row with no ethnicity picked yet is ignored — Add starts one blank
+    expect(
+      missingRequired({
+        ...complete(),
+        ethnicities: [{ weight: '100', id: 'mediterranean' }, { weight: '10', id: '' }]
+      })
+    ).toEqual([])
+  })
+
   it('counts an ethnicity row the writer would reject as missing', () => {
     expect(missingRequired({ ...complete(), ethnicities: [] })).toEqual(['Ethnicities'])
     expect(missingRequired({ ...complete(), ethnicities: [{ weight: '100', id: ' ' }] })).toEqual([

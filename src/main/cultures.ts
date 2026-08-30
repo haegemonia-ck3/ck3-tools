@@ -10,7 +10,7 @@ import {
   splitComment
 } from './lineEditor'
 import { readLocalization, resolveLocReferences } from './localization'
-import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
+import { appendBlock, isTxtFileName, KEY_CHARS, listTxtFiles } from './scriptFile'
 import { annotateLines, scanBlocks, scanScalarsCI } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
 import type { LineEditor } from './lineEditor'
@@ -585,7 +585,11 @@ export function saveCulture(
   const path = join(modPath, ...CULTURE_DIR.split('/'), file)
   try {
     if (!existsSync(path)) return { ok: false, error: `File not found: ${file}` }
-    if (patch.color !== null && !HEX.test(patch.color.trim())) {
+    // Trimmed once and used from here on: `formatColor` slices fixed offsets,
+    // so writing an untrimmed value would put the guard and the writer out of
+    // step and emit `rgb { NaN … }` for exactly the input the guard accepted.
+    const color = patch.color === null ? null : patch.color.trim()
+    if (color !== null && !HEX.test(color)) {
       return { ok: false, error: `Invalid colour "${patch.color}" (expected #rrggbb)` }
     }
     const text = readFileSync(path, 'utf-8')
@@ -607,7 +611,7 @@ export function saveCulture(
       if (!sameList(was, now)) setBlockList(ed, key, now)
     }
 
-    if (patch.color !== (current.color?.hex ?? null)) setColor(ed, patch.color)
+    if (color !== (current.color?.hex ?? null)) setColor(ed, color)
     scalar('ethos', patch.ethos)
     scalar('heritage', patch.heritage)
     scalar('language', patch.language)
@@ -641,16 +645,9 @@ export function saveCulture(
 
 // ---------- Creating ----------
 
-function listTxt(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.txt'))
-    .sort((a, b) => a.localeCompare(b))
-}
-
 /** The mod's own culture files — the targets a new definition can be written to. */
 export function listCultureFiles(modPath: string): string[] {
-  return listTxt(join(modPath, ...CULTURE_DIR.split('/')))
+  return listTxtFiles(join(modPath, ...CULTURE_DIR.split('/')))
 }
 
 /**
@@ -685,8 +682,9 @@ function cultureBlockLines(id: string, def: NewCulture): string[] {
   const scalar = (key: string, value: string | null): void => {
     if (value !== null && value.trim() !== '') lines.push(`\t${key} = ${value.trim()}`)
   }
-  // Duplicates are dropped because `blockWords` dedupes on read — writing them
-  // would make the block fail to round-trip through the next scan.
+  // Duplicates are dropped: for the word lists `blockWords` dedupes on read, so
+  // writing them would break the round-trip, and a repeated ethnicity line says
+  // nothing the single line doesn't.
   const block = (key: string, items: string[]): void => {
     const kept = [...new Set(items.map((v) => v.trim()).filter((v) => v !== ''))]
     if (kept.length === 0) return

@@ -231,9 +231,19 @@ export function blankDraft(data: CultureData, color: string): CulturePatch {
   }
 }
 
-/** Whether an ethnicities list has at least one row the writer would accept. */
-const hasUsableEthnicity = (rows: CultureEthnicity[]): boolean =>
-  rows.some((e) => e.id.trim() !== '' && /^\d+(\.\d+)?$/.test(e.weight.trim()))
+/** The weights `createCulture` accepts on an ethnicity row. */
+const WEIGHT = /^\d+(\.\d+)?$/
+
+/**
+ * Whether the ethnicities block is one the writer would accept: at least one
+ * row naming an ethnicity, and every such row carrying a numeric weight. Rows
+ * with no ethnicity picked yet are ignored — Add starts one blank, and the
+ * panel drops those before writing.
+ */
+const ethnicitiesUsable = (rows: CultureEthnicity[]): boolean => {
+  const named = rows.filter((e) => e.id.trim() !== '')
+  return named.length > 0 && named.every((e) => WEIGHT.test(e.weight.trim()))
+}
 
 /**
  * The required fields still unset, by label. One source of truth for the create
@@ -241,7 +251,7 @@ const hasUsableEthnicity = (rows: CultureEthnicity[]): boolean =>
  */
 export function missingRequired(draft: CulturePatch): string[] {
   return REQUIRED_FIELDS.filter(([key]) => {
-    if (key === 'ethnicities') return !hasUsableEthnicity(draft.ethnicities)
+    if (key === 'ethnicities') return !ethnicitiesUsable(draft.ethnicities)
     const value = draft[key] as string | null
     return value === null || value.trim() === ''
   }).map(([, label]) => label)

@@ -359,7 +359,10 @@ export default function CultureForm({
     )
   }
 
-  /** Swatch plus hex field; the file's own colour spelling is kept on save. */
+  /**
+   * Swatch plus hex field. Editing a culture keeps whatever spelling its file
+   * already used; a brand-new one is written as an `rgb` triple.
+   */
   const colorField = (): React.JSX.Element => {
     const hex = draft.color
     const valid = hex !== null && /^#[0-9a-f]{6}$/i.test(hex)

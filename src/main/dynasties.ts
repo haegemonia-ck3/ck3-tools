@@ -5,7 +5,7 @@ import { makeEditor, setScalar } from './lineEditor'
 import { readLocalization } from './localization'
 import { annotateLines, scanBlocks, scanScalarsCI } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
-import { appendBlock, isTxtFileName, KEY_CHARS } from './scriptFile'
+import { appendBlock, isTxtFileName, KEY_CHARS, listTxtFiles } from './scriptFile'
 import type { BlockSpan } from './pdx'
 import type {
   DynastyCharacter,
@@ -269,18 +269,11 @@ export function saveHouse(modPath: string, file: string, id: string, patch: Hous
 
 // ---------- Creating ----------
 
-function listTxt(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.txt'))
-    .sort((a, b) => a.localeCompare(b))
-}
-
 /** The mod's own definition files — the targets a new block can be written to. */
 export function listDynastyFiles(modPath: string): DynastyFiles {
   return {
-    dynasties: listTxt(join(modPath, ...DEF_DIR.dynasty.split('/'))),
-    houses: listTxt(join(modPath, ...DEF_DIR.house.split('/')))
+    dynasties: listTxtFiles(join(modPath, ...DEF_DIR.dynasty.split('/'))),
+    houses: listTxtFiles(join(modPath, ...DEF_DIR.house.split('/')))
   }
 }
 
