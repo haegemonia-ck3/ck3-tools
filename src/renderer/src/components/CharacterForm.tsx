@@ -9,6 +9,7 @@ import type {
 } from '@shared/types'
 import { STAT_LABELS } from '../statLabels'
 import { useTraitIcons } from '../useTraitIcons'
+import { useSkillIcons } from '../useSkillIcons'
 import type { IconContext } from '../useTraitIcons'
 import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
@@ -160,6 +161,7 @@ export default function CharacterForm({
 
   const iconCtx: IconContext = { gameDir, modPath, replacePaths }
   const iconFor = useTraitIcons(iconCtx, draft.traits)
+  const skillIconFor = useSkillIcons(iconCtx)
 
   const addTrait = (value: string): void => {
     const t = value.trim()
@@ -521,21 +523,32 @@ export default function CharacterForm({
           <FieldLabel>Stats</FieldLabel>
           <div className="grid grid-cols-3 gap-2">
             {STAT_LABELS.map(([key, label]) => (
-              <label key={key} className="space-y-1 text-[11px] text-muted-foreground">
-                <span>{label}</span>
-                <Input
-                  type="number"
-                  value={draft.stats[key] ?? ''}
-                  placeholder="—"
-                  onChange={(e) =>
-                    set({
-                      stats: {
-                        ...draft.stats,
-                        [key]: e.target.value === '' ? null : Number(e.target.value)
-                      }
-                    })
-                  }
+              <label
+                key={key}
+                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+              >
+                <img
+                  src={skillIconFor(key) ?? undefined}
+                  alt=""
+                  aria-hidden
+                  className="size-6 shrink-0"
                 />
+                <span className="min-w-0 flex-1 space-y-1">
+                  <span className="block">{label}</span>
+                  <Input
+                    type="number"
+                    value={draft.stats[key] ?? ''}
+                    placeholder="—"
+                    onChange={(e) =>
+                      set({
+                        stats: {
+                          ...draft.stats,
+                          [key]: e.target.value === '' ? null : Number(e.target.value)
+                        }
+                      })
+                    }
+                  />
+                </span>
               </label>
             ))}
           </div>

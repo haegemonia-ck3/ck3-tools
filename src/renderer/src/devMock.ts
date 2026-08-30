@@ -352,6 +352,7 @@ const mock: Ck3ToolsApi = {
   },
   getTraitIcons: async (_g, _m, _r, traits) =>
     Object.fromEntries(traits.map((t) => [t, null])),
+  getSkillIcons: async () => ({}),
   // A quartered stand-in so browser-mode dev shows the layout; real rendering
   // needs Electron (game files + main process). Only some ids get one, so the
   // "no coat of arms" placeholder is reachable here too.
