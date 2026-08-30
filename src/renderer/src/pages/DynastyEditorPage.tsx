@@ -586,6 +586,7 @@ export default function DynastyEditorPage(): React.JSX.Element {
                 void navigate({ to: '/characters', search })
               }}
               onOpenRow={openRow}
+              onOpenCulture={(id) => void navigate({ to: '/cultures', search: { id } })}
               onSaved={reload}
               onClose={closeRow}
             />

@@ -8,6 +8,7 @@ import {
 import RootLayout from './RootLayout'
 import SettingsPage from './pages/SettingsPage'
 import CharacterEditorPage from './pages/CharacterEditorPage'
+import CultureEditorPage from './pages/CultureEditorPage'
 import DynastyEditorPage from './pages/DynastyEditorPage'
 import ToolPlaceholder from './pages/ToolPlaceholder'
 
@@ -41,6 +42,14 @@ export interface CharacterSearch {
 export interface DynastySearch {
   id?: string
   kind?: 'dynasty' | 'house'
+}
+
+/**
+ * Deep-link target for the culture editor (e.g. a character's or dynasty's
+ * Culture field). An id that matches no culture falls back to the list.
+ */
+export interface CultureSearch {
+  id?: string
 }
 
 const rootRoute = createRootRoute({
@@ -102,7 +111,10 @@ const faithsRoute = createRoute({
 const culturesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/cultures',
-  component: () => <ToolPlaceholder name="Culture Editor" />
+  component: CultureEditorPage,
+  validateSearch: (search: Record<string, unknown>): CultureSearch => ({
+    id: typeof search.id === 'string' ? search.id : undefined
+  })
 })
 
 const routeTree = rootRoute.addChildren([

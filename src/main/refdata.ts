@@ -177,7 +177,13 @@ const KIND_DIRS: Record<RefKind, string[]> = {
   faith: ['common/religion/religion_types'],
   trait: ['common/traits'],
   dynasty: ['common/dynasties', 'common/dynasty_houses'],
-  dna: ['common/dna_data']
+  dna: ['common/dna_data'],
+  // Culture-editor references. Pillars of every type share one folder, so a
+  // single 'pillar' kind covers ethos, heritage, language and the rest.
+  pillar: ['common/culture/pillars'],
+  tradition: ['common/culture/traditions'],
+  name_list: ['common/culture/name_lists'],
+  ethnicity: ['common/ethnicities']
 }
 
 function lineOf(text: string, offset: number): number {

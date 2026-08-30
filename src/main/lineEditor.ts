@@ -1,4 +1,4 @@
-import { annotateLines } from './pdx'
+import { annotateLines, scanBlocks } from './pdx'
 
 /**
  * Surgical line editor for the body slice of a `key = { ... }` block. Only
@@ -180,4 +180,115 @@ export function setScalar(
   const cr = at < ed.lines.length ? eolSuffix(ed) : ''
   ed.lines.splice(at, 0, `${ed.indent}${statement}${cr}`)
   refresh(ed)
+}
+
+// ---------- Block-valued keys ----------
+
+/**
+ * Splice raw text into the body by character offsets and re-annotate. Offsets
+ * come from `scanBlocks` over the same joined text, so an edit lands exactly
+ * where the scanner saw the block and everything outside the span survives
+ * byte-for-byte.
+ */
+function spliceText(ed: LineEditor, start: number, end: number, replacement: string): void {
+  const text = ed.lines.join('\n')
+  ed.lines = (text.slice(0, start) + replacement + text.slice(end)).split('\n')
+  refresh(ed)
+}
+
+/** Every depth-0 `key = { … }` sub-block of the body, keys matched case-insensitively. */
+function findBlocks(ed: LineEditor, key: string): ReturnType<typeof scanBlocks> {
+  const wanted = key.toLowerCase()
+  return scanBlocks(ed.lines.join('\n')).filter((b) => b.key.toLowerCase() === wanted)
+}
+
+/** The whitespace prefix of the first non-blank line of a block body, if any. */
+function innerIndent(body: string, fallback: string): string {
+  for (const line of body.split('\n')) {
+    const m = line.match(/^([ \t]*)\S/)
+    if (m) return m[1]
+  }
+  return fallback
+}
+
+/**
+ * Set the contents of a `key = { … }` block to `values`, one per line.
+ *
+ * A block that already exists keeps its shape: single-line stays single-line
+ * (`coa_gfx = { a b }`), multi-line keeps its inner indentation. An empty list
+ * removes the whole statement; a new list is appended at the end of the body.
+ * Duplicate blocks of the same key — real files carry them — collapse into the
+ * first, since the edited value is the whole truth about the field.
+ */
+export function setBlockList(ed: LineEditor, key: string, values: string[]): void {
+  setBlockBody(
+    ed,
+    key,
+    values.length === 0
+      ? null
+      : (indent) => ({
+          single: ` ${values.join(' ')} `,
+          multi: values.map((v) => `${indent}${v}`)
+        })
+  )
+}
+
+/** Line renderings for a block body: one for a single-line block, one for a multi-line one. */
+type BlockBody = (innerIndent: string) => { single: string; multi: string[] }
+
+/**
+ * Shared machinery behind setBlockList and the ethnicities writer: replace,
+ * insert or delete the `key = { … }` statement. `render` returning null
+ * deletes it.
+ */
+export function setBlockBody(ed: LineEditor, key: string, render: BlockBody | null): void {
+  const blocks = findBlocks(ed, key)
+
+  if (render === null) {
+    // Delete back-to-front so earlier spans keep their offsets
+    for (const block of [...blocks].reverse()) {
+      const text = ed.lines.join('\n')
+      // Swallow the line's leading whitespace and its newline when the
+      // statement is all the line holds, so no blank line is left behind
+      let start = block.start
+      while (start > 0 && (text[start - 1] === ' ' || text[start - 1] === '\t')) start--
+      let end = block.end
+      const trailing = /^[ \t]*\r?\n/.exec(text.slice(end))
+      if (trailing && (start === 0 || text[start - 1] === '\n')) end += trailing[0].length
+      spliceText(ed, start, end, '')
+    }
+    return
+  }
+
+  for (const extra of blocks.slice(1).reverse()) spliceText(ed, extra.start, extra.end, '')
+  const block = findBlocks(ed, key)[0] ?? null
+
+  if (block === null) {
+    const body = render(`${ed.indent}${ed.indent}`)
+    const cr = eolSuffix(ed)
+    const at = endOfBodyIndex(ed)
+    ed.lines.splice(
+      at,
+      0,
+      `${ed.indent}${key} = {${cr}`,
+      ...body.multi.map((l) => `${l}${cr}`),
+      `${ed.indent}}${cr}`
+    )
+    refresh(ed)
+    return
+  }
+
+  const text = ed.lines.join('\n')
+  const current = text.slice(block.bodyStart, block.bodyEnd)
+  if (!current.includes('\n')) {
+    spliceText(ed, block.bodyStart, block.bodyEnd, render(ed.indent).single)
+    return
+  }
+  // Multi-line: keep the closing brace's own indentation by rebuilding the
+  // body as newline + items + closing indent
+  const closingIndent = current.slice(current.lastIndexOf('\n') + 1)
+  const cr = eolSuffix(ed)
+  const body = render(innerIndent(current, `${closingIndent}${ed.indent}`))
+  const lines = body.multi.map((l) => `${l}${cr}`).join('\n')
+  spliceText(ed, block.bodyStart, block.bodyEnd, `${cr}\n${lines}\n${closingIndent}`)
 }

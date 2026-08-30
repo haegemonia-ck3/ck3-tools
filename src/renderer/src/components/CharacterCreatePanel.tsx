@@ -40,6 +40,8 @@ interface Props {
   initialFile: string | null
   onNavigate: (id: string) => void
   onOpenLineage: (kind: 'dynasty' | 'house', id: string) => void
+  /** Open a culture in the Culture Editor */
+  onOpenCulture: (id: string) => void
   /** Called after a successful create with the target file and new id */
   onCreated: (file: string, id: string) => void
   onClose: () => void
@@ -63,6 +65,7 @@ export default function CharacterCreatePanel({
   initialFile,
   onNavigate,
   onOpenLineage,
+  onOpenCulture,
   onCreated,
   onClose
 }: Props): React.JSX.Element {
@@ -236,6 +239,7 @@ export default function CharacterCreatePanel({
           characters={characters}
           onNavigate={onNavigate}
           onOpenLineage={onOpenLineage}
+          onOpenCulture={onOpenCulture}
           badBirth={badBirth}
           badDeath={badDeath}
           markRequired

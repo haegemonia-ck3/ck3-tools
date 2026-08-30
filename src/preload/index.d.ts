@@ -2,6 +2,8 @@ import type {
   AppSettings,
   CharacterDetail,
   CharacterSummary,
+  CultureData,
+  CulturePatch,
   DetectionResult,
   DirValidation,
   DnaPasteInfo,
@@ -60,6 +62,20 @@ export interface Ck3ToolsApi {
     patch: DynastyPatch
   ) => Promise<SaveResult>
   saveHouse: (modPath: string, file: string, id: string, patch: HousePatch) => Promise<SaveResult>
+  getCultureData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<CultureData>
+  /** Game paths included so a named colour resolves and survives an unrelated edit */
+  saveCulture: (
+    gameDir: string | null,
+    modPath: string,
+    replacePaths: string[],
+    file: string,
+    id: string,
+    patch: CulturePatch
+  ) => Promise<SaveResult>
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

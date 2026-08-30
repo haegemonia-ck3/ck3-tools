@@ -161,6 +161,8 @@ interface Props {
   onNavigate: (id: string) => void
   /** Open a lineage row in the Dynasty & House Editor */
   onOpenLineage: (kind: 'dynasty' | 'house', id: string) => void
+  /** Open a culture in the Culture Editor */
+  onOpenCulture: (id: string) => void
   badBirth: boolean
   badDeath: boolean
   /** Mark the game-mandatory fields with an asterisk (create mode) */
@@ -193,6 +195,7 @@ export default function CharacterForm({
   characters,
   onNavigate,
   onOpenLineage,
+  onOpenCulture,
   badBirth,
   badDeath,
   markRequired = false,
@@ -550,14 +553,17 @@ export default function CharacterForm({
 
       <FieldSet className="gap-3.5">
         <FieldLegend variant="label" className="mb-0">Culture &amp; traits</FieldLegend>
-        {refField(
-          'Culture',
-          'culture',
-          draft.culture,
-          (v) => set({ culture: v }),
-          refData?.cultures ?? [],
-          markRequired
-        )}
+        <div className="space-y-1.5">
+          <FieldLabel required={markRequired}>Culture</FieldLabel>
+          <ReferenceInput
+            value={draft.culture}
+            onChange={(v) => set({ culture: v })}
+            options={refData?.cultures ?? []}
+            placeholder="none"
+            onNavigate={onOpenCulture}
+            followTitle="Open in Culture Editor"
+          />
+        </div>
         {refField(
           'Faith',
           'faith',

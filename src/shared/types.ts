@@ -236,6 +236,138 @@ export interface HousePatch {
 }
 
 /**
+ * How a culture's `color =` line is written, so an edit can be written back
+ * the same way the file already reads. CK3 spells the same color five ways:
+ * a named color from `common/named_colors`, an `rgb { 0-255 }` triple, `hsv`
+ * (0-1) or `hsv360` (h 0-360, s/v 0-100), or a bare brace triple that is 0-255
+ * when every component is an integer and 0-1 otherwise.
+ */
+export type CultureColorFormat = 'named' | 'rgb' | 'hsv' | 'hsv360' | 'int' | 'float'
+
+export interface CultureColor {
+  format: CultureColorFormat
+  /** The value exactly as written, e.g. "italian" or "rgb { 128 149 72 }" */
+  raw: string
+  /** Resolved sRGB hex ("#809548"); null when a named color resolves nowhere */
+  hex: string | null
+}
+
+/** One `<weight> = <ethnicity>` line of a culture's `ethnicities` block. */
+export interface CultureEthnicity {
+  /** Relative weight, as written (real files use whole numbers) */
+  weight: string
+  id: string
+}
+
+/**
+ * A culture definition block from `common/culture/cultures`. Unlike dynasties,
+ * cultures carry no `name` scalar — their display name is the localization of
+ * the id itself, so `localizedName` is read-only here.
+ */
+export interface CultureDef {
+  id: string
+  /** File name within common/culture/cultures */
+  file: string
+  /** Whether the definition lives in the mod (editable) vs. the base game */
+  inMod: boolean
+  localizedName: string | null
+  color: CultureColor | null
+  ethos: string | null
+  heritage: string | null
+  language: string | null
+  martialCustom: string | null
+  headDetermination: string | null
+  traditions: string[]
+  nameList: string | null
+  /** Cultures this one descends from, as written */
+  parents: string[]
+  /** Raw `created =` date, e.g. "476.11.4" */
+  created: string | null
+  coaGfx: string[]
+  buildingGfx: string[]
+  clothingGfx: string[]
+  unitGfx: string[]
+  houseCoaFrame: string | null
+  ethnicities: CultureEthnicity[]
+}
+
+/** The five `type =` values a `common/culture/pillars` definition can carry. */
+export type CulturePillarType =
+  | 'ethos'
+  | 'heritage'
+  | 'language'
+  | 'martial_custom'
+  | 'head_determination'
+
+/** A tradition, with the `category =` its definition declares (for grouping). */
+export interface CultureTraditionEntry extends RefEntry {
+  category: string | null
+}
+
+/**
+ * A character as needed for a culture's member list. Only the mod's own
+ * history is scanned — game characters aren't editable and would swamp it.
+ */
+export interface CultureCharacter {
+  id: string
+  /** File name within history/characters */
+  file: string
+  name: string | null
+  birth: string | null
+  death: string | null
+  /** Raw `culture =` value, if present */
+  culture: string | null
+}
+
+export interface CultureData {
+  /** Every culture the mod effectively loads, mod definitions first */
+  cultures: CultureDef[]
+  /** Pillar options, keyed by the `type =` their definition declares */
+  pillars: Record<CulturePillarType, RefEntry[]>
+  traditions: CultureTraditionEntry[]
+  /** Ids from `common/culture/name_lists` */
+  nameLists: RefEntry[]
+  /** Ids from `common/ethnicities` */
+  ethnicities: RefEntry[]
+  /**
+   * Graphics-bundle ids, gathered from the values the effective culture files
+   * actually use — these have no single definition folder to enumerate.
+   */
+  gfx: {
+    coa: string[]
+    building: string[]
+    clothing: string[]
+    unit: string[]
+    houseCoaFrame: string[]
+  }
+  characters: CultureCharacter[]
+}
+
+/**
+ * Editable culture fields. A null scalar clears its line, an empty list drops
+ * the whole block, and `color` is a hex string written back in the format the
+ * file already used (a named color becomes `rgb { … }`).
+ */
+export interface CulturePatch {
+  color: string | null
+  ethos: string | null
+  heritage: string | null
+  language: string | null
+  martialCustom: string | null
+  headDetermination: string | null
+  traditions: string[]
+  nameList: string | null
+  parents: string[]
+  created: string | null
+  coaGfx: string[]
+  buildingGfx: string[]
+  clothingGfx: string[]
+  unitGfx: string[]
+  houseCoaFrame: string | null
+  ethnicities: CultureEthnicity[]
+}
+
+/**
  * A reference id paired with its display name. `name` is the localized name
  * when one could be resolved (cultures/faiths key off the id, traits off
  * `trait_<id>`, dynasties/houses off their `name` scalar), and null for
@@ -260,7 +392,16 @@ export interface ReferenceData {
 }
 
 /** Kinds of reference data whose definition site can be located on disk */
-export type RefKind = 'culture' | 'faith' | 'trait' | 'dynasty' | 'dna'
+export type RefKind =
+  | 'culture'
+  | 'faith'
+  | 'trait'
+  | 'dynasty'
+  | 'dna'
+  | 'pillar'
+  | 'tradition'
+  | 'name_list'
+  | 'ethnicity'
 
 export interface RefLocation {
   /** Absolute path of the file containing the definition */

@@ -71,6 +71,8 @@ interface Props {
   onAddMember: () => void
   /** Switch the editor to another dynasty/house row */
   onOpenRow: (kind: 'dynasty' | 'house', id: string) => void
+  /** Open a culture in the Culture Editor */
+  onOpenCulture: (id: string) => void
   /** Called after a successful save so the page can reload definitions */
   onSaved: () => void
   /** Leave the row and go back to the list (the header arrow, and Esc) */
@@ -100,6 +102,7 @@ export default function DynastyDetailPanel({
   onOpenCharacter,
   onAddMember,
   onOpenRow,
+  onOpenCulture,
   onSaved,
   onClose
 }: Props): React.JSX.Element {
@@ -449,9 +452,8 @@ export default function DynastyDetailPanel({
                   onChange={(v) => set({ culture: v })}
                   options={refData?.cultures ?? []}
                   placeholder="none"
-                  locate={(v) =>
-                    window.ck3tools.locateRef(gameDir, modPath, replacePaths, 'culture', v)
-                  }
+                  onNavigate={onOpenCulture}
+                  followTitle="Open in Culture Editor"
                 />
               </div>
             )}

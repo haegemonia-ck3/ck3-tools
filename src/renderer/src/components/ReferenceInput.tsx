@@ -63,6 +63,12 @@ interface Props {
   limit?: number
   /** Tooltip for the follow button; defaults to wording for a definition site. */
   followTitle?: string
+  /**
+   * Read-only mode: the value still shows (and the follow button still
+   * works) but nothing can be picked or cleared — for records the app can
+   * display but not write, like a base-game definition.
+   */
+  disabled?: boolean
   className?: string
 }
 
@@ -77,6 +83,7 @@ export default function ReferenceInput({
   renderItem,
   limit = 100,
   followTitle,
+  disabled = false,
   className
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
@@ -138,7 +145,12 @@ export default function ReferenceInput({
           setInputText(text)
         }}
       >
-        <ComboboxInput className="flex-1" placeholder={placeholder} showClear={!onAdd} />
+        <ComboboxInput
+          className="flex-1"
+          placeholder={placeholder}
+          showClear={!onAdd}
+          disabled={disabled}
+        />
         <ComboboxContent>
           <ComboboxEmpty>No matches.</ComboboxEmpty>
           <ComboboxList>

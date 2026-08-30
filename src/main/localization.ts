@@ -79,3 +79,39 @@ export function readLocalization(
   }
   return loc
 }
+
+/**
+ * One localization entry can stand in for another: real files write
+ * `tradition_x_name:0 "$innovation_x$"` rather than repeating the text. Values
+ * that are entirely such a reference are replaced with what they point at,
+ * fetching the referenced keys in one extra targeted pass.
+ *
+ * Only whole-value references are followed — a `$…$` embedded in a sentence is
+ * game-side formatting, not a name, and is left alone.
+ */
+const LOC_REF = /^\$([A-Za-z0-9_.\-']+)\$$/
+
+export function resolveLocReferences(
+  loc: Map<string, string>,
+  gameDir: string | null,
+  modPath: string | null
+): void {
+  const wanted = new Set<string>()
+  for (const value of loc.values()) {
+    const m = LOC_REF.exec(value)
+    if (m && !loc.has(m[1])) wanted.add(m[1])
+  }
+  const targets =
+    wanted.size === 0
+      ? new Map<string, string>()
+      : readLocalization(gameDir, modPath, null, (key) => wanted.has(key))
+
+  for (const [key, value] of loc) {
+    const m = LOC_REF.exec(value)
+    if (!m) continue
+    const target = loc.get(m[1]) ?? targets.get(m[1])
+    // A target that is itself a reference is left unresolved rather than
+    // chased further — one hop is what real files use.
+    if (target !== undefined && !LOC_REF.test(target)) loc.set(key, target)
+  }
+}

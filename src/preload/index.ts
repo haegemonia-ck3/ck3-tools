@@ -3,6 +3,8 @@ import type {
   AppSettings,
   CharacterDetail,
   CharacterSummary,
+  CultureData,
+  CulturePatch,
   DetectionResult,
   DirValidation,
   DnaPasteInfo,
@@ -74,6 +76,29 @@ const api = {
   ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveDynasty', modPath, file, id, patch),
   saveHouse: (modPath: string, file: string, id: string, patch: HousePatch): Promise<SaveResult> =>
     ipcRenderer.invoke('ck3:saveHouse', modPath, file, id, patch),
+  getCultureData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<CultureData> =>
+    ipcRenderer.invoke('ck3:getCultureData', gameDir, modPath, replacePaths),
+  saveCulture: (
+    gameDir: string | null,
+    modPath: string,
+    replacePaths: string[],
+    file: string,
+    id: string,
+    patch: CulturePatch
+  ): Promise<SaveResult> =>
+    ipcRenderer.invoke(
+      'ck3:saveCulture',
+      gameDir,
+      modPath,
+      replacePaths,
+      file,
+      id,
+      patch
+    ),
   getTraitIcons: (
     gameDir: string | null,
     modPath: string | null,

@@ -182,3 +182,66 @@ export function scanRepeatedScalar(body: string, key: string): string[] {
   }
   return values
 }
+
+// ---------- Lenient scalar scanning ----------
+
+/**
+ * A `key = value` statement anywhere in a line of depth-0 code. Unlike
+ * scanScalars this is not anchored to the whole line, so it also reads
+ * single-line bodies holding several statements.
+ */
+const STATEMENT = /(^|\s)([A-Za-z0-9_.\-']+)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/g
+
+/**
+ * The depth-0 code of a line — comments and the contents of inline sub-blocks
+ * removed — given the brace depth at the line's start.
+ */
+export function topLevelCode(line: string, startDepth: number): string {
+  let out = ''
+  let depth = startDepth
+  let inQuote = false
+  for (const c of line) {
+    if (inQuote) {
+      if (depth === 0) out += c
+      if (c === '"') inQuote = false
+      continue
+    }
+    if (c === '#') break
+    if (c === '"') {
+      inQuote = true
+      if (depth === 0) out += c
+      continue
+    }
+    if (c === '{') {
+      depth++
+      // Elide the sub-block but leave `{}` so the dangling `key =` before it
+      // binds to an unmatchable token instead of swallowing the NEXT
+      // statement's key as its value
+      if (depth === 1) out += '{}'
+      continue
+    }
+    if (c === '}') {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) out += ' '
+      continue
+    }
+    if (depth === 0) out += c
+  }
+  return out
+}
+
+/**
+ * Depth-0 scalars with lowercased keys, first occurrence wins. Laxer than
+ * scanScalars: real files put several statements on one line and spell keys
+ * with unexpected case.
+ */
+export function scanScalarsCI(body: string): Map<string, string> {
+  const scalars = new Map<string, string>()
+  for (const { text, depth } of annotateLines(body)) {
+    for (const m of topLevelCode(text, depth).matchAll(STATEMENT)) {
+      const key = m[2].toLowerCase()
+      if (!scalars.has(key)) scalars.set(key, m[3] ?? m[4])
+    }
+  }
+  return scalars
+}

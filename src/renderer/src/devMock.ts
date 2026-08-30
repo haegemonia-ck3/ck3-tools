@@ -8,6 +8,8 @@ import type { Ck3ToolsApi } from '../../preload/index.d'
 import type {
   AppSettings,
   CharacterDetail,
+  CultureCharacter,
+  CultureDef,
   DynastyCharacter,
   DynastyDef,
   HouseDef,
@@ -191,6 +193,102 @@ const characters: CharacterDetail[] = [
 // Synthetic dynasty data shaped like real mod files: disconnected islands
 // centuries apart, cadet houses, a case-mismatched parent ref, a dangling
 // house, external (ghost) parents, and a game-defined dynasty in use.
+const cultures: CultureDef[] = [
+  {
+    id: 'greek',
+    file: '00_mock_cultures.txt',
+    inMod: true,
+    localizedName: 'Greek',
+    color: { format: 'rgb', raw: 'rgb { 20 85 150 }', hex: '#145596' },
+    ethos: 'ethos_bellicose',
+    heritage: 'heritage_hellenic',
+    language: 'language_greek',
+    martialCustom: 'martial_custom_male_only',
+    headDetermination: null,
+    traditions: ['tradition_philosopher_culture', 'tradition_seafaring'],
+    nameList: 'name_list_greek',
+    parents: [],
+    created: null,
+    coaGfx: ['greek_coa_gfx'],
+    buildingGfx: ['mediterranean_building_gfx'],
+    clothingGfx: ['greek_clothing_gfx'],
+    unitGfx: ['eastern_unit_gfx'],
+    houseCoaFrame: 'house_frame_05',
+    ethnicities: [{ weight: '10', id: 'mediterranean' }]
+  },
+  {
+    id: 'attic',
+    file: '00_mock_cultures.txt',
+    inMod: true,
+    localizedName: 'Attic',
+    color: { format: 'hsv', raw: 'hsv { 0.1 0.6 0.8 }', hex: '#cc8f29' },
+    ethos: 'ethos_stoic',
+    heritage: 'heritage_hellenic',
+    language: 'language_greek',
+    martialCustom: 'martial_custom_male_only',
+    headDetermination: 'head_determination_domain',
+    traditions: ['tradition_philosopher_culture'],
+    nameList: 'name_list_greek',
+    // Points at greek, so the relations panel has a lineage to draw
+    parents: ['greek'],
+    created: '1050.1.1',
+    coaGfx: ['greek_coa_gfx'],
+    buildingGfx: ['mediterranean_building_gfx'],
+    clothingGfx: ['greek_clothing_gfx'],
+    unitGfx: ['eastern_unit_gfx'],
+    houseCoaFrame: 'house_frame_05',
+    ethnicities: [
+      { weight: '10', id: 'mediterranean' },
+      { weight: '2', id: 'levantine' }
+    ]
+  },
+  {
+    id: 'norse',
+    file: '00_mock_cultures.txt',
+    inMod: true,
+    // No localization and no colour: the bare-id and empty-swatch fallbacks
+    localizedName: null,
+    color: null,
+    ethos: 'ethos_bellicose',
+    heritage: 'heritage_north_germanic',
+    language: null,
+    martialCustom: null,
+    headDetermination: null,
+    traditions: [],
+    nameList: null,
+    parents: ['nonexistent_culture'],
+    created: null,
+    coaGfx: [],
+    buildingGfx: [],
+    clothingGfx: [],
+    unitGfx: [],
+    houseCoaFrame: null,
+    ethnicities: []
+  },
+  {
+    id: 'saxon',
+    file: '01_game_cultures.txt',
+    inMod: false,
+    localizedName: 'Saxon',
+    color: { format: 'named', raw: 'english', hex: '#cc3333' },
+    ethos: 'ethos_communal',
+    heritage: 'heritage_west_germanic',
+    language: 'language_anglic',
+    martialCustom: 'martial_custom_male_only',
+    headDetermination: null,
+    traditions: ['tradition_hill_dwellers'],
+    nameList: 'name_list_saxon',
+    parents: [],
+    created: null,
+    coaGfx: ['western_coa_gfx'],
+    buildingGfx: ['western_building_gfx'],
+    clothingGfx: ['western_clothing_gfx'],
+    unitGfx: ['western_unit_gfx'],
+    houseCoaFrame: 'house_frame_22',
+    ethnicities: [{ weight: '100', id: 'caucasian_nordic' }]
+  }
+]
+
 const dynasties: DynastyDef[] = [
   {
     id: 'mockidae',
@@ -362,6 +460,53 @@ const mock: Ck3ToolsApi = {
       return { ok: false, error: `ID ${detail.id} already exists in the mod` }
     }
     characters.push(structuredClone({ ...detail, file }))
+    return { ok: true }
+  },
+  getCultureData: async () => ({
+    cultures: structuredClone(cultures),
+    pillars: {
+      ethos: named({ ethos_bellicose: 'Bellicose', ethos_stoic: 'Stoic', ethos_communal: 'Communal' }),
+      heritage: named({
+        heritage_hellenic: 'Hellenic',
+        heritage_north_germanic: 'North Germanic',
+        heritage_west_germanic: null
+      }),
+      language: named({ language_greek: 'Greek', language_anglic: 'Anglic' }),
+      martial_custom: named({ martial_custom_male_only: 'Men Only' }),
+      head_determination: named({ head_determination_domain: 'Determine by largest domain' })
+    },
+    traditions: [
+      { id: 'tradition_philosopher_culture', name: 'Philosopher Culture', category: 'societal' },
+      { id: 'tradition_seafaring', name: 'Seafaring', category: 'regional' },
+      { id: 'tradition_hill_dwellers', name: 'Hill Dwellers', category: 'regional' },
+      { id: 'tradition_unnamed', name: null, category: null }
+    ],
+    nameLists: named({ name_list_greek: 'Greek', name_list_saxon: 'Saxon' }),
+    ethnicities: named({ mediterranean: null, levantine: null, caucasian_nordic: null }),
+    gfx: {
+      coa: ['greek_coa_gfx', 'western_coa_gfx'],
+      building: ['mediterranean_building_gfx', 'western_building_gfx'],
+      clothing: ['greek_clothing_gfx', 'western_clothing_gfx'],
+      unit: ['eastern_unit_gfx', 'western_unit_gfx'],
+      houseCoaFrame: ['house_frame_05', 'house_frame_22']
+    },
+    characters: characters.map(
+      (c): CultureCharacter => ({
+        id: c.id,
+        file: c.file,
+        name: c.name,
+        birth: c.birth,
+        death: c.death,
+        culture: c.culture
+      })
+    )
+  }),
+  saveCulture: async (_g, _modPath, _r, file, id, patch) => {
+    const c = cultures.find((x) => x.file === file && x.id === id)
+    if (!c) return { ok: false, error: `Culture ${id} not found in ${file}` }
+    Object.assign(c, patch, {
+      color: patch.color === null ? null : { ...(c.color ?? { format: 'rgb' as const, raw: '' }), hex: patch.color }
+    })
     return { ok: true }
   },
   getDynastyData: async () => ({
