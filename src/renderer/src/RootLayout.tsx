@@ -79,7 +79,7 @@ export default function RootLayout(): React.JSX.Element {
         <Sidebar collapsible="icon">
           <SidebarHeader>
             <div className="px-2 py-1 group-data-[collapsible=icon]:hidden">
-              <span className="block text-lg font-semibold tracking-wide text-sidebar-primary">
+              <span className="block font-heading text-lg font-semibold tracking-wide text-sidebar-primary">
                 CK3 Tools
               </span>
               <Dialog open={modDialogOpen} onOpenChange={setModDialogOpen}>

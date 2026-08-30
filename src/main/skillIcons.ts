@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { decodeDds, encodePng } from './dds'
-import { iconCandidates } from './icons'
+import { assetCandidates } from './icons'
 import type { CharacterStats } from '@shared/types'
 
 const ICON_REL_DIR = 'gfx/interface/icons'
@@ -73,7 +73,7 @@ export function getSkillIcons(
       const paths =
         frame !== null && frame < 0
           ? [] // not a skill we know an icon for
-          : iconCandidates(gameDir, modPath, replacePaths, ICON_REL_DIR, own ?? STRIP_FILE)
+          : assetCandidates(gameDir, modPath, replacePaths, ICON_REL_DIR, own ?? STRIP_FILE)
       iconCache.set(skill, iconUrl(paths, frame))
     }
     result[skill] = iconCache.get(skill)!

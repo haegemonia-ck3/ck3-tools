@@ -14,6 +14,7 @@ import type {
   EditorInfo,
   FaithPatch,
   HousePatch,
+  ModFonts,
   ModInfo,
   NewCulture,
   NewDynasty,
@@ -199,6 +200,12 @@ const api = {
     id: string
   ): Promise<RefLocation | null> =>
     ipcRenderer.invoke('ck3:locateRef', gameDir, modPath, replacePaths, kind, id),
+  getModFonts: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<ModFonts | null> =>
+    ipcRenderer.invoke('ck3:getModFonts', gameDir, modPath, replacePaths),
   validateGameDir: (dir: string): Promise<DirValidation> =>
     ipcRenderer.invoke('ck3:validateGameDir', dir),
   validateModDir: (dir: string): Promise<DirValidation> =>

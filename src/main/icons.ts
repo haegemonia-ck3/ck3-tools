@@ -26,7 +26,7 @@ function isReplaced(replacePaths: string[], relDir: string): boolean {
  * Where `<relDir>/<fileName>` could live, mod first: the mod's copy wins, and
  * the game's is skipped entirely when `replace_path` takes the folder over.
  */
-export function iconCandidates(
+export function assetCandidates(
   gameDir: string | null,
   modPath: string | null,
   replacePaths: string[],
@@ -67,7 +67,7 @@ export function resolveIcons(
       result[name] = iconCache.get(cacheId)!
       continue
     }
-    const candidates = iconCandidates(gameDir, modPath, replacePaths, relDir, fileName)
+    const candidates = assetCandidates(gameDir, modPath, replacePaths, relDir, fileName)
     let url: string | null = null
     for (const candidate of candidates) {
       if (!existsSync(candidate)) continue

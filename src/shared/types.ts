@@ -17,6 +17,8 @@ export interface AppSettings {
   draftCharacters: Record<string, Record<string, CharacterDraft>>
   /** Absolute path to the preferred text editor executable; null = system Notepad */
   textEditorPath: string | null
+  /** Render the app in the selected mod's own CK3 fonts (see ModFonts) */
+  useModFonts: boolean
 }
 
 export interface CharacterDraft {
@@ -60,6 +62,41 @@ export interface CalendarConfig {
  */
 export interface ModProfile {
   calendar: CalendarConfig | null
+}
+
+/**
+ * One font file of a CK3 font, resolved to something the renderer can install
+ * as a `@font-face`. CK3 spells a font's variants as `fontstyle` blocks
+ * (`regular`, `bold`, `italic`, `bold|italic`); each maps to one CSS
+ * weight/style pair.
+ */
+export interface ModFontFace {
+  weight: 'normal' | 'bold'
+  style: 'normal' | 'italic'
+  /** data: URL carrying the font file itself */
+  src: string
+  /** CSS `format()` hint for `src`, e.g. "truetype" or "opentype" */
+  format: string
+}
+
+export interface ModFont {
+  /** The `fontfiles` name the font's regular style points at, e.g. "Gitan-Regular" */
+  name: string
+  /** Resolved faces, at most one per weight/style pair */
+  faces: ModFontFace[]
+}
+
+/**
+ * The fonts a mod effectively loads, read from the `fonts/fonts.font` it
+ * ships (falling back to the game's) and resolved against the font files
+ * themselves, mod copies winning over game copies. Either font is null when
+ * the definition names no file that exists on disk.
+ */
+export interface ModFonts {
+  /** CK3's `StandardGameFont` — the app uses it for body text */
+  standard: ModFont | null
+  /** CK3's `TitleFont` — the app uses it for headings */
+  title: ModFont | null
 }
 
 export interface ModInfo {

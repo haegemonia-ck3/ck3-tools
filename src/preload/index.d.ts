@@ -13,6 +13,7 @@ import type {
   EditorInfo,
   FaithPatch,
   HousePatch,
+  ModFonts,
   ModInfo,
   NewCulture,
   NewDynasty,
@@ -166,6 +167,12 @@ export interface Ck3ToolsApi {
     kind: RefKind,
     id: string
   ) => Promise<RefLocation | null>
+  /** The mod's StandardGameFont and TitleFont; null when it ships none */
+  getModFonts: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<ModFonts | null>
   validateGameDir: (dir: string) => Promise<DirValidation>
   validateModDir: (dir: string) => Promise<DirValidation>
   detectEditors: () => Promise<EditorInfo[]>

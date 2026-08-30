@@ -10,7 +10,8 @@ const DEFAULTS: AppSettings = {
   recentCharacters: {},
   favoriteCharacters: {},
   draftCharacters: {},
-  textEditorPath: null
+  textEditorPath: null,
+  useModFonts: true
 }
 
 function settingsPath(): string {

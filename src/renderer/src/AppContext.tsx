@@ -1,11 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppSettings, ModInfo } from '@shared/types'
+import { useModFonts } from './useModFonts'
+import type { AppSettings, ModFonts, ModInfo } from '@shared/types'
 
 interface AppContextValue {
   settings: AppSettings | null
   mods: ModInfo[]
   selectedMod: ModInfo | null
+  /** The mod fonts the app is currently dressed in; null when it uses its own */
+  modFonts: ModFonts | null
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>
   refreshMods: () => Promise<void>
 }
@@ -42,6 +45,14 @@ export function AppProvider({ children }: { children: ReactNode }): React.JSX.El
     }
   }, [settings?.modDir])
 
+  const selectedMod = mods.find((m) => m.file === settings?.selectedModFile) ?? null
+  const modFonts = useModFonts(
+    settings?.useModFonts ?? false,
+    settings?.gameDir ?? null,
+    selectedMod?.path ?? null,
+    selectedMod?.replacePaths ?? []
+  )
+
   const updateSettings = useCallback(async (patch: Partial<AppSettings>) => {
     const next = await window.ck3tools.setSettings(patch)
     setSettings(next)
@@ -53,10 +64,10 @@ export function AppProvider({ children }: { children: ReactNode }): React.JSX.El
     }
   }, [settings?.modDir])
 
-  const selectedMod = mods.find((m) => m.file === settings?.selectedModFile) ?? null
-
   return (
-    <AppContext.Provider value={{ settings, mods, selectedMod, updateSettings, refreshMods }}>
+    <AppContext.Provider
+      value={{ settings, mods, selectedMod, modFonts, updateSettings, refreshMods }}
+    >
       {children}
     </AppContext.Provider>
   )

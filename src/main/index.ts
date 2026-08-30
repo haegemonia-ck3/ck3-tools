@@ -38,6 +38,7 @@ import { getFaithIcons, listFaithIcons } from './faithIcons'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
 import { getFlatIcons } from './icons'
+import { getModFonts } from './fonts'
 import { getSkillIcons } from './skillIcons'
 import { getCoatsOfArms } from './coatOfArms'
 import { detectEditors, openInEditor } from './editor'
@@ -249,6 +250,11 @@ function registerIpc(): void {
     'ck3:locateRef',
     (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], kind: RefKind, id: string) =>
       locateRef(gameDir, modPath, replacePaths, kind, id)
+  )
+  ipcMain.handle(
+    'ck3:getModFonts',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[]) =>
+      getModFonts(gameDir, modPath, replacePaths)
   )
   ipcMain.handle('ck3:validateGameDir', (_e, dir: string) => validateGameDir(dir))
   ipcMain.handle('ck3:validateModDir', (_e, dir: string) => validateModDir(dir))

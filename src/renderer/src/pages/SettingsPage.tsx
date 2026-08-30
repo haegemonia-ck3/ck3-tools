@@ -4,8 +4,10 @@ import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import type { DirValidation, EditorInfo } from '@shared/types'
+import type { DirValidation, EditorInfo, ModFonts } from '@shared/types'
 
 function PathRow({
   label,
@@ -43,8 +45,19 @@ function PathRow({
   )
 }
 
+/** One line saying which fonts the app landed on, and why. */
+function fontStatus(enabled: boolean, modName: string | null, fonts: ModFonts | null): string {
+  if (!enabled) return 'Off — the app uses its own font.'
+  if (!modName) return 'Select a mod to use its fonts.'
+  if (!fonts) return `${modName} loads no fonts of its own.`
+  const used: string[] = []
+  if (fonts.standard) used.push(`text in ${fonts.standard.name}`)
+  if (fonts.title) used.push(`headings in ${fonts.title.name}`)
+  return `Using ${used.join(', ')}.`
+}
+
 export default function SettingsPage(): React.JSX.Element {
-  const { settings, updateSettings } = useApp()
+  const { settings, selectedMod, modFonts, updateSettings } = useApp()
   const [gameValidation, setGameValidation] = useState<DirValidation | null>(null)
   const [modValidation, setModValidation] = useState<DirValidation | null>(null)
   const [detecting, setDetecting] = useState(false)
@@ -86,6 +99,8 @@ export default function SettingsPage(): React.JSX.Element {
     const path = await window.ck3tools.pickEditor()
     if (path) await updateSettings({ textEditorPath: path })
   }
+
+  const fonts = fontStatus(settings.useModFonts, selectedMod?.name ?? null, modFonts)
 
   // Notepad is the built-in default, so picking it stores null
   const editorIsActive = (ed: EditorInfo): boolean =>
@@ -175,6 +190,29 @@ export default function SettingsPage(): React.JSX.Element {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Appearance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="use-mod-fonts">Use mod fonts</FieldLabel>
+              <FieldDescription>
+                Show the app in the fonts the selected mod loads — its StandardGameFont for
+                text, its TitleFont for headings.
+              </FieldDescription>
+              <p className="text-xs text-muted-foreground">{fonts}</p>
+            </FieldContent>
+            <Switch
+              id="use-mod-fonts"
+              checked={settings.useModFonts}
+              onCheckedChange={(useModFonts) => updateSettings({ useModFonts })}
+            />
+          </Field>
         </CardContent>
       </Card>
 

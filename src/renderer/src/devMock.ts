@@ -29,7 +29,8 @@ const settings: AppSettings = {
   recentCharacters: {},
   favoriteCharacters: {},
   draftCharacters: {},
-  textEditorPath: null
+  textEditorPath: null,
+  useModFonts: true
 }
 
 const characters: CharacterDetail[] = [
@@ -816,6 +817,8 @@ const mock: Ck3ToolsApi = {
     id.includes('missing')
       ? null
       : { path: `C:\\Mock\\common\\${kind}\\00_${kind}.txt`, line: 42, inMod: true },
+  // No real CK3 files in the browser, so the mock mod ships no fonts
+  getModFonts: async () => null,
   validateGameDir: async () => ({ valid: true, reason: null }),
   validateModDir: async () => ({ valid: true, reason: null }),
   detectEditors: async () => [
