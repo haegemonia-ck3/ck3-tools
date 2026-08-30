@@ -1,9 +1,23 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import { endOfBodyIndex, eolSuffix, makeEditor, refresh, setScalar, SCALAR_LINE } from './lineEditor'
+import {
+  endOfBodyIndex,
+  eolSuffix,
+  makeEditor,
+  refresh,
+  setScalar,
+  splitComment,
+  SCALAR_LINE
+} from './lineEditor'
 import { annotateLines, scanBlocks, scanRepeatedScalar, scanScalars } from './pdx'
 import type { LineEditor } from './lineEditor'
-import type { CharacterDetail, CharacterStats, CharacterSummary, SaveResult } from '@shared/types'
+import type {
+  CharacterDetail,
+  CharacterSpouse,
+  CharacterStats,
+  CharacterSummary,
+  SaveResult
+} from '@shared/types'
 
 // Tolerates typos that appear in real mod files: a trailing dot ("3220.1.1.")
 // and a missing day part ("3212.1")
@@ -41,6 +55,133 @@ function cleanDate(key: string): string {
   return key.replace(/\.$/, '')
 }
 
+/** Sortable number for a Y.M.D date key, so new blocks land chronologically. */
+function dateSortKey(date: string): number {
+  const [y, m, d] = cleanDate(date).split('.')
+  return Number(y) * 10000 + Number(m ?? 1) * 100 + Number(d ?? 1)
+}
+
+// Marriages live as dated effects rather than scalars: `add_spouse` (or
+// `add_matrilineal_spouse`) in the wedding year's block, `remove_spouse` in
+// the divorce year's.
+const SPOUSE_STATEMENT =
+  /(^|[\s{])(add_matrilineal_spouse|add_spouse|remove_spouse)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/gi
+
+interface SpouseEvent {
+  kind: 'add' | 'remove'
+  id: string
+  matrilineal: boolean
+  /** Date of the block the statement sits in, cleaned of a trailing dot */
+  date: string
+}
+
+interface SpouseEventHit extends SpouseEvent {
+  /** Index of the containing date block within scanBlocks(body) */
+  block: number
+  /** Span of the statement within the character body */
+  start: number
+  end: number
+}
+
+/** Every spouse effect in the body's dated blocks, in file order, with spans. */
+function scanSpouseEvents(body: string): SpouseEventHit[] {
+  const hits: SpouseEventHit[] = []
+  scanBlocks(body).forEach((block, index) => {
+    if (!DATE_KEY.test(block.key)) return
+    const sub = body.slice(block.bodyStart, block.bodyEnd)
+    let lineStart = 0
+    for (const { text, depth } of annotateLines(sub)) {
+      const at = lineStart
+      lineStart += text.length + 1
+      if (depth !== 0) continue
+      const [code] = splitComment(text)
+      SPOUSE_STATEMENT.lastIndex = 0
+      let m: RegExpExecArray | null
+      while ((m = SPOUSE_STATEMENT.exec(code)) !== null) {
+        const keyword = m[2].toLowerCase()
+        hits.push({
+          kind: keyword === 'remove_spouse' ? 'remove' : 'add',
+          id: m[3] ?? m[4],
+          matrilineal: keyword === 'add_matrilineal_spouse',
+          date: cleanDate(block.key),
+          block: index,
+          start: block.bodyStart + at + m.index + m[1].length,
+          end: block.bodyStart + at + m.index + m[0].length
+        })
+      }
+    }
+  })
+  return hits
+}
+
+/** Pair add/remove effects into marriages; a remove closes the latest open one. */
+function pairSpouses(events: SpouseEvent[]): CharacterSpouse[] {
+  const spouses: CharacterSpouse[] = []
+  for (const event of events) {
+    if (event.kind === 'add') {
+      spouses.push({
+        id: event.id,
+        marriage: event.date,
+        divorce: null,
+        matrilineal: event.matrilineal
+      })
+      continue
+    }
+    const open = [...spouses].reverse().find((s) => s.id === event.id && s.divorce === null)
+    if (open) open.divorce = event.date
+    else spouses.push({ id: event.id, marriage: null, divorce: event.date, matrilineal: false })
+  }
+  return spouses
+}
+
+/** The effects a spouse list should produce, in list order. */
+function spouseEvents(spouses: CharacterSpouse[]): SpouseEvent[] {
+  const events: SpouseEvent[] = []
+  for (const spouse of spouses) {
+    const id = spouse.id.trim()
+    if (!id) continue
+    if (spouse.marriage) {
+      events.push({ kind: 'add', id, matrilineal: spouse.matrilineal, date: spouse.marriage })
+    }
+    if (spouse.divorce) {
+      events.push({ kind: 'remove', id, matrilineal: false, date: spouse.divorce })
+    }
+  }
+  return events
+}
+
+function statementFor(event: SpouseEvent): string {
+  const keyword =
+    event.kind === 'remove'
+      ? 'remove_spouse'
+      : event.matrilineal
+        ? 'add_matrilineal_spouse'
+        : 'add_spouse'
+  return `${keyword} = ${event.id}`
+}
+
+const eventKey = (e: SpouseEvent): string =>
+  `${e.kind}|${e.id}|${cleanDate(e.date)}|${e.kind === 'add' && e.matrilineal ? 'm' : ''}`
+
+/** Reject a spouse list that can't be written; null when it's fine. */
+function validateSpouses(spouses: CharacterSpouse[]): string | null {
+  for (const spouse of spouses) {
+    if (!spouse.id.trim()) return 'Every spouse needs a character id'
+    for (const [label, date] of [
+      ['Marriage', spouse.marriage],
+      ['Divorce', spouse.divorce]
+    ] as const) {
+      if (date !== null && date !== '' && !DATE_KEY.test(date)) {
+        return `Invalid ${label.toLowerCase()} date "${date}" (expected Y.M.D)`
+      }
+    }
+    if (!spouse.marriage && !spouse.divorce) {
+      return `Spouse ${spouse.id.trim()} needs a marriage date`
+    }
+  }
+  return null
+}
+
 function parseBlockDetail(body: string, id: string, file: string): CharacterDetail {
   const scalars = scanScalars(body)
   const stats = {} as CharacterStats
@@ -64,6 +205,7 @@ function parseBlockDetail(body: string, id: string, file: string): CharacterDeta
     father: scalars.get('father') ?? null,
     mother: scalars.get('mother') ?? null,
     traits: scanRepeatedScalar(body, 'trait'),
+    spouses: pairSpouses(scanSpouseEvents(body)),
     stats,
     female: scalars.get('female') ?? null,
     sexuality: scalars.get('sexuality') ?? null
@@ -219,6 +361,136 @@ function setDateBlock(ed: LineEditor, statement: 'birth' | 'death', date: string
   refresh(ed)
 }
 
+/**
+ * Remove one statement from a block body, given its span. When the statement
+ * was the line's only code the whole line goes (comment included, since it
+ * annotated that statement); otherwise just the statement and one neighboring
+ * space, so nothing sharing the line is disturbed.
+ */
+function cutStatement(sub: string, start: number, end: number): string {
+  const lineStart = sub.lastIndexOf('\n', start - 1) + 1
+  const nl = sub.indexOf('\n', end)
+  const lineEnd = nl < 0 ? sub.length : nl
+  const [code] = splitComment(sub.slice(lineStart, lineEnd))
+  const rest = code.slice(0, start - lineStart) + code.slice(end - lineStart)
+  if (rest.trim() === '') {
+    return sub.slice(0, lineStart) + sub.slice(nl < 0 ? lineEnd : nl + 1)
+  }
+  let from = start
+  let to = end
+  if (sub[to] === ' ') to++
+  else if (sub[from - 1] === ' ') from--
+  return sub.slice(0, from) + sub.slice(to)
+}
+
+/** Whether a block body still carries code once statements have been cut out. */
+function hasCode(sub: string): boolean {
+  return sub.split('\n').some((line) => splitComment(line)[0].trim() !== '')
+}
+
+/** Line index of the opener of the depth-0 date block for `date`, or -1. */
+function findDateBlockLine(ed: LineEditor, date: string): number {
+  for (let i = 0; i < ed.lines.length; i++) {
+    if (ed.depths[i] !== 0) continue
+    const [code] = splitComment(ed.lines[i])
+    const m = code.match(/^\s*([A-Za-z0-9_.\-']+)\s*=\s*\{/)
+    if (m && DATE_KEY.test(m[1]) && cleanDate(m[1]) === date) return i
+  }
+  return -1
+}
+
+/** Add a statement to the block for `date`, creating the block when missing. */
+function insertDatedStatement(ed: LineEditor, date: string, statement: string): void {
+  const opener = findDateBlockLine(ed, date)
+  if (opener >= 0) {
+    // A one-line block (`1050.1.1 = { birth = yes }`) has no body line to
+    // splice into — append the statement inside its braces instead
+    if (opener + 1 >= ed.lines.length || ed.depths[opener + 1] <= ed.depths[opener]) {
+      const [code, comment] = splitComment(ed.lines[opener])
+      const close = code.lastIndexOf('}')
+      ed.lines[opener] = `${code.slice(0, close)}${statement} ${code.slice(close)}${comment}`
+      return
+    }
+    const at = opener + 1
+    ed.lines.splice(at, 0, ...withEol(ed, [`${ed.indent}${ed.indent}${statement}`], at))
+    refresh(ed)
+    return
+  }
+  // No block for that date — create one, before the first later-dated block
+  let at = endOfBodyIndex(ed)
+  for (let i = 0; i < ed.lines.length; i++) {
+    if (ed.depths[i] !== 0) continue
+    const [code] = splitComment(ed.lines[i])
+    const m = code.match(/^\s*([A-Za-z0-9_.\-']+)\s*=\s*\{/)
+    if (m && DATE_KEY.test(m[1]) && dateSortKey(m[1]) > dateSortKey(date)) {
+      at = i
+      break
+    }
+  }
+  ed.lines.splice(
+    at,
+    0,
+    ...withEol(
+      ed,
+      [`${ed.indent}${date} = {`, `${ed.indent}${ed.indent}${statement}`, `${ed.indent}}`],
+      at
+    )
+  )
+  refresh(ed)
+}
+
+/**
+ * Reconcile the body's spouse effects with the edited list. Effects that
+ * survive unchanged are matched by value and left byte-for-byte alone; only
+ * the ones that went away are cut and the new ones inserted, so an untouched
+ * spouse list is a no-op even when the file spells its dates oddly.
+ */
+function setSpouses(ed: LineEditor, spouses: CharacterSpouse[]): void {
+  const body = ed.lines.join('\n')
+  const existing = scanSpouseEvents(body)
+  const wanted = spouseEvents(spouses).map((e) => ({ event: e, placed: false }))
+  const cuts: SpouseEventHit[] = []
+  for (const hit of existing) {
+    const match = wanted.find((w) => !w.placed && eventKey(w.event) === eventKey(hit))
+    if (match) match.placed = true
+    else cuts.push(hit)
+  }
+
+  if (cuts.length > 0) {
+    const blocks = scanBlocks(body)
+    // Rewrite each affected block once, dropping it entirely when the cuts
+    // leave it empty; blocks are edited back to front so spans stay valid
+    const byBlock = new Map<number, SpouseEventHit[]>()
+    for (const cut of cuts) byBlock.set(cut.block, [...(byBlock.get(cut.block) ?? []), cut])
+    let next = body
+    for (const index of [...byBlock.keys()].sort((a, b) => b - a)) {
+      const block = blocks[index]
+      let sub = next.slice(block.bodyStart, block.bodyEnd)
+      for (const cut of byBlock.get(index)!.sort((a, b) => b.start - a.start)) {
+        sub = cutStatement(sub, cut.start - block.bodyStart, cut.end - block.bodyStart)
+      }
+      if (hasCode(sub)) {
+        next = next.slice(0, block.bodyStart) + sub + next.slice(block.bodyEnd)
+        continue
+      }
+      let from = block.start
+      while (from > 0 && (next[from - 1] === ' ' || next[from - 1] === '\t')) from--
+      let to = block.end
+      if (next[to] === '\r') to++
+      if (next[to] === '\n') to++
+      next = next.slice(0, from) + next.slice(to)
+    }
+    ed.lines = next.split('\n')
+    refresh(ed)
+  }
+
+  for (const { event } of wanted
+    .filter((w) => !w.placed)
+    .sort((a, b) => dateSortKey(a.event.date) - dateSortKey(b.event.date))) {
+    insertDatedStatement(ed, cleanDate(event.date), statementFor(event))
+  }
+}
+
 export function saveCharacter(
   modPath: string,
   file: string,
@@ -249,6 +521,8 @@ export function saveCharacter(
         return { ok: false, error: `Invalid date "${date}" (expected Y.M.D)` }
       }
     }
+    const spouseError = validateSpouses(detail.spouses ?? [])
+    if (spouseError) return { ok: false, error: spouseError }
 
     const ed = makeEditor(text.slice(block.bodyStart, block.bodyEnd))
     // New scalar lines go above the first date block
@@ -270,6 +544,7 @@ export function saveCharacter(
     setTraits(ed, detail.traits)
     setDateBlock(ed, 'birth', detail.birth)
     setDateBlock(ed, 'death', detail.death)
+    setSpouses(ed, detail.spouses ?? [])
 
     const newBody = ed.lines.join('\n')
     const updated =
@@ -335,6 +610,8 @@ export function createCharacter(
         return { ok: false, error: `Invalid date "${date}" (expected Y.M.D)` }
       }
     }
+    const spouseError = validateSpouses(detail.spouses ?? [])
+    if (spouseError) return { ok: false, error: spouseError }
     const clash = listCharacters(modPath).find((c) => c.id === id)
     if (clash) return { ok: false, error: `ID ${id} already exists in ${clash.file}` }
 
@@ -363,8 +640,22 @@ export function createCharacter(
       const v = detail.stats[key]
       if (v !== null) push(key, String(v))
     }
-    lines.push(`${t}${detail.birth} = {`, `${t}${t}birth = yes`, `${t}}`)
-    if (detail.death) lines.push(`${t}${detail.death} = {`, `${t}${t}death = yes`, `${t}}`)
+    // Birth, death and every marriage effect are dated blocks; group the
+    // statements by date and emit the blocks chronologically
+    const dated = new Map<string, string[]>()
+    const onDate = (date: string, statement: string): void => {
+      dated.set(cleanDate(date), [...(dated.get(cleanDate(date)) ?? []), statement])
+    }
+    onDate(detail.birth!, 'birth = yes')
+    if (detail.death) onDate(detail.death, 'death = yes')
+    for (const event of spouseEvents(detail.spouses ?? [])) {
+      onDate(event.date, statementFor(event))
+    }
+    for (const [date, statements] of [...dated].sort(
+      (a, b) => dateSortKey(a[0]) - dateSortKey(b[0])
+    )) {
+      lines.push(`${t}${date} = {`, ...statements.map((x) => `${t}${t}${x}`), `${t}}`)
+    }
     lines.push('}')
     const block = lines.join(eol) + eol
 

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
   CharacterDetail,
+  CharacterSpouse,
   RefKind,
   ReferenceData
 } from '@shared/types'
@@ -11,6 +13,8 @@ import type { IconContext } from '../useGameIcons'
 import CoatOfArms from './CoatOfArms'
 import ReferenceInput from './ReferenceInput'
 import ReferenceBadge from './ReferenceBadge'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,6 +29,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   formatCalendarDate,
   fromCalendarInput,
+  isValidCK3Date,
   toCalendarInput
 } from '@/lib/ck3Date'
 import type { CalendarEra } from '@/lib/ck3Date'
@@ -117,6 +122,27 @@ function DateHint({ label, value }: { label: string; value: string }): React.JSX
   )
 }
 
+/**
+ * Whether a marriage row can't be written yet: no spouse chosen, neither date
+ * set, or a date that isn't a real Y.M.D. A row parsed from a file with only a
+ * divorce (a lone `remove_spouse`) is left alone rather than forced to grow a
+ * marriage date it never had.
+ */
+export function spouseRowInvalid(spouse: CharacterSpouse): boolean {
+  const badDate = (d: string | null): boolean => !!d && !isValidCK3Date(d)
+  return (
+    !spouse.id.trim() ||
+    (!spouse.marriage && !spouse.divorce) ||
+    badDate(spouse.marriage) ||
+    badDate(spouse.divorce)
+  )
+}
+
+/** True when any marriage row would be rejected by a save. */
+export function spousesInvalid(spouses: CharacterSpouse[] | undefined): boolean {
+  return (spouses ?? []).some(spouseRowInvalid)
+}
+
 interface Props {
   draft: CharacterDetail
   set: (patch: Partial<CharacterDetail>) => void
@@ -138,7 +164,7 @@ interface Props {
   markRequired?: boolean
   /** Rendered at the top of the identity fieldset (ID display/input, file picker) */
   identitySlot?: React.ReactNode
-  /** Rendered at the end of Life & lineage (the edit panel's children list) */
+  /** Rendered at the end of Family (the edit panel's children list) */
   childrenSlot?: React.ReactNode
 }
 
@@ -327,6 +353,87 @@ export default function CharacterForm({
     </div>
   )
 
+  /**
+   * Marriages are dated effects rather than fields, so each row edits one
+   * `add_spouse` / `remove_spouse` pair: who, when it started, and when (if
+   * ever) it ended. Rows keep file order; `matrilineal` picks the other
+   * add_ effect and is kept so a file that uses it round-trips.
+   */
+  const spouses = draft.spouses ?? []
+  const setSpouse = (index: number, patch: Partial<CharacterSpouse>): void =>
+    set({ spouses: spouses.map((s, i) => (i === index ? { ...s, ...patch } : s)) })
+
+  const spousesField = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel>Spouses · {spouses.length}</FieldLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            set({
+              spouses: [
+                ...spouses,
+                { id: '', marriage: null, divorce: null, matrilineal: false }
+              ]
+            })
+          }
+        >
+          <Plus />
+          Add spouse
+        </Button>
+      </div>
+      {spouses.length === 0 ? (
+        <p className="text-sm text-muted-foreground">none</p>
+      ) : (
+        spouses.map((spouse, index) => (
+          <div key={index} className="space-y-2.5 rounded-md border p-2.5">
+            <div className="flex items-center gap-1.5">
+              <ReferenceInput
+                className="min-w-0 flex-1"
+                value={spouse.id === '' ? null : spouse.id}
+                onChange={(v) => setSpouse(index, { id: v ?? '' })}
+                options={characterIds}
+                placeholder="character"
+                onNavigate={onNavigate}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Remove this marriage"
+                onClick={() => set({ spouses: spouses.filter((_, i) => i !== index) })}
+              >
+                <X />
+              </Button>
+            </div>
+            <div className="flex gap-2.5 *:flex-1">
+              {dateField('Married', spouse.marriage, (v) => setSpouse(index, { marriage: v }), {
+                invalid: spouse.marriage
+                  ? !isValidCK3Date(spouse.marriage)
+                  : !spouse.divorce,
+                placeholder: 'Y.M.D'
+              })}
+              {dateField('Divorced', spouse.divorce, (v) => setSpouse(index, { divorce: v }), {
+                invalid: !!spouse.divorce && !isValidCK3Date(spouse.divorce),
+                placeholder: 'never'
+              })}
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id={`spouse-matrilineal-${index}`}
+                checked={spouse.matrilineal}
+                onCheckedChange={(checked) =>
+                  setSpouse(index, { matrilineal: checked === true })
+                }
+              />
+              <FieldLabel htmlFor={`spouse-matrilineal-${index}`}>Matrilineal</FieldLabel>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
   return (
     <>
       <FieldSet className="gap-3.5">
@@ -400,7 +507,7 @@ export default function CharacterForm({
             </ToggleGroup>
           )}
         </FieldLegend>
-        <div className="flex gap-2.5 *:flex-1">
+        <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {dateField('Birth', draft.birth, (v) => set({ birth: v }), {
             invalid: badBirth,
             placeholder: 'Y.M.D',
@@ -431,10 +538,15 @@ export default function CharacterForm({
             )}
           </div>
         </div>
+      </FieldSet>
+
+      <FieldSet className="gap-3.5">
+        <FieldLegend variant="label" className="mb-0">Family</FieldLegend>
         <div className="flex flex-col gap-3.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
           {parentField('Father', draft.father, (v) => set({ father: v }))}
           {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
         </div>
+        {spousesField}
         {childrenSlot}
       </FieldSet>
 

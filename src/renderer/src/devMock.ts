@@ -37,6 +37,7 @@ const characters: CharacterDetail[] = [
     father: '218',
     mother: null,
     traits: ['brave', 'ambitious'],
+    spouses: [{ id: '1002', marriage: '1070.3.4', divorce: null, matrilineal: false }],
     stats: {
       diplomacy: 4,
       martial: 7,
@@ -61,6 +62,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['just'],
+    spouses: [],
     stats: {
       diplomacy: 6,
       martial: 3,
@@ -85,6 +87,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['shy'],
+    spouses: [],
     stats: {
       diplomacy: 6,
       martial: 2,
@@ -109,6 +112,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: [],
+    spouses: [],
     stats: {
       diplomacy: null,
       martial: null,
@@ -133,6 +137,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['brave'],
+    spouses: [],
     stats: {
       diplomacy: 2,
       martial: 9,
@@ -158,6 +163,7 @@ const characters: CharacterDetail[] = [
     father: null,
     mother: null,
     traits: ['ambitious', 'craven'],
+    spouses: [],
     stats: {
       diplomacy: 5,
       martial: 3,

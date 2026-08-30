@@ -9,7 +9,7 @@ import type {
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import type { CharacterSearch } from '../router'
-import CharacterForm, { FieldLabel } from './CharacterForm'
+import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
 import ReferenceDisplay from './ReferenceDisplay'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -18,16 +18,18 @@ import { cn } from '@/lib/utils'
 import { isValidCK3Date } from '@/lib/ck3Date'
 
 /**
- * Drafts persisted before Dynasty/House (and later Female) became separate
- * fields miss those keys. Treat them as unset so a resumed draft neither reads
- * as dirty against a freshly parsed character nor writes `undefined` back.
+ * Drafts persisted before a field existed (Dynasty/House, then Female, then
+ * Spouses and Sexuality) miss its key. Treat those as unset so a resumed draft
+ * neither reads as dirty against a freshly parsed character nor writes
+ * `undefined` back.
  */
 function withDefaults(detail: CharacterDetail): CharacterDetail {
   return {
     ...detail,
     house: detail.house ?? null,
     female: detail.female ?? null,
-    sexuality: detail.sexuality ?? null
+    sexuality: detail.sexuality ?? null,
+    spouses: detail.spouses ?? []
   }
 }
 
@@ -138,6 +140,7 @@ export default function CharacterDetailPanel({
 
   const badBirth = !!draft?.birth && !isValidCK3Date(draft.birth)
   const badDeath = !!draft?.death && !isValidCK3Date(draft.death)
+  const badSpouses = spousesInvalid(draft?.spouses)
 
   const save = async (): Promise<void> => {
     if (!draft || !original) return
@@ -169,7 +172,8 @@ export default function CharacterDetailPanel({
 
   useFormHotkeys({
     onSave: save,
-    canSave: dirty && !saving && !badBirth && !badDeath && !!draft?.id.trim(),
+    canSave:
+      dirty && !saving && !badBirth && !badDeath && !badSpouses && !!draft?.id.trim(),
     onClose
   })
 
@@ -330,7 +334,9 @@ export default function CharacterDetailPanel({
           Revert
         </Button>
         <Button
-          disabled={!dirty || saving || badBirth || badDeath || !draft.id.trim()}
+          disabled={
+            !dirty || saving || badBirth || badDeath || badSpouses || !draft.id.trim()
+          }
           title={SAVE_HOTKEY_LABEL}
           onClick={save}
         >

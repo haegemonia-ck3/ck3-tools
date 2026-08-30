@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { CalendarConfig, CharacterDetail, ReferenceData } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
-import CharacterForm, { FieldLabel } from './CharacterForm'
+import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -78,6 +78,7 @@ export default function CharacterCreatePanel({
     father: null,
     mother: null,
     traits: [],
+    spouses: [],
     stats: {
       diplomacy: null,
       martial: null,
@@ -116,6 +117,7 @@ export default function CharacterCreatePanel({
   const idTaken = id !== '' && characterIds.includes(id)
   const badBirth = !!draft.birth && !isValidCK3Date(draft.birth)
   const badDeath = !!draft.death && !isValidCK3Date(draft.death)
+  const badSpouses = spousesInvalid(draft.spouses)
 
   const canCreate =
     !creating &&
@@ -128,7 +130,8 @@ export default function CharacterCreatePanel({
     !!draft.faith &&
     !!draft.birth &&
     !badBirth &&
-    !badDeath
+    !badDeath &&
+    !badSpouses
 
   const create = async (): Promise<void> => {
     if (!canCreate) return
