@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join, sep } from 'path'
-import { scanBlocks } from './pdx'
-import type { RefKind, RefLocation, ReferenceData } from '@shared/types'
+import { readLocalization } from './localization'
+import { scanBlocks, scanScalars } from './pdx'
+import type { RefEntry, RefKind, RefLocation, ReferenceData } from '@shared/types'
 
 /**
  * Is `file` inside `dir`? Compared separator- and case-insensitively: mod paths
@@ -93,33 +94,70 @@ function listTraits(gameDir: string | null, modPath: string | null, replacePaths
   return [...keys].sort()
 }
 
-/** Top-level ids across every effective file of one directory. */
-function listIds(
+/**
+ * Top-level id -> its `name` scalar, for definitions that point at a
+ * localization key rather than carrying the display name inline (dynasties and
+ * houses write `name = "dynn_Komnenos"`). Ids with no `name` line map to null.
+ */
+function listNameKeys(
   gameDir: string | null,
   modPath: string | null,
   replacePaths: string[],
   relDir: string
-): string[] {
-  const keys = new Set<string>()
+): Map<string, string | null> {
+  const names = new Map<string, string | null>()
   for (const file of effectiveFiles(gameDir, modPath, replacePaths, relDir)) {
-    for (const key of topLevelKeys(file)) keys.add(key)
+    let text: string
+    try {
+      text = readFileSync(file, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const block of scanBlocks(text)) {
+      names.set(block.key, scanScalars(text.slice(block.bodyStart, block.bodyEnd)).get('name') ?? null)
+    }
   }
-  return [...keys].sort()
+  return names
 }
+
+/** The localization key a trait's display name lives under. */
+const traitLocKey = (id: string): string => `trait_${id}`
 
 export function getReferenceData(
   gameDir: string | null,
   modPath: string | null,
   replacePaths: string[]
 ): ReferenceData {
+  const cultures = listCultures(gameDir, modPath, replacePaths)
+  const faiths = listFaiths(gameDir, modPath, replacePaths)
+  const traits = listTraits(gameDir, modPath, replacePaths)
+  // Kept apart: a character's `dynasty` and `dynasty_house` are separate
+  // fields, each offering only the ids that are valid for it
+  const dynastyNames = listNameKeys(gameDir, modPath, replacePaths, 'common/dynasties')
+  const houseNames = listNameKeys(gameDir, modPath, replacePaths, 'common/dynasty_houses')
+
+  // Cultures and faiths are localized under their own id; traits under
+  // `trait_<id>`; dynasties and houses under whatever their `name` line names.
+  // Those keys are spread across the whole english tree (DLC folders included),
+  // so the scan is narrowed by key rather than by folder.
+  const wanted = new Set<string>([...cultures, ...faiths, ...traits.map(traitLocKey)])
+  for (const names of [dynastyNames, houseNames]) {
+    for (const key of names.values()) if (key !== null) wanted.add(key)
+  }
+  const loc = readLocalization(gameDir, modPath, null, (key) => wanted.has(key))
+
+  const entries = (ids: string[], locKey: (id: string) => string | null): RefEntry[] =>
+    ids.map((id) => {
+      const key = locKey(id)
+      return { id, name: key === null ? null : (loc.get(key) ?? null) }
+    })
+
   return {
-    cultures: listCultures(gameDir, modPath, replacePaths),
-    faiths: listFaiths(gameDir, modPath, replacePaths),
-    traits: listTraits(gameDir, modPath, replacePaths),
-    // Kept apart: a character's `dynasty` and `dynasty_house` are separate
-    // fields, each offering only the ids that are valid for it
-    dynasties: listIds(gameDir, modPath, replacePaths, 'common/dynasties'),
-    houses: listIds(gameDir, modPath, replacePaths, 'common/dynasty_houses')
+    cultures: entries(cultures, (id) => id),
+    faiths: entries(faiths, (id) => id),
+    traits: entries(traits, traitLocKey),
+    dynasties: entries([...dynastyNames.keys()].sort(), (id) => dynastyNames.get(id) ?? null),
+    houses: entries([...houseNames.keys()].sort(), (id) => houseNames.get(id) ?? null)
   }
 }
 

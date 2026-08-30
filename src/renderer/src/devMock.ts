@@ -10,8 +10,13 @@ import type {
   CharacterDetail,
   DynastyCharacter,
   DynastyDef,
-  HouseDef
+  HouseDef,
+  RefEntry
 } from '@shared/types'
+
+/** `{ id: name }` as reference entries; a null name means "no localization". */
+const named = (entries: Record<string, string | null>): RefEntry[] =>
+  Object.entries(entries).map(([id, name]) => ({ id, name }))
 
 const settings: AppSettings = {
   gameDir: 'C:\\Mock\\Crusader Kings III\\game',
@@ -395,12 +400,14 @@ const mock: Ck3ToolsApi = {
             )
       ])
     ),
+  // A couple of entries per kind are deliberately name-less, so the bare-id
+  // fallback in the reference pickers is reachable in browser-mode dev too.
   getReferenceData: async () => ({
-    cultures: ['greek', 'norse', 'saxon'],
-    faiths: ['orthodox', 'catholic', 'asatru'],
-    traits: ['brave', 'ambitious', 'craven', 'shy'],
-    dynasties: ['dynn_Mock', 'dynn_Other'],
-    houses: ['house_Mockington', 'house_Other']
+    cultures: named({ greek: 'Greek', norse: 'Norse', saxon: null }),
+    faiths: named({ orthodox: 'Orthodoxy', catholic: 'Catholicism', asatru: null }),
+    traits: named({ brave: 'Brave', ambitious: 'Ambitious', craven: 'Craven', shy: null }),
+    dynasties: named({ dynn_Mock: 'Mockidae', dynn_Other: null }),
+    houses: named({ house_Mockington: 'Mockington', house_Other: null })
   }),
   locateRef: async (_g, _m, _r, kind, id) =>
     id.includes('missing')

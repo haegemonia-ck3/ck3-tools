@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import type { CalendarConfig, CharacterDetail, ReferenceData } from '@shared/types'
+import type { CalendarConfig, CharacterDetail, RefEntry, ReferenceData } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -29,8 +29,8 @@ interface Props {
   /** The mod's offset-calendar display convention, if it declares one */
   calendar: CalendarConfig | null
   refData: ReferenceData | null
-  /** Ids of every character in the mod (parent options, duplicate check) */
-  characterIds: string[]
+  /** Every character in the mod (parent options, duplicate check) */
+  characters: RefEntry[]
   /** Existing .txt files under history/characters */
   characterFiles: string[]
   /** Field values seeded from the URL (Add child, Add member, …) */
@@ -56,7 +56,7 @@ export default function CharacterCreatePanel({
   replacePaths,
   calendar,
   refData,
-  characterIds,
+  characters,
   characterFiles,
   prefill,
   initialFile,
@@ -114,7 +114,7 @@ export default function CharacterCreatePanel({
 
   const id = draft.id.trim()
   const idInvalid = id !== '' && !ID_CHARS.test(id)
-  const idTaken = id !== '' && characterIds.includes(id)
+  const idTaken = id !== '' && characters.some((c) => c.id === id)
   const badBirth = !!draft.birth && !isValidCK3Date(draft.birth)
   const badDeath = !!draft.death && !isValidCK3Date(draft.death)
   const badSpouses = spousesInvalid(draft.spouses)
@@ -225,7 +225,7 @@ export default function CharacterCreatePanel({
           replacePaths={replacePaths}
           calendar={calendar}
           refData={refData}
-          characterIds={characterIds}
+          characters={characters}
           onNavigate={onNavigate}
           onOpenLineage={onOpenLineage}
           badBirth={badBirth}

@@ -30,8 +30,27 @@ writeFixture(
   'common/religion/religion_types/my_religions.txt',
   'religion_one = {\n\tdoctrine = x\n\tfaiths = {\n\t\tfaith_a = {\n\t\t\tcolor = { 1 2 3 }\n\t\t}\n\t\tfaith_b = {\n\t\t}\n\t}\n}\n'
 )
-writeFixture(modPath, 'common/dynasties/my_dynasties.txt', 'dynn_Foo = {\n\tname = "Foo"\n}\n')
-writeFixture(modPath, 'common/dynasty_houses/my_houses.txt', 'house_Bar = {\n}\n')
+writeFixture(
+  modPath,
+  'common/dynasties/my_dynasties.txt',
+  'dynn_Foo = {\n\tname = "dynn_Foo"\n}\ndynn_Nameless = {\n}\n'
+)
+writeFixture(modPath, 'common/dynasty_houses/my_houses.txt', 'house_Bar = {\n\tname = house_Bar\n}\n')
+writeFixture(modPath, 'common/culture/cultures/my_cultures.txt', 'attic = {\n}\n')
+
+// Localization the names resolve through. The game's copy sits in a DLC
+// subfolder to prove the scan isn't limited to the tree's top level, and the
+// mod's entry for `brave` layers over the game's.
+writeFixture(
+  gameDir,
+  'localization/english/dlc/ep1/traits_l_english.yml',
+  'l_english:\n trait_brave:0 "Brave"\n trait_ambitious:0 "Ambitious"\n'
+)
+writeFixture(
+  modPath,
+  'localization/english/mod_l_english.yml',
+  'l_english:\n trait_brave:0 "Bold"\n attic:0 "Attic"\n faith_a:0 "Faith A"\n dynn_Foo:0 "Foo"\n house_Bar:0 "Bar"\n'
+)
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
@@ -40,8 +59,34 @@ describe('getReferenceData dynasties', () => {
   // its own option list rather than one merged pool
   it('keeps dynasty and dynasty-house ids apart', () => {
     const data = getReferenceData(gameDir, modPath, [])
-    expect(data.dynasties).toEqual(['dynn_Foo'])
-    expect(data.houses).toEqual(['house_Bar'])
+    expect(data.dynasties.map((d) => d.id)).toEqual(['dynn_Foo', 'dynn_Nameless'])
+    expect(data.houses.map((h) => h.id)).toEqual(['house_Bar'])
+  })
+})
+
+describe('getReferenceData names', () => {
+  it('resolves each kind through its own localization key', () => {
+    const data = getReferenceData(gameDir, modPath, [])
+    // cultures and faiths key off the id itself, traits off `trait_<id>`
+    expect(data.cultures).toEqual([{ id: 'attic', name: 'Attic' }])
+    expect(data.faiths).toContainEqual({ id: 'faith_a', name: 'Faith A' })
+    expect(data.traits).toContainEqual({ id: 'ambitious', name: 'Ambitious' })
+    // dynasties and houses key off their `name` scalar, quoted or not
+    expect(data.dynasties).toContainEqual({ id: 'dynn_Foo', name: 'Foo' })
+    expect(data.houses).toEqual([{ id: 'house_Bar', name: 'Bar' }])
+  })
+
+  it('layers mod localization over the game files', () => {
+    const data = getReferenceData(gameDir, modPath, [])
+    expect(data.traits).toContainEqual({ id: 'brave', name: 'Bold' })
+  })
+
+  it('leaves a name null when nothing localizes it', () => {
+    const data = getReferenceData(gameDir, modPath, [])
+    // no `name` line at all, and ids whose localization key is missing
+    expect(data.dynasties).toContainEqual({ id: 'dynn_Nameless', name: null })
+    expect(data.traits).toContainEqual({ id: 'mod_only_trait', name: null })
+    expect(data.faiths).toContainEqual({ id: 'faith_b', name: null })
   })
 })
 

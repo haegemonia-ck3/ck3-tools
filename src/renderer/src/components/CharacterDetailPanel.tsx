@@ -5,6 +5,7 @@ import type {
   CharacterDetail,
   CharacterDraft,
   CharacterSummary,
+  RefEntry,
   ReferenceData
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
@@ -43,7 +44,7 @@ interface Props {
   calendar: CalendarConfig | null
   refData: ReferenceData | null
   /** Ids of every character in the mod, offered as father/mother options */
-  characterIds: string[]
+  characters: RefEntry[]
   /** Characters in the mod naming this one as father or mother */
   childCharacters: CharacterSummary[]
   /** Switch the editor to another character in the mod (father/mother jump) */
@@ -72,7 +73,7 @@ export default function CharacterDetailPanel({
   replacePaths,
   calendar,
   refData,
-  characterIds,
+  characters,
   childCharacters,
   onNavigate,
   onOpenLineage,
@@ -245,13 +246,11 @@ export default function CharacterDetailPanel({
           {childCharacters.map((c) => (
             <div key={`${c.file}:${c.id}`} className="flex min-w-0 items-baseline gap-2 text-sm">
               <ReferenceDisplay
-                value={c.name ?? c.id}
+                value={c.id}
+                name={c.name}
                 onNavigate={() => onNavigate(c.id)}
-                className={cn('truncate', c.name === null && 'font-mono')}
+                className="truncate"
               />
-              {c.name !== null && (
-                <span className="truncate font-mono text-xs text-muted-foreground">{c.id}</span>
-              )}
             </div>
           ))}
         </div>
@@ -290,7 +289,7 @@ export default function CharacterDetailPanel({
           replacePaths={replacePaths}
           calendar={calendar}
           refData={refData}
-          characterIds={characterIds}
+          characters={characters}
           onNavigate={onNavigate}
           onOpenLineage={onOpenLineage}
           badBirth={badBirth}

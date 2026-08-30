@@ -152,6 +152,13 @@ export default function DynastyDetailPanel({
   // A house without its own CoA inherits its dynasty's, like in game
   const coaIds = kind === 'house' ? [id, house?.dynasty] : [id]
 
+  // Parent-dynasty options carry the same display name the list shows:
+  // localized where localization resolved it, else the raw `name` value.
+  const dynastyOptions = data.dynasties.map((d) => ({
+    id: d.id,
+    name: d.localizedName ?? d.name
+  }))
+
   const editable = def !== null && def.inMod
   const dirty =
     draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
@@ -452,7 +459,7 @@ export default function DynastyDetailPanel({
                 <ReferenceInput
                   value={draft.dynasty}
                   onChange={(v) => set({ dynasty: v })}
-                  options={data.dynasties.map((d) => d.id)}
+                  options={dynastyOptions}
                   placeholder="none"
                   followTitle="Go to this dynasty"
                   onNavigate={(v) => onOpenRow('dynasty', v)}
