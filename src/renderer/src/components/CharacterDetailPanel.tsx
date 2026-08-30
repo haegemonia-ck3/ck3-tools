@@ -10,7 +10,7 @@ import type {
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
 import type { CharacterSearch } from '../router'
-import CharacterForm, { FieldLabel, spousesInvalid } from './CharacterForm'
+import CharacterForm, { FieldLabel, relationsInvalid, spousesInvalid } from './CharacterForm'
 import DateFormatToggle from './DateFormatToggle'
 import ReferenceDisplay from './ReferenceDisplay'
 import RulerDesignerDnaDialog from './RulerDesignerDnaDialog'
@@ -42,6 +42,7 @@ function withDefaults(detail: CharacterDetail): CharacterDetail {
     sexuality: detail.sexuality ?? null,
     // Spouse rows saved before the concubine flag existed miss that key too
     spouses: (detail.spouses ?? []).map((s) => ({ ...s, concubine: s.concubine === true })),
+    relations: detail.relations ?? [],
     dna: detail.dna ?? null
   }
 }
@@ -163,6 +164,7 @@ export default function CharacterDetailPanel({
   const badBirth = !!draft?.birth && !isValidCK3Date(draft.birth)
   const badDeath = !!draft?.death && !isValidCK3Date(draft.death)
   const badSpouses = spousesInvalid(draft?.spouses)
+  const badRelations = relationsInvalid(draft?.relations)
 
   const save = async (): Promise<void> => {
     if (!draft || !original) return
@@ -195,7 +197,13 @@ export default function CharacterDetailPanel({
   useFormHotkeys({
     onSave: save,
     canSave:
-      dirty && !saving && !badBirth && !badDeath && !badSpouses && !!draft?.id.trim(),
+      dirty &&
+      !saving &&
+      !badBirth &&
+      !badDeath &&
+      !badSpouses &&
+      !badRelations &&
+      !!draft?.id.trim(),
     onClose
   })
 
@@ -438,7 +446,13 @@ export default function CharacterDetailPanel({
         </Button>
         <Button
           disabled={
-            !dirty || saving || badBirth || badDeath || badSpouses || !draft.id.trim()
+            !dirty ||
+            saving ||
+            badBirth ||
+            badDeath ||
+            badSpouses ||
+            badRelations ||
+            !draft.id.trim()
           }
           title={SAVE_HOTKEY_LABEL}
           onClick={save}

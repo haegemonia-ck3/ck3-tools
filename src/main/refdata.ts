@@ -102,6 +102,18 @@ function listDnas(gameDir: string | null, modPath: string | null, replacePaths: 
   return [...keys].sort()
 }
 
+function listRelationTypes(
+  gameDir: string | null,
+  modPath: string | null,
+  replacePaths: string[]
+): string[] {
+  const keys = new Set<string>()
+  for (const file of effectiveFiles(gameDir, modPath, replacePaths, 'common/scripted_relations')) {
+    for (const key of topLevelKeys(file)) keys.add(key)
+  }
+  return [...keys].sort()
+}
+
 /**
  * Top-level id -> its `name` scalar, for definitions that point at a
  * localization key rather than carrying the display name inline (dynasties and
@@ -167,7 +179,12 @@ export function getReferenceData(
     dynasties: entries([...dynastyNames.keys()].sort(), (id) => dynastyNames.get(id) ?? null),
     houses: entries([...houseNames.keys()].sort(), (id) => houseNames.get(id) ?? null),
     // DNAs have no localization — the id is the whole story
-    dnas: listDnas(gameDir, modPath, replacePaths).map((id) => ({ id, name: null }))
+    dnas: listDnas(gameDir, modPath, replacePaths).map((id) => ({ id, name: null })),
+    // Relation ids ("lover", "best_friend") are readable as-is — no loc scan
+    relationTypes: listRelationTypes(gameDir, modPath, replacePaths).map((id) => ({
+      id,
+      name: null
+    }))
   }
 }
 

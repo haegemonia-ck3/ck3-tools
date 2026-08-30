@@ -2,6 +2,7 @@ import { ClipboardPaste, Plus, X } from 'lucide-react'
 import type {
   CalendarConfig,
   CharacterDetail,
+  CharacterRelation,
   CharacterSpouse,
   RefEntry,
   RefKind,
@@ -142,6 +143,21 @@ export function spouseRowInvalid(spouse: CharacterSpouse): boolean {
 /** True when any marriage row would be rejected by a save. */
 export function spousesInvalid(spouses: CharacterSpouse[] | undefined): boolean {
   return (spouses ?? []).some(spouseRowInvalid)
+}
+
+/**
+ * Whether a relationship row can't be written yet: no type picked, no target
+ * character, or a date that isn't a real Y.M.D.
+ */
+export function relationRowInvalid(relation: CharacterRelation): boolean {
+  return (
+    !relation.type.trim() || !relation.target.trim() || !isValidCK3Date(relation.date)
+  )
+}
+
+/** True when any relationship row would be rejected by a save. */
+export function relationsInvalid(relations: CharacterRelation[] | undefined): boolean {
+  return (relations ?? []).some(relationRowInvalid)
 }
 
 interface Props {
@@ -511,6 +527,89 @@ export default function CharacterForm({
     </div>
   )
 
+  /**
+   * Scripted relations (lover, rival, friend, …) are dated `set_relation_*`
+   * effects; each row edits one: the type, who, when, and (optionally) the
+   * scripted reason. Rows keep file order; `extra` (unrecognized inner lines
+   * of a block-form statement) is carried invisibly so nothing is lost.
+   */
+  const relations = draft.relations ?? []
+  const setRelation = (index: number, patch: Partial<CharacterRelation>): void =>
+    set({ relations: relations.map((r, i) => (i === index ? { ...r, ...patch } : r)) })
+
+  const relationsField = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <FieldLabel>Relationships · {relations.length}</FieldLabel>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            set({
+              relations: [
+                ...relations,
+                { type: '', target: '', prefixed: true, date: '', reason: null, extra: null }
+              ]
+            })
+          }
+        >
+          <Plus />
+          Add relationship
+        </Button>
+      </div>
+      {relations.length === 0 ? (
+        <p className="text-sm text-muted-foreground">none</p>
+      ) : (
+        relations.map((relation, index) => (
+          <div key={index} className="space-y-2.5 rounded-md border p-2.5">
+            {/*
+              Narrow: the remove button stays on the type's row and the target
+              wraps below it. Wide: all three sit on one row, remove last.
+            */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2.5 @sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] @sm:gap-x-2.5">
+              <ReferenceInput
+                className="col-start-1 row-start-1 min-w-0"
+                value={relation.type === '' ? null : relation.type}
+                onChange={(v) => setRelation(index, { type: v ?? '' })}
+                options={refData?.relationTypes ?? []}
+                placeholder="relation"
+                renderItem={(t) => <span>{t.id.replace(/_/g, ' ')}</span>}
+              />
+              <ReferenceInput
+                className="col-start-1 row-start-2 min-w-0 @sm:col-start-2 @sm:row-start-1"
+                value={relation.target === '' ? null : relation.target}
+                // A user-picked target is always written as character:<id>;
+                // only untouched rows keep a bare token the file used
+                onChange={(v) => setRelation(index, { target: v ?? '', prefixed: true })}
+                options={characters}
+                placeholder="character"
+                onNavigate={onNavigate}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="col-start-2 row-start-1 text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/20 @sm:col-start-3"
+                title="Remove this relationship"
+                onClick={() => set({ relations: relations.filter((_, i) => i !== index) })}
+              >
+                <X />
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2.5 @sm:flex-row @sm:gap-2.5 @sm:*:flex-1">
+              {dateField('Date', relation.date || null, (v) => setRelation(index, { date: v ?? '' }), {
+                invalid: !isValidCK3Date(relation.date),
+                placeholder: 'Y.M.D'
+              })}
+              {textField('Reason', relation.reason, (v) => setRelation(index, { reason: v }), {
+                placeholder: 'none'
+              })}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
   return (
     <>
       <FieldSet className="gap-3.5">
@@ -606,6 +705,7 @@ export default function CharacterForm({
           {parentField('Mother', draft.mother, (v) => set({ mother: v }))}
         </div>
         {spousesField}
+        {relationsField}
         {childrenSlot}
       </FieldSet>
 
