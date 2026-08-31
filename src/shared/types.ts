@@ -665,6 +665,11 @@ export interface TitleSummary {
   nobleFamily: string | null
   /** Raw `province =` value (baronies) */
   province: string | null
+  /**
+   * Whether any effective history file records at least one dated entry for
+   * the title (an empty placeholder block doesn't count).
+   */
+  hasHistory: boolean
 }
 
 /** One `<key> = <loc_key>` line of a title's `cultural_names` block. */

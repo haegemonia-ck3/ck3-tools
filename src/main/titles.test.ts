@@ -223,6 +223,17 @@ const MOD_NF_CHARACTERS = [
 const MOD_DYNASTIES = ['old01 = {', '\tname = "dynn_Old"', '}', ''].join('\n')
 const MOD_HOUSES = ['house_new = {', '\tname = "dynn_New"', '}', ''].join('\n')
 
+// Game-side history: a real entry for e_empire, an EMPTY placeholder block
+// for d_titular — a parked block with no dated entries is not history
+const GAME_TITLE_HISTORY = [
+  'e_empire = {',
+  '\t800.1.1 = { holder = 1 }',
+  '}',
+  'd_titular = {',
+  '}',
+  ''
+].join('\n')
+
 beforeEach(() => {
   rmSync(root, { recursive: true, force: true })
   writeFixture(gameDir, 'common/landed_titles/00_landed_titles.txt', GAME_TITLES)
@@ -235,6 +246,7 @@ beforeEach(() => {
   writeFixture(modPath, 'common/governments/HAAO_gov.txt', MOD_GOV)
   writeFixture(modPath, 'common/landed_titles/mod_nf.txt', MOD_NF)
   writeFixture(modPath, 'history/titles/nf.txt', MOD_NF_HISTORY)
+  writeFixture(gameDir, 'history/titles/game_titles.txt', GAME_TITLE_HISTORY)
   writeFixture(modPath, 'history/characters/nf_chars.txt', MOD_NF_CHARACTERS)
   writeFixture(modPath, 'common/dynasties/00_dynasties.txt', MOD_DYNASTIES)
   writeFixture(modPath, 'common/dynasty_houses/00_houses.txt', MOD_HOUSES)
@@ -334,6 +346,15 @@ describe('getTitleData', () => {
       'male_only_law',
       'noble_family_succession_law'
     ])
+  })
+
+  it('marks the titles with recorded history, layered like everything else', () => {
+    const byId = new Map(load().titles.map((t) => [t.id, t]))
+    expect(byId.get('c_nf_edge')!.hasHistory).toBe(true)
+    expect(byId.get('e_empire')!.hasHistory).toBe(true)
+    expect(byId.get('c_athens')!.hasHistory).toBe(false)
+    // An empty placeholder block records nothing
+    expect(byId.get('d_titular')!.hasHistory).toBe(false)
   })
 
   it('honors replace_path by dropping the game folder', () => {

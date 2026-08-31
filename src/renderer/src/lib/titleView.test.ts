@@ -20,6 +20,7 @@ const t = (partial: Partial<TitleSummary> & { id: string }): TitleSummary => ({
   landless: null,
   nobleFamily: null,
   province: null,
+  hasHistory: false,
   ...partial
 })
 

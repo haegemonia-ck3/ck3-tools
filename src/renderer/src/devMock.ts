@@ -546,6 +546,8 @@ const titleSummary = (partial: Partial<TitleSummary> & { id: string }): TitleSum
   landless: null,
   nobleFamily: null,
   province: null,
+  // Recomputed from titleHistories by the getTitleData mock, like the backend
+  hasHistory: false,
   ...partial
 })
 
@@ -979,7 +981,10 @@ const mock: Ck3ToolsApi = {
     return { ok: true }
   },
   getTitleData: async () => ({
-    titles: structuredClone(titles),
+    titles: structuredClone(titles).map((t) => ({
+      ...t,
+      hasHistory: (titleHistories.get(t.id.toLowerCase()) ?? []).length > 0
+    })),
     governments: named({
       feudal_government: 'Feudal',
       aristocratic_government: 'Aristocratic',

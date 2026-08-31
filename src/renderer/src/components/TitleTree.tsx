@@ -1,6 +1,5 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, FlameKindling, Shield } from 'lucide-react'
 import type { TitleSummary } from '@shared/types'
-import { Swatch } from './Swatch'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { matchesQuery, normId, titleKindLabel, titleName } from '@/lib/titleView'
@@ -8,6 +7,23 @@ import type { TitleTreeNode } from '@/lib/titleView'
 
 /** Search results are a flat list; past this many the query needs narrowing. */
 const SEARCH_CAP = 300
+
+/**
+ * The row's type marker, tinted with the title's map colour: a shield for
+ * ordinary titles, a kindling fire for noble family hearths. Filled once the
+ * title has recorded history; outline-only when nothing ever happened to it.
+ */
+function TitleGlyph({ title }: { title: TitleSummary }): React.JSX.Element {
+  const Icon = title.nobleFamily?.trim().toLowerCase() === 'yes' ? FlameKindling : Shield
+  return (
+    <Icon
+      aria-hidden
+      className="size-3.5 shrink-0"
+      style={{ color: title.color ?? 'var(--muted-foreground)' }}
+      fill={title.hasHistory ? 'currentColor' : 'none'}
+    />
+  )
+}
 
 interface RowProps {
   title: TitleSummary
@@ -58,7 +74,7 @@ function TitleRow({
       ) : (
         <span className="size-5 shrink-0" />
       )}
-      <Swatch hex={title.color} className="size-3 shrink-0" />
+      <TitleGlyph title={title} />
       <span className={cn('min-w-0 truncate', title.localizedName === null && 'font-mono')}>
         {titleName(title)}
       </span>

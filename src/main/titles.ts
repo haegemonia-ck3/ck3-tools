@@ -165,6 +165,33 @@ function successionLawIds(
   return [...ids].sort()
 }
 
+/**
+ * Every title id (normalized) that at least one effective history file
+ * records a dated entry for. An empty placeholder block (`d_x = {}`) counts
+ * as no history — real mods keep those parked while authoring.
+ */
+function titlesWithHistory(
+  gameDir: string | null,
+  modPath: string | null,
+  replacePaths: string[]
+): Set<string> {
+  const ids = new Set<string>()
+  for (const path of effectiveFiles(gameDir, modPath, replacePaths, 'history/titles')) {
+    let text: string
+    try {
+      text = readFileSync(path, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const block of scanBlocks(text)) {
+      if (ids.has(norm(block.key))) continue
+      const body = text.slice(block.bodyStart, block.bodyEnd)
+      if (scanBlocks(body).some((d) => DATED_BLOCK_KEY.test(d.key))) ids.add(norm(block.key))
+    }
+  }
+  return ids
+}
+
 // ---------- Assembly ----------
 
 export function getTitleData(
@@ -173,6 +200,7 @@ export function getTitleData(
   replacePaths: string[]
 ): TitleData {
   const named = readNamedColors(gameDir, modPath, replacePaths)
+  const withHistory = titlesWithHistory(gameDir, modPath, replacePaths)
   const titles: TitleSummary[] = []
   // Mod definitions win on an id clash (vanilla itself ships a few duplicate
   // ids); children of a skipped duplicate still walk, so nothing disappears.
@@ -200,7 +228,8 @@ export function getTitleData(
         color: parseColor(node.body, named)?.hex ?? null,
         landless: scalars.get('landless') ?? null,
         nobleFamily: scalars.get('noble_family') ?? null,
-        province: scalars.get('province') ?? null
+        province: scalars.get('province') ?? null,
+        hasHistory: withHistory.has(norm(node.id))
       })
     })
   }
