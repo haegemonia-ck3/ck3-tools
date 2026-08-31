@@ -7,13 +7,17 @@ import { cn } from '@/lib/utils'
  * with controls parked at the right end of that line.
  *
  * The title is a heading, so it wears the heading font — which is the mod's
- * TitleFont whenever the app is dressed in one (see useModFonts.ts).
+ * TitleFont whenever the app is dressed in one (see useModFonts.ts). Only the
+ * title: the controls beside it are ordinary buttons and stay on the body
+ * font, so the font has to sit on the title itself rather than on the legend.
  */
 
 /**
  * The legend on its own, for the few sections that can't use `FormSection`
  * because something (a `Collapsible`) has to wrap the legend and the body
- * together inside the `fieldset`.
+ * together inside the `fieldset`. The heading font goes on the title text
+ * inside it, not here — a legend can also hold controls, and buttons inherit
+ * their font.
  */
 export function SectionLegend({
   className,
@@ -23,7 +27,7 @@ export function SectionLegend({
     <FieldLegend
       variant="label"
       data-slot="section-legend"
-      className={cn('mb-2 font-heading', className)}
+      className={cn('mb-2', className)}
       {...props}
     />
   )
@@ -51,7 +55,7 @@ export default function FormSection({
           legendClassName
         )}
       >
-        {title}
+        <span className="font-heading">{title}</span>
         {action}
       </SectionLegend>
       {children}
