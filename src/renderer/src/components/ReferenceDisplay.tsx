@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight, ExternalLink } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import type { RefLocation } from '@shared/types'
 import { openReferenceTarget } from './ReferenceInput'
 import ReferenceLabel, { refLabel } from './ReferenceLabel'
@@ -61,8 +61,6 @@ export default function ReferenceDisplay({
     return <span className={cn('min-w-0', className)}>{label}</span>
   }
 
-  const Icon = onNavigate ? ArrowRight : ExternalLink
-
   return (
     <Button
       variant="link"
@@ -79,7 +77,7 @@ export default function ReferenceDisplay({
       onClick={follow}
     >
       {label}
-      <Icon className="size-3 shrink-0" />
+      {!onNavigate && <ExternalLink className="size-3 shrink-0" />}
     </Button>
   )
 }
