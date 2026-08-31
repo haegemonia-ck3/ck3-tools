@@ -1140,7 +1140,7 @@ const mock: Ck3ToolsApi = {
     Object.fromEntries(
       ids.map((id) => [
         id,
-        !['mockidae', 'house_Alpha', 'dynn_Mock'].includes(id)
+        !['mockidae', 'house_Alpha', 'dynn_Mock', 'e_mockia', 'k_hellas', 'd_athens'].includes(id)
           ? null
           : 'data:image/svg+xml,' +
             encodeURIComponent(
