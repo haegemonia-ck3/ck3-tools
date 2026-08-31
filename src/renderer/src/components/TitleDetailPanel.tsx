@@ -367,10 +367,19 @@ export default function TitleDetailPanel({
                     disabled
                     readOnly
                   />
-                  <p className="text-xs text-muted-foreground">
-                    From localization key <code className="font-mono">{detail.id}</code> — edit it
-                    in the mod&apos;s localization files.
-                  </p>
+                  {detail.flags.noble_family?.trim().toLowerCase() === 'yes' ? (
+                    <p className="text-xs text-muted-foreground">
+                      A noble-family title is named in game after the holding house — shown here
+                      from the last holder in the title&apos;s history (a{' '}
+                      <code className="font-mono">{detail.id}</code> localization key would
+                      override it).
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      From localization key <code className="font-mono">{detail.id}</code> — edit
+                      it in the mod&apos;s localization files.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
