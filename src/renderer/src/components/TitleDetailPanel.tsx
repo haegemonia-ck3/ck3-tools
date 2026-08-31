@@ -353,10 +353,6 @@ export default function TitleDetailPanel({
                 <div className="space-y-1.5">
                   <FieldLabel>ID</FieldLabel>
                   <Input type="text" value={detail.id} disabled readOnly className="font-mono" />
-                  <Hint
-                    label="Tier"
-                    value={`${TIER_LABEL[detail.tier]} — from the ${detail.id.slice(0, 2)} prefix`}
-                  />
                 </div>
                 <div className="space-y-1.5">
                   <FieldLabel>Name</FieldLabel>
