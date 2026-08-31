@@ -48,6 +48,8 @@ export default function TitleEditorPage(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<'mod' | 'all'>('mod')
   const [showRawDates, setShowRawDates] = useState(false)
+  /** While a history entry form is open, Escape cancels it rather than the page */
+  const [historyFormOpen, setHistoryFormOpen] = useState(false)
   // Which title is open lives in the URL, not in state, so opening one pushes
   // a history entry and the mouse "back" button returns to the tree.
   const search = useSearch({ from: '/titles' })
@@ -133,12 +135,19 @@ export default function TitleEditorPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modPath])
 
-  /** The selected title's full parse and history, loaded per selection. */
+  /**
+   * The selected title's full parse and history, loaded per selection. The
+   * token drops a slow response that lands after another selection started,
+   * so quick clicks through the tree can't show a stale title's data.
+   */
+  const selectionToken = useRef(0)
   const loadSelected = async (id: string): Promise<void> => {
+    const token = ++selectionToken.current
     const [d, h] = await Promise.all([
       window.ck3tools.getTitle(gameDir, modPath, replacePaths, id),
       window.ck3tools.getTitleHistory(gameDir, modPath, replacePaths, id)
     ])
+    if (token !== selectionToken.current) return
     setDetail(d)
     setHistory(h)
   }
@@ -219,7 +228,9 @@ export default function TitleEditorPage(): React.JSX.Element {
                 void reload()
                 if (search.id) void loadSelected(search.id)
               }}
-              onClose={closeRow}
+              onClose={() => {
+                if (!historyFormOpen) closeRow()
+              }}
             />
           </ResizablePanel>
           <ResizableHandle withHandle className="mx-2 bg-transparent hover:bg-border" />
@@ -248,6 +259,7 @@ export default function TitleEditorPage(): React.JSX.Element {
                 if (search.id) void loadSelected(search.id)
                 void reload()
               }}
+              onFormOpenChange={setHistoryFormOpen}
             />
           </ResizablePanel>
         </ResizablePanelGroup>

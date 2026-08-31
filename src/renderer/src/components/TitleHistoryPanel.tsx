@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useHotkeys } from 'react-hotkeys-hook'
 import type {
   CalendarConfig,
   CharacterSummary,
@@ -415,6 +416,12 @@ interface Props {
   onOpenCharacter: (file: string, id: string) => void
   /** Called after any successful write so the page can reload the history */
   onChanged: () => void
+  /**
+   * Reports whether an entry form is open, so the page can keep the detail
+   * panel's Escape-to-close from firing while one is — Escape then cancels
+   * the form instead (handled here).
+   */
+  onFormOpenChange: (open: boolean) => void
 }
 
 /**
@@ -434,7 +441,8 @@ export default function TitleHistoryPanel({
   modPath,
   onOpenTitle,
   onOpenCharacter,
-  onChanged
+  onChanged,
+  onFormOpenChange
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState<string | null>(null)
   const [adding, setAdding] = useState(false)
@@ -446,6 +454,29 @@ export default function TitleHistoryPanel({
     setAdding(false)
     setError(null)
   }, [titleId])
+
+  const formOpen = editing !== null || adding
+  useEffect(() => {
+    onFormOpenChange(formOpen)
+    return () => onFormOpenChange(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formOpen])
+
+  // Escape cancels an open entry form; the page keeps the detail panel's
+  // Escape-to-close inert while one is open, so the two never both fire.
+  useHotkeys(
+    'escape',
+    () => {
+      setEditing(null)
+      setAdding(false)
+      setError(null)
+    },
+    {
+      enabled: () => formOpen,
+      enableOnFormTags: true,
+      ignoreEventWhen: (e) => e.defaultPrevented
+    }
+  )
 
   const sorted = useMemo(() => (entries === null ? [] : sortEntries(entries)), [entries])
 
