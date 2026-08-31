@@ -194,7 +194,7 @@ const STATEMENT = /(^|\s)([A-Za-z0-9_.\-']+)\s*=\s*(?:"([^"]*)"|([^\s{}"#=]+))/g
  * The depth-0 code of a line — comments and the contents of inline sub-blocks
  * removed — given the brace depth at the line's start.
  */
-function topLevelCode(line: string, startDepth: number): string {
+export function topLevelCode(line: string, startDepth: number): string {
   let out = ''
   let depth = startDepth
   let inQuote = false

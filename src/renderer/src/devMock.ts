@@ -15,8 +15,13 @@ import type {
   FaithDef,
   HouseDef,
   RefEntry,
-  ReligionDef
+  ReligionDef,
+  TitleDetail,
+  TitleFlags,
+  TitleHistoryEntry,
+  TitleSummary
 } from '@shared/types'
+import { TITLE_FLAG_KEYS } from '@shared/types'
 
 /** `{ id: name }` as reference entries; a null name means "no localization". */
 const named = (entries: Record<string, string | null>): RefEntry[] =>
@@ -523,6 +528,198 @@ const faiths: FaithDef[] = [
   })
 ]
 
+// ---------- Landed titles & their history ----------
+
+const noFlags = (over: Partial<TitleFlags> = {}): TitleFlags => {
+  const flags = {} as TitleFlags
+  for (const key of TITLE_FLAG_KEYS) flags[key] = null
+  return { ...flags, ...over }
+}
+
+const titleSummary = (partial: Partial<TitleSummary> & { id: string }): TitleSummary => ({
+  tier: 'duchy',
+  parent: null,
+  file: 'mock_titles.txt',
+  inMod: true,
+  localizedName: null,
+  color: null,
+  landless: null,
+  nobleFamily: null,
+  province: null,
+  ...partial
+})
+
+// A small de jure tree with the edge cases the tree browser has to survive: a
+// game-defined empire, a dangling parent, special-kind flags, a titular duchy.
+const titles: TitleSummary[] = [
+  titleSummary({ id: 'e_mockia', tier: 'empire', localizedName: 'Mockia', color: '#a03030' }),
+  titleSummary({
+    id: 'k_hellas',
+    tier: 'kingdom',
+    parent: 'e_mockia',
+    localizedName: 'Hellás',
+    color: '#3a5f9f'
+  }),
+  titleSummary({
+    id: 'd_athens',
+    tier: 'duchy',
+    parent: 'k_hellas',
+    localizedName: 'Athens',
+    color: '#4f8f4f'
+  }),
+  titleSummary({
+    id: 'c_athens',
+    tier: 'county',
+    parent: 'd_athens',
+    localizedName: 'Attica',
+    color: '#5f9f5f'
+  }),
+  titleSummary({
+    id: 'b_athens',
+    tier: 'barony',
+    parent: 'c_athens',
+    localizedName: 'Athens',
+    color: '#6faf6f',
+    province: '100'
+  }),
+  titleSummary({
+    id: 'b_piraeus',
+    tier: 'barony',
+    parent: 'c_athens',
+    color: '#7fbf7f',
+    province: '101'
+  }),
+  // Titular — no children, no localization
+  titleSummary({ id: 'd_oracle', parent: 'k_hellas', color: '#646464' }),
+  titleSummary({
+    id: 'd_laamp_wanderers',
+    localizedName: 'The Wanderers',
+    color: '#646464',
+    landless: 'yes'
+  }),
+  titleSummary({
+    id: 'c_nf_mockidae',
+    tier: 'county',
+    localizedName: 'Mockidae',
+    color: '#646464',
+    landless: 'yes',
+    nobleFamily: 'yes'
+  }),
+  titleSummary({
+    id: 'e_game',
+    tier: 'empire',
+    file: '00_game_titles.txt',
+    inMod: false,
+    localizedName: 'Gamelandia',
+    color: '#907030'
+  }),
+  titleSummary({ id: 'd_dangling', parent: 'k_missing', color: '#556677' })
+]
+
+const titleDetails = new Map<string, TitleDetail>(
+  titles.map((t) => {
+    const children = titles.filter((c) => c.parent === t.id).map((c) => c.id)
+    const path: string[] = []
+    for (let p = t.parent; p !== null; ) {
+      const parent = titles.find((x) => x.id === p)
+      if (!parent) break
+      path.unshift(parent.id)
+      p = parent.parent
+    }
+    return [
+      t.id.toLowerCase(),
+      {
+        id: t.id,
+        tier: t.tier,
+        file: t.file,
+        inMod: t.inMod,
+        dejurePath: path,
+        parent: t.parent,
+        children,
+        color:
+          t.color === null ? null : { hex: t.color, raw: `{ ${t.color} }`, editable: true },
+        capital: t.tier === 'barony' ? null : children.find((c) => c.startsWith('c_')) ?? null,
+        province: t.province,
+        flags: noFlags(
+          t.nobleFamily === 'yes'
+            ? {
+                definite_form: 'yes',
+                landless: 'yes',
+                ruler_uses_title_name: 'no',
+                no_automatic_claims: 'yes',
+                noble_family: 'yes',
+                destroy_if_invalid_heir: 'yes'
+              }
+            : t.landless === 'yes'
+              ? { landless: 'yes', require_landless: 'yes', definite_form: 'yes' }
+              : {}
+        ),
+        culturalNames:
+          t.id === 'c_athens'
+            ? [
+                { key: 'name_list_attic', value: 'cn_athenai' },
+                { key: 'name_list_doric', value: 'cn_athana' }
+              ]
+            : [],
+        scriptBlocks: t.id === 'd_laamp_wanderers' ? ['can_create', 'ai_primary_priority'] : []
+      }
+    ]
+  })
+)
+
+const historyEntry = (
+  partial: Partial<TitleHistoryEntry> & { date: string }
+): TitleHistoryEntry => ({
+  file: 'mock_history.txt',
+  inMod: true,
+  titleBlock: 0,
+  index: 0,
+  holder: null,
+  liege: null,
+  deJureLiege: null,
+  government: null,
+  changeDevelopmentLevel: null,
+  developmentLevel: null,
+  name: null,
+  resetName: null,
+  insertTitleHistory: null,
+  removeSuccessionLaws: null,
+  holderIgnoreHeadOfFaithRequirement: null,
+  successionLaws: null,
+  opaqueBlocks: [],
+  extra: [],
+  ...partial
+})
+
+// Out of order on purpose (dev lines first, the vanilla house style), with a
+// duplicate date, a typo'd date, a vacancy and an opaque effect block.
+const titleHistories = new Map<string, TitleHistoryEntry[]>([
+  [
+    'k_hellas',
+    [
+      historyEntry({ date: '3200.1.1', index: 0, changeDevelopmentLevel: '2' }),
+      historyEntry({ date: '3400.1.1', index: 1, changeDevelopmentLevel: '5' }),
+      historyEntry({
+        date: '3254.1.1',
+        index: 2,
+        holder: '219',
+        liege: 'e_mockia',
+        government: 'aristocratic_government',
+        successionLaws: ['male_only_law']
+      }),
+      historyEntry({ date: '3254.1.1', index: 3, opaqueBlocks: ['effect'] }),
+      historyEntry({ date: '3300.1', index: 4, holder: '0' }),
+      historyEntry({
+        date: '800.1.1',
+        file: '00_game_history.txt',
+        inMod: false,
+        holder: '9999'
+      })
+    ]
+  ],
+  ['d_laamp_wanderers', [historyEntry({ date: '3254.1.1', holder: '218', liege: '0' })]]
+])
+
 const mock: Ck3ToolsApi = {
   getSettings: async () => structuredClone(settings),
   setSettings: async (patch) => Object.assign(settings, patch) && structuredClone(settings),
@@ -779,6 +976,138 @@ const mock: Ck3ToolsApi = {
       color: def.color === null ? null : { hex: def.color, raw: def.color, editable: true },
       localizedName: null
     })
+    return { ok: true }
+  },
+  getTitleData: async () => ({
+    titles: structuredClone(titles),
+    governments: named({
+      feudal_government: 'Feudal',
+      aristocratic_government: 'Aristocratic',
+      tribal_government: null
+    }),
+    successionLaws: named({
+      male_only_law: 'Male Only',
+      equal_law: 'Equal',
+      noble_family_succession_law: null,
+      landless_adventurer_succession_law: null
+    })
+  }),
+  getTitle: async (_g, _m, _r, id) =>
+    structuredClone(titleDetails.get(id.trim().toLowerCase()) ?? null),
+  saveTitle: async (_modPath, file, id, patch) => {
+    const detail = titleDetails.get(id.trim().toLowerCase())
+    const summary = titles.find((t) => t.id.toLowerCase() === id.trim().toLowerCase())
+    if (!detail || !summary || detail.file !== file) {
+      return { ok: false, error: `${id} not found in ${file}` }
+    }
+    Object.assign(detail, {
+      capital: patch.capital,
+      province: patch.province,
+      flags: structuredClone(patch.flags),
+      culturalNames: structuredClone(patch.culturalNames),
+      color:
+        detail.color !== null && patch.color !== null
+          ? { ...detail.color, hex: patch.color }
+          : detail.color
+    })
+    summary.color = detail.color?.hex ?? null
+    summary.landless = patch.flags.landless
+    summary.nobleFamily = patch.flags.noble_family
+    summary.province = patch.province
+    return { ok: true }
+  },
+  listTitleFiles: async () =>
+    [...new Set(titles.filter((t) => t.inMod).map((t) => t.file))].sort(),
+  createTitle: async (_modPath, def) => {
+    // Mod-only, like the backend: shadowing a base-game title is legal
+    const taken = titles.find(
+      (t) => t.inMod && t.id.toLowerCase() === def.id.trim().toLowerCase()
+    )
+    if (taken) return { ok: false, error: `ID ${def.id} already exists in ${taken.file}` }
+    const tier =
+      ({ h: 'hegemony', e: 'empire', k: 'kingdom', d: 'duchy', c: 'county', b: 'barony' } as const)[
+        def.id.trim()[0]?.toLowerCase() as 'h' | 'e' | 'k' | 'd' | 'c' | 'b'
+      ] ?? 'duchy'
+    const parent = def.parent?.trim() || null
+    if (parent !== null && !titles.some((t) => t.inMod && t.id.toLowerCase() === parent.toLowerCase())) {
+      return { ok: false, error: `Title ${parent} isn't defined in the mod` }
+    }
+    const file = parent === null ? (def.file ?? 'mock_titles.txt') : 'mock_titles.txt'
+    titles.push(
+      titleSummary({
+        id: def.id.trim(),
+        tier,
+        parent,
+        file,
+        color: def.color,
+        province: def.province,
+        landless: def.flags.landless,
+        nobleFamily: def.flags.noble_family
+      })
+    )
+    const path: string[] = []
+    for (let p = parent; p !== null; ) {
+      const up = titles.find((x) => x.id.toLowerCase() === p!.toLowerCase())
+      if (!up) break
+      path.unshift(up.id)
+      p = up.parent
+    }
+    titleDetails.set(def.id.trim().toLowerCase(), {
+      id: def.id.trim(),
+      tier,
+      file,
+      inMod: true,
+      dejurePath: path,
+      parent,
+      children: [],
+      color: def.color === null ? null : { hex: def.color, raw: `{ ${def.color} }`, editable: true },
+      capital: def.capital,
+      province: def.province,
+      flags: structuredClone(def.flags),
+      culturalNames: [],
+      scriptBlocks: []
+    })
+    if (parent !== null) {
+      titleDetails.get(parent.toLowerCase())?.children.push(def.id.trim())
+    }
+    return { ok: true }
+  },
+  getTitleHistory: async (_g, _m, _r, titleId) =>
+    structuredClone(titleHistories.get(titleId.trim().toLowerCase()) ?? []),
+  listTitleHistoryFiles: async () => ['mock_history.txt'],
+  saveTitleHistoryEntry: async (_modPath, file, titleId, titleBlock, index, patch) => {
+    const entries = titleHistories.get(titleId.trim().toLowerCase()) ?? []
+    const at = entries.findIndex(
+      (e) => e.file === file && e.titleBlock === titleBlock && e.index === index
+    )
+    if (at < 0) return { ok: false, error: `History entry not found in ${file}` }
+    entries[at] = { ...entries[at], ...structuredClone(patch) }
+    return { ok: true }
+  },
+  addTitleHistoryEntry: async (_modPath, file, titleId, patch) => {
+    const key = titleId.trim().toLowerCase()
+    const entries = titleHistories.get(key) ?? []
+    const inFile = entries.filter((e) => e.file === file)
+    const titleBlock = inFile.length > 0 ? Math.max(...inFile.map((e) => e.titleBlock)) : 0
+    const index =
+      inFile.filter((e) => e.titleBlock === titleBlock).length > 0
+        ? Math.max(...inFile.filter((e) => e.titleBlock === titleBlock).map((e) => e.index)) + 1
+        : 0
+    entries.push(historyEntry({ ...structuredClone(patch), file, titleBlock, index }))
+    titleHistories.set(key, entries)
+    return { ok: true }
+  },
+  deleteTitleHistoryEntry: async (_modPath, file, titleId, titleBlock, index) => {
+    const entries = titleHistories.get(titleId.trim().toLowerCase()) ?? []
+    const at = entries.findIndex(
+      (e) => e.file === file && e.titleBlock === titleBlock && e.index === index
+    )
+    if (at < 0) return { ok: false, error: `History entry not found in ${file}` }
+    entries.splice(at, 1)
+    // Later entries of the same block shift down, the way a re-scan would see them
+    for (const e of entries) {
+      if (e.file === file && e.titleBlock === titleBlock && e.index > index) e.index--
+    }
     return { ok: true }
   },
   getFaithIcons: async (_g, _m, _r, icons) => Object.fromEntries(icons.map((i) => [i, null])),

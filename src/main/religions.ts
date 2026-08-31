@@ -84,7 +84,7 @@ function hsvHex(h: number, s: number, v: number): string {
  * (`color = basque`). Entries written as `hsv{ … }` aren't blocks and are
  * skipped — they resolve to no swatch rather than a wrong one.
  */
-function readNamedColors(
+export function readNamedColors(
   gameDir: string | null,
   modPath: string | null,
   replacePaths: string[]
@@ -121,7 +121,7 @@ function colorStatement(body: string): string | null {
   return null
 }
 
-function parseColor(body: string, named: Map<string, string>): FaithColor | null {
+export function parseColor(body: string, named: Map<string, string>): FaithColor | null {
   // A plain `color = { … }` is a depth-0 block, so it is read from the span
   // rather than the line — real files wrap long triples across lines.
   const block = scanBlocks(body).find((b) => b.key.toLowerCase() === 'color')
@@ -198,7 +198,7 @@ const holySiteLocKey = (id: string): string => `holy_site_${id}_name`
  * are already resolved in the mod's favour; this covers ids the mod moved into
  * a file of its own.)
  */
-function modFirst(files: string[], modPath: string | null): string[] {
+export function modFirst(files: string[], modPath: string | null): string[] {
   return [...files].sort(
     (a, b) => Number(isUnderDir(b, modPath)) - Number(isUnderDir(a, modPath))
   )
@@ -453,7 +453,7 @@ function spliceBody(text: string, block: BlockSpan, body: string): string {
  * unchanged or the file's form isn't a rewritable triple, so an untouched save
  * round-trips exactly.
  */
-function setColor(body: string, hex: string | null, current: FaithColor | null): string {
+export function setColor(body: string, hex: string | null, current: FaithColor | null): string {
   if (hex === null || current === null || !current.editable) return body
   if (current.hex !== null && current.hex.toLowerCase() === hex.toLowerCase()) return body
   const block = scanBlocks(body).find((b) => b.key.toLowerCase() === 'color')
@@ -604,7 +604,7 @@ function newIdError(modPath: string, kind: 'religion' | 'faith', rawId: string):
 }
 
 /** "#rrggbb" -> "{ r g b }" in 0-255 integers, the unambiguous triple form. */
-function colorTriple(hex: string): string {
+export function colorTriple(hex: string): string {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
   return `{ ${r} ${g} ${b} }`
 }

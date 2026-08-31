@@ -12,6 +12,7 @@ import CultureEditorPage from './pages/CultureEditorPage'
 import DynastyEditorPage from './pages/DynastyEditorPage'
 import FaithEditorPage from './pages/FaithEditorPage'
 import ReligionEditorPage from './pages/ReligionEditorPage'
+import TitleEditorPage from './pages/TitleEditorPage'
 
 /**
  * Deep-link target for the character editor (e.g. from a family-tree node).
@@ -86,6 +87,18 @@ export interface CultureSearch {
   id?: string
   create?: boolean
   from?: string
+}
+
+/**
+ * Deep-link target for the title editor (e.g. a faith's religious-head field
+ * one day, or a history entry's liege). With `create` set, the page opens the
+ * new-title panel instead of a title, and `parent` prefills the de jure liege
+ * — which is what "Add child title" on a title passes.
+ */
+export interface TitleSearch {
+  id?: string
+  create?: boolean
+  parent?: string
 }
 
 const rootRoute = createRootRoute({
@@ -179,11 +192,23 @@ const culturesRoute = createRoute({
   }
 })
 
+const titlesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/titles',
+  component: TitleEditorPage,
+  validateSearch: (search: Record<string, unknown>): TitleSearch => ({
+    id: typeof search.id === 'string' ? search.id : undefined,
+    create: search.create === true || search.create === 'true' ? true : undefined,
+    parent: typeof search.parent === 'string' ? search.parent : undefined
+  })
+})
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   settingsRoute,
   charactersRoute,
   dynastiesRoute,
+  titlesRoute,
   faithsRoute,
   religionsRoute,
   culturesRoute

@@ -35,6 +35,14 @@ import {
   saveReligion
 } from './religions'
 import { getFaithIcons, listFaithIcons } from './faithIcons'
+import { createTitle, getTitle, getTitleData, listTitleFiles, saveTitle } from './titles'
+import {
+  addTitleHistoryEntry,
+  deleteTitleHistoryEntry,
+  getTitleHistory,
+  listTitleHistoryFiles,
+  saveTitleHistoryEntry
+} from './titleHistory'
 import { getReferenceData, locateRef } from './refdata'
 import { getTraitIcons } from './traitIcons'
 import { getFlatIcons } from './icons'
@@ -54,8 +62,11 @@ import type {
   NewFaith,
   NewHouse,
   NewReligion,
+  NewTitle,
   RefKind,
-  ReligionPatch
+  ReligionPatch,
+  TitleHistoryEntryPatch,
+  TitlePatch
 } from '@shared/types'
 
 function createWindow(): void {
@@ -188,6 +199,55 @@ function registerIpc(): void {
   )
   ipcMain.handle('ck3:createFaith', (_e, modPath: string, religionId: string, def: NewFaith) =>
     createFaith(modPath, religionId, def)
+  )
+  ipcMain.handle(
+    'ck3:getTitleData',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[]) =>
+      getTitleData(gameDir, modPath, replacePaths)
+  )
+  ipcMain.handle(
+    'ck3:getTitle',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], id: string) =>
+      getTitle(gameDir, modPath, replacePaths, id)
+  )
+  ipcMain.handle(
+    'ck3:saveTitle',
+    (_e, modPath: string, file: string, id: string, patch: TitlePatch) =>
+      saveTitle(modPath, file, id, patch)
+  )
+  ipcMain.handle('ck3:listTitleFiles', (_e, modPath: string) => listTitleFiles(modPath))
+  ipcMain.handle('ck3:createTitle', (_e, modPath: string, def: NewTitle) =>
+    createTitle(modPath, def)
+  )
+  ipcMain.handle(
+    'ck3:getTitleHistory',
+    (_e, gameDir: string | null, modPath: string | null, replacePaths: string[], titleId: string) =>
+      getTitleHistory(gameDir, modPath, replacePaths, titleId)
+  )
+  ipcMain.handle('ck3:listTitleHistoryFiles', (_e, modPath: string) =>
+    listTitleHistoryFiles(modPath)
+  )
+  ipcMain.handle(
+    'ck3:saveTitleHistoryEntry',
+    (
+      _e,
+      modPath: string,
+      file: string,
+      titleId: string,
+      titleBlock: number,
+      index: number,
+      patch: TitleHistoryEntryPatch
+    ) => saveTitleHistoryEntry(modPath, file, titleId, titleBlock, index, patch)
+  )
+  ipcMain.handle(
+    'ck3:addTitleHistoryEntry',
+    (_e, modPath: string, file: string, titleId: string, patch: TitleHistoryEntryPatch) =>
+      addTitleHistoryEntry(modPath, file, titleId, patch)
+  )
+  ipcMain.handle(
+    'ck3:deleteTitleHistoryEntry',
+    (_e, modPath: string, file: string, titleId: string, titleBlock: number, index: number) =>
+      deleteTitleHistoryEntry(modPath, file, titleId, titleBlock, index)
   )
   ipcMain.handle(
     'ck3:getFaithIcons',

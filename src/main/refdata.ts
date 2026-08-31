@@ -203,7 +203,26 @@ const KIND_DIRS: Record<RefKind, string[]> = {
   ethnicity: ['common/ethnicities'],
   religion: ['common/religion/religion_types'],
   doctrine: ['common/religion/doctrine_types', 'common/religion/doctrine_group_types'],
-  holy_site: ['common/religion/holy_site_types']
+  holy_site: ['common/religion/holy_site_types'],
+  title: ['common/landed_titles'],
+  government: ['common/governments']
+}
+
+/** A landed-title key: tier prefix (h e k d c b) + at least one more char. */
+const TITLE_KEY = /^[hekdcb]_./i
+
+/** Offset of title `id` anywhere in the de jure nesting of `text`, or null. */
+function findTitleDefinition(text: string, id: string): number | null {
+  const recurse = (body: string, base: number): number | null => {
+    for (const b of scanBlocks(body)) {
+      if (!TITLE_KEY.test(b.key)) continue
+      if (b.key === id) return base + b.start
+      const hit = recurse(body.slice(b.bodyStart, b.bodyEnd), base + b.bodyStart)
+      if (hit !== null) return hit
+    }
+    return null
+  }
+  return recurse(text, 0)
 }
 
 function lineOf(text: string, offset: number): number {
@@ -216,6 +235,7 @@ function lineOf(text: string, offset: number): number {
 
 /** Offset of `id`'s definition within the file, or null. Faiths are nested two levels deep. */
 function findDefinition(text: string, kind: RefKind, id: string): number | null {
+  if (kind === 'title') return findTitleDefinition(text, id)
   if (kind === 'faith') {
     for (const religion of scanBlocks(text)) {
       const body = text.slice(religion.bodyStart, religion.bodyEnd)

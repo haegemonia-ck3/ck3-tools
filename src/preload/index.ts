@@ -21,12 +21,18 @@ import type {
   NewFaith,
   NewHouse,
   NewReligion,
+  NewTitle,
   RefKind,
   RefLocation,
   ReferenceData,
   ReligionData,
   ReligionPatch,
-  SaveResult
+  SaveResult,
+  TitleData,
+  TitleDetail,
+  TitleHistoryEntry,
+  TitleHistoryEntryPatch,
+  TitlePatch
 } from '@shared/types'
 
 const api = {
@@ -141,6 +147,69 @@ const api = {
     ipcRenderer.invoke('ck3:createReligion', modPath, file, def),
   createFaith: (modPath: string, religionId: string, def: NewFaith): Promise<SaveResult> =>
     ipcRenderer.invoke('ck3:createFaith', modPath, religionId, def),
+  getTitleData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ): Promise<TitleData> => ipcRenderer.invoke('ck3:getTitleData', gameDir, modPath, replacePaths),
+  getTitle: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    id: string
+  ): Promise<TitleDetail | null> =>
+    ipcRenderer.invoke('ck3:getTitle', gameDir, modPath, replacePaths, id),
+  saveTitle: (
+    modPath: string,
+    file: string,
+    id: string,
+    patch: TitlePatch
+  ): Promise<SaveResult> => ipcRenderer.invoke('ck3:saveTitle', modPath, file, id, patch),
+  listTitleFiles: (modPath: string): Promise<string[]> =>
+    ipcRenderer.invoke('ck3:listTitleFiles', modPath),
+  createTitle: (modPath: string, def: NewTitle): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:createTitle', modPath, def),
+  getTitleHistory: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    titleId: string
+  ): Promise<TitleHistoryEntry[]> =>
+    ipcRenderer.invoke('ck3:getTitleHistory', gameDir, modPath, replacePaths, titleId),
+  listTitleHistoryFiles: (modPath: string): Promise<string[]> =>
+    ipcRenderer.invoke('ck3:listTitleHistoryFiles', modPath),
+  saveTitleHistoryEntry: (
+    modPath: string,
+    file: string,
+    titleId: string,
+    titleBlock: number,
+    index: number,
+    patch: TitleHistoryEntryPatch
+  ): Promise<SaveResult> =>
+    ipcRenderer.invoke(
+      'ck3:saveTitleHistoryEntry',
+      modPath,
+      file,
+      titleId,
+      titleBlock,
+      index,
+      patch
+    ),
+  addTitleHistoryEntry: (
+    modPath: string,
+    file: string,
+    titleId: string,
+    patch: TitleHistoryEntryPatch
+  ): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:addTitleHistoryEntry', modPath, file, titleId, patch),
+  deleteTitleHistoryEntry: (
+    modPath: string,
+    file: string,
+    titleId: string,
+    titleBlock: number,
+    index: number
+  ): Promise<SaveResult> =>
+    ipcRenderer.invoke('ck3:deleteTitleHistoryEntry', modPath, file, titleId, titleBlock, index),
   getFaithIcons: (
     gameDir: string | null,
     modPath: string | null,

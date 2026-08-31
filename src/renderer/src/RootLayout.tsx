@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet, useLocation } from '@tanstack/react-router'
 import {
   BookOpen,
+  Castle,
   ChevronsUpDown,
   Church,
   Crown,
@@ -44,6 +45,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 const TOOLS = [
   { to: '/characters', label: 'Character Editor', icon: Crown },
   { to: '/dynasties', label: 'Dynasty & House Editor', icon: Shield },
+  { to: '/titles', label: 'Title Editor', icon: Castle },
   { to: '/faiths', label: 'Faith Editor', icon: Church },
   { to: '/religions', label: 'Religion Editor', icon: BookOpen },
   { to: '/cultures', label: 'Culture Editor', icon: Landmark }

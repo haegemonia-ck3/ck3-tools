@@ -20,12 +20,18 @@ import type {
   NewFaith,
   NewHouse,
   NewReligion,
+  NewTitle,
   RefKind,
   RefLocation,
   ReferenceData,
   ReligionData,
   ReligionPatch,
-  SaveResult
+  SaveResult,
+  TitleData,
+  TitleDetail,
+  TitleHistoryEntry,
+  TitleHistoryEntryPatch,
+  TitlePatch
 } from '@shared/types'
 
 export interface Ck3ToolsApi {
@@ -113,6 +119,61 @@ export interface Ck3ToolsApi {
   createReligion: (modPath: string, file: string, def: NewReligion) => Promise<SaveResult>
   /** Nests the new faith into `religionId`'s faiths block; the religion must be mod-defined */
   createFaith: (modPath: string, religionId: string, def: NewFaith) => Promise<SaveResult>
+  /** The de jure title forest plus government/succession-law reference lists */
+  getTitleData: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[]
+  ) => Promise<TitleData>
+  getTitle: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    id: string
+  ) => Promise<TitleDetail | null>
+  saveTitle: (
+    modPath: string,
+    file: string,
+    id: string,
+    patch: TitlePatch
+  ) => Promise<SaveResult>
+  /** The mod's own .txt files under common/landed_titles */
+  listTitleFiles: (modPath: string) => Promise<string[]>
+  /**
+   * With a parent, nests the new title into that title's block (the parent
+   * must be mod-defined); without one, appends a top-level block to def.file.
+   */
+  createTitle: (modPath: string, def: NewTitle) => Promise<SaveResult>
+  /** Every dated history entry for the title, across all effective history files */
+  getTitleHistory: (
+    gameDir: string | null,
+    modPath: string | null,
+    replacePaths: string[],
+    titleId: string
+  ) => Promise<TitleHistoryEntry[]>
+  /** The mod's own .txt files under history/titles */
+  listTitleHistoryFiles: (modPath: string) => Promise<string[]>
+  saveTitleHistoryEntry: (
+    modPath: string,
+    file: string,
+    titleId: string,
+    titleBlock: number,
+    index: number,
+    patch: TitleHistoryEntryPatch
+  ) => Promise<SaveResult>
+  addTitleHistoryEntry: (
+    modPath: string,
+    file: string,
+    titleId: string,
+    patch: TitleHistoryEntryPatch
+  ) => Promise<SaveResult>
+  deleteTitleHistoryEntry: (
+    modPath: string,
+    file: string,
+    titleId: string,
+    titleBlock: number,
+    index: number
+  ) => Promise<SaveResult>
   /** Faith icons from gfx/interface/icons/faith, keyed by the `icon =` value */
   getFaithIcons: (
     gameDir: string | null,

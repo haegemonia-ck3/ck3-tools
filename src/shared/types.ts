@@ -604,6 +604,186 @@ export interface DynastyFiles {
   houses: string[]
 }
 
+// ---------- Landed titles ----------
+
+/** Tier of a landed title, read off its id prefix (h_ e_ k_ d_ c_ b_). */
+export type TitleTier = 'hegemony' | 'empire' | 'kingdom' | 'duchy' | 'county' | 'barony'
+
+/**
+ * The yes/no flag keys a landed title block can carry. Values are kept raw
+ * ("yes"/"no" as written; null when the key is absent) so an untouched save
+ * round-trips byte-for-byte — the game treats absence as each flag's default.
+ *
+ * A runtime list in a types file is unusual here, but the key set is needed by
+ * the parser, the writer, the form and the dev mock alike — one source of truth.
+ */
+export const TITLE_FLAG_KEYS = [
+  'definite_form',
+  'ruler_uses_title_name',
+  'landless',
+  'require_landless',
+  'no_automatic_claims',
+  'always_follows_primary_heir',
+  'destroy_if_invalid_heir',
+  'destroy_on_succession',
+  'delete_on_destroy',
+  'delete_on_gain_same_tier',
+  'noble_family',
+  'can_be_named_after_dynasty',
+  'can_use_nomadic_naming',
+  'de_jure_drift_disabled',
+  'allow_domicile',
+  'figurehead',
+  'disable_regnal_numbers',
+  'ignore_titularity_for_title_weighting'
+] as const
+
+export type TitleFlagKey = (typeof TITLE_FLAG_KEYS)[number]
+
+/** Raw flag values by key; null = the key is absent from the block. */
+export type TitleFlags = Record<TitleFlagKey, string | null>
+
+/**
+ * One title of the de jure tree. Landed titles nest to arbitrary depth
+ * (hegemony > empire > kingdom > duchy > county > barony, tiers skippable), so
+ * the whole database is a forest reconstructed from `parent` pointers.
+ */
+export interface TitleSummary {
+  id: string
+  tier: TitleTier
+  /** Id of the enclosing title block (the de jure liege); null at top level */
+  parent: string | null
+  /** File name within common/landed_titles */
+  file: string
+  inMod: boolean
+  localizedName: string | null
+  /** Resolved map-color swatch as "#rrggbb"; null when unresolvable/absent */
+  color: string | null
+  /** Raw `landless =` value */
+  landless: string | null
+  /** Raw `noble_family =` value */
+  nobleFamily: string | null
+  /** Raw `province =` value (baronies) */
+  province: string | null
+}
+
+/** One `<key> = <loc_key>` line of a title's `cultural_names` block. */
+export interface TitleCulturalName {
+  /** Usually a name-list id (`name_list_norse`), but real mods use bare words too */
+  key: string
+  /** Localization key of the cultural name */
+  value: string
+}
+
+/** Full parse of one title block. Display names come from the TitleSummary. */
+export interface TitleDetail {
+  id: string
+  tier: TitleTier
+  /** File name within common/landed_titles */
+  file: string
+  inMod: boolean
+  /** De jure ancestor ids, outermost first; [] at top level */
+  dejurePath: string[]
+  parent: string | null
+  /** Child title ids, in file order */
+  children: string[]
+  color: FaithColor | null
+  /** `capital =` county id, as written */
+  capital: string | null
+  /** Raw `province =` value (baronies) */
+  province: string | null
+  flags: TitleFlags
+  culturalNames: TitleCulturalName[]
+  /**
+   * Keys of block-valued properties the editor leaves untouched (can_create,
+   * ai_primary_priority, …), for display only.
+   */
+  scriptBlocks: string[]
+}
+
+/**
+ * Editable title fields; null clears a scalar, [] drops the cultural_names
+ * block. `color` is "#rrggbb", rewritten only when the file's form is a plain
+ * triple. Flags write `yes`/`no` as given and null removes the line.
+ */
+export interface TitlePatch {
+  color: string | null
+  capital: string | null
+  province: string | null
+  flags: TitleFlags
+  culturalNames: TitleCulturalName[]
+}
+
+/**
+ * A brand-new landed title. With a `parent` it nests into that title's block
+ * (the parent must be mod-defined), becoming de jure part of it; without one
+ * it is appended to `file` as a top-level block.
+ */
+export interface NewTitle {
+  /** Tier-prefixed id, e.g. "d_athens" — the prefix decides the tier */
+  id: string
+  parent: string | null
+  /** Target file within common/landed_titles; required when parent is null */
+  file: string | null
+  /** "#rrggbb"; written as a `{ r g b }` triple */
+  color: string | null
+  capital: string | null
+  province: string | null
+  flags: TitleFlags
+}
+
+export interface TitleData {
+  /** Every title the mod effectively loads, mod definitions first, file order kept */
+  titles: TitleSummary[]
+  /** Government ids from common/governments */
+  governments: RefEntry[]
+  /** Law ids from common/laws groups (open vocabulary — history files carry typos) */
+  successionLaws: RefEntry[]
+}
+
+/**
+ * The editable fields of one dated block of a title's history. Values are raw
+ * strings as written (holder ids may be words, `0` means vacant; dates carry
+ * tolerated typos). `successionLaws` is null when the block has no
+ * succession_laws at all, [] when it is present but empty.
+ */
+export interface TitleHistoryEntryPatch {
+  /** The block's date key, exactly as written */
+  date: string
+  holder: string | null
+  liege: string | null
+  deJureLiege: string | null
+  government: string | null
+  changeDevelopmentLevel: string | null
+  developmentLevel: string | null
+  name: string | null
+  resetName: string | null
+  insertTitleHistory: string | null
+  removeSuccessionLaws: string | null
+  holderIgnoreHeadOfFaithRequirement: string | null
+  successionLaws: string[] | null
+}
+
+/**
+ * One dated block of a title's history. A title's entries can be spread over
+ * several blocks in one file and over several files (vanilla does both), so an
+ * entry is addressed by (file, titleBlock, index) — the ordinals of its title
+ * block within the file and of the dated block within that title block.
+ */
+export interface TitleHistoryEntry extends TitleHistoryEntryPatch {
+  /** File name within history/titles */
+  file: string
+  inMod: boolean
+  /** Ordinal of the containing title block among the file's blocks for this title */
+  titleBlock: number
+  /** Ordinal of this dated block among the title block's dated blocks */
+  index: number
+  /** Keys of opaque block values (effect, tributary_of, …), preserved untouched */
+  opaqueBlocks: string[]
+  /** Unrecognized scalar statements, verbatim, display-only */
+  extra: string[]
+}
+
 /**
  * A reference id paired with its display name. `name` is the localized name
  * when one could be resolved (cultures/faiths key off the id, traits off
@@ -647,6 +827,8 @@ export type RefKind =
   | 'religion'
   | 'doctrine'
   | 'holy_site'
+  | 'title'
+  | 'government'
 
 export interface RefLocation {
   /** Absolute path of the file containing the definition */
