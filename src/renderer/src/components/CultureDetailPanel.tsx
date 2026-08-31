@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import type { CalendarConfig, CultureData, CulturePatch } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
+import { usePersistedDraft } from '../hooks/usePersistedDraft'
 import { FieldLabel } from './CharacterForm'
 import CultureForm from './CultureForm'
 import Hint from './Hint'
 import DateFormatToggle from './DateFormatToggle'
+import StaleDraftAlert from './StaleDraftAlert'
 import { openReferenceTarget } from './ReferenceInput'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -54,17 +56,23 @@ export default function CultureDetailPanel({
   // The dirty check compares JSON, so both sides must be built the same way
   const original: CulturePatch | null = def === null ? null : draftOf(def)
 
-  const [draft, setDraft] = useState<CulturePatch | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
   const body = useRef<HTMLDivElement>(null)
 
+  const editable = def !== null && def.inMod
+  // Edits outlive the row: closing it, switching tools or restarting the app
+  // all leave the draft where it was, listed above the list as unsaved.
+  const { draft, setDraft, dirty, stale, revert, markSaved } = usePersistedDraft<CulturePatch>({
+    tool: 'cultures',
+    ref: def === null ? null : { id: def.id, name: def.localizedName },
+    original,
+    editable
+  })
+
   useEffect(() => {
-    setDraft(original ? { ...original } : null)
     setError(null)
-    // Re-derived from data on purpose: a reload after save re-seeds the draft
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, data])
 
   // The "Saved ✓" flash must survive the post-save data reload (which re-runs
@@ -75,10 +83,6 @@ export default function CultureDetailPanel({
     setSavedFlash(false)
     body.current?.scrollTo({ top: 0 })
   }, [id])
-
-  const editable = def !== null && def.inMod
-  const dirty =
-    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
 
   const set = (patch: Partial<CulturePatch>): void => {
     if (!draft) return
@@ -103,6 +107,7 @@ export default function CultureDetailPanel({
         setError(result.error)
         return
       }
+      markSaved(draft)
       setSavedFlash(true)
       onSaved()
     } finally {
@@ -167,6 +172,7 @@ export default function CultureDetailPanel({
       </div>
 
       <div ref={body} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
+        {stale && <StaleDraftAlert what="culture" />}
         {!def.inMod && (
           <Alert>
             <AlertDescription>
@@ -237,7 +243,7 @@ export default function CultureDetailPanel({
             variant="outline"
             disabled={!dirty || saving}
             onClick={() => {
-              setDraft(original ? { ...original } : null)
+              revert()
               setError(null)
             }}
           >

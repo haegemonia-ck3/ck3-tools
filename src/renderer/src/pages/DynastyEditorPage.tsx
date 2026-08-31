@@ -22,10 +22,14 @@ import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
+import CoatOfArms from '../components/CoatOfArms'
 import DebouncedInput from '../components/DebouncedInput'
 import DynastyCreatePanel from '../components/DynastyCreatePanel'
 import DynastyDetailPanel from '../components/DynastyDetailPanel'
+import EntryHistoryBar from '../components/EntryHistoryBar'
 import FamilyTree from '../components/FamilyTree'
+import FavoriteToggle from '../components/FavoriteToggle'
+import { useEntryHistory } from '../hooks/useEntryHistory'
 import ReferenceInput from '../components/ReferenceInput'
 import ReferenceDisplay from '../components/ReferenceDisplay'
 import { Badge } from '@/components/ui/badge'
@@ -48,7 +52,8 @@ import {
 } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import type { DynastyData, DynastyFiles, ReferenceData } from '@shared/types'
+import { entryKey } from '@shared/entries'
+import type { DynastyData, DynastyFiles, EntryRef, ReferenceData } from '@shared/types'
 import type { CharacterSearch, DynastySearch } from '../router'
 import {
   buildRows,
@@ -281,6 +286,17 @@ interface Selection {
   id: string
 }
 
+/**
+ * A lineage's remembered ref. Dynasties and houses are separate databases
+ * whose ids can collide, so which of the two a row belongs to is the ref's
+ * scope — the same coordinate the URL carries as `kind`.
+ */
+const lineageRef = (
+  kind: 'dynasty' | 'house',
+  id: string,
+  name: string | null = null
+): EntryRef => ({ id, name, scope: kind })
+
 export default function DynastyEditorPage(): React.JSX.Element {
   const { settings, selectedMod } = useApp()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
@@ -313,6 +329,8 @@ export default function DynastyEditorPage(): React.JSX.Element {
   const gameDir = settings?.gameDir ?? null
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
   const calendar = selectedMod?.profile?.calendar ?? null
+  const modKey = selectedMod?.file ?? null
+  const history = useEntryHistory('dynasties')
 
   const go = (next: DynastySearch, replace = false): void => {
     void navigate({ to: '/dynasties', search: next, replace })
@@ -497,6 +515,44 @@ export default function DynastyEditorPage(): React.JSX.Element {
     return colors
   }, [data, selected])
 
+  /** The list row a remembered ref points at — its kind rides in the scope. */
+  const rowFor = useMemo(() => {
+    const byKey = new Map(rows.map((r) => [`${r.kind}:${normId(r.id)}`, r]))
+    return (ref: EntryRef): DynastyListRow | undefined =>
+      byKey.get(`${ref.scope}:${normId(ref.id)}`)
+  }, [rows])
+
+  // Whichever lineage is open — clicked here, or deep-linked from a character
+  // — is recorded as a visit under the spelling the definition uses.
+  useEffect(() => {
+    if (selectedRow === null) return
+    history.recordVisit(lineageRef(selectedRow.kind, selectedRow.id, selectedRow.name))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRow?.kind, selectedRow?.id, modKey])
+
+  /**
+   * A remembered ref against the current scan: the name it reads by now, and
+   * null for a lineage this mod no longer has — hidden while it's missing,
+   * but left in settings for when it comes back.
+   */
+  const resolveRef = (ref: EntryRef): EntryRef | null => {
+    if (rows.length === 0) return ref
+    const row = rowFor(ref)
+    return row === undefined ? null : lineageRef(row.kind, row.id, row.name)
+  }
+
+  /**
+   * The chip's coat of arms. A house without one of its own inherits its
+   * dynasty's, exactly as the game does.
+   */
+  const refCoa = (ref: EntryRef): React.JSX.Element => (
+    <CoatOfArms
+      ids={[ref.id, rowFor(ref)?.parent]}
+      size={36}
+      className="rounded-none border-0 shadow-none"
+    />
+  )
+
   const focusMember = (id: string): void => {
     // A house member clicked while the tree shows "dynasty only" — widen first
     if (
@@ -554,6 +610,14 @@ export default function DynastyEditorPage(): React.JSX.Element {
             {members.length} member{members.length === 1 ? '' : 's'}
           </span>
         </header>
+
+      <EntryHistoryBar
+        history={history}
+        active={selected && lineageRef(selected.kind, selected.id)}
+        onOpen={(ref) => openRow(ref.scope === 'house' ? 'house' : 'dynasty', ref.id)}
+        resolve={resolveRef}
+        visual={refCoa}
+      />
 
         <ResizablePanelGroup
           orientation="horizontal"
@@ -636,6 +700,14 @@ export default function DynastyEditorPage(): React.JSX.Element {
         <h1 className="text-2xl font-semibold">Dynasty &amp; House Editor</h1>
       </header>
 
+      <EntryHistoryBar
+        history={history}
+        active={selected && lineageRef(selected.kind, selected.id)}
+        onOpen={(ref) => openRow(ref.scope === 'house' ? 'house' : 'dynasty', ref.id)}
+        resolve={resolveRef}
+        visual={refCoa}
+      />
+
       {!loading && rows.length === 0 && (
         <Card>
           <CardContent className="flex items-center justify-between gap-3">
@@ -697,6 +769,10 @@ export default function DynastyEditorPage(): React.JSX.Element {
                 <TableHeader>
                 {table.getHeaderGroups().map((hg) => (
                   <TableRow key={hg.id} className="hover:bg-transparent">
+                    <TableHead
+                      className="sticky top-0 z-10 h-auto w-9 border-b bg-card"
+                      aria-label="Favorite"
+                    />
                     {hg.headers.map((header) => (
                       <TableHead
                         key={header.id}
@@ -725,41 +801,51 @@ export default function DynastyEditorPage(): React.JSX.Element {
                 ))}
               </TableHeader>
               <TableBody>
-                {visibleRows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className="cursor-pointer"
-                    onClick={() => openRow(row.original.kind, row.original.id)}
-                  >
-                    {row.getAllCells().map((cell) => (
-                      <TableCell
-                        key={cell.id}
-                        className={cn(
-                          'max-w-70 truncate',
-                          cell.column.id === 'culture' || cell.column.id === 'parent'
-                            ? 'max-w-50'
-                            : cell.column.id === 'id'
-                              ? 'max-w-60'
-                              : undefined
-                        )}
-                      >
-                        {cell.column.id === 'parent' ? (
-                          <ReferenceDisplay
-                            value={row.original.parent}
-                            name={
-                              row.original.parent === null
-                                ? null
-                                : referenceName('parent', row.original.parent)
-                            }
-                            onNavigate={(v) => openRow('dynasty', v)}
-                          />
-                        ) : (
-                          flexRender(cell.column.columnDef.cell, cell.getContext())
-                        )}
+                {visibleRows.map((row) => {
+                  const rowRef = lineageRef(row.original.kind, row.original.id, row.original.name)
+                  return (
+                    <TableRow
+                      key={row.id}
+                      className="group cursor-pointer"
+                      onClick={() => openRow(row.original.kind, row.original.id)}
+                    >
+                      <TableCell className="w-9 py-0 pr-0 pl-2">
+                        <FavoriteToggle
+                          on={history.isFavorite(rowRef)}
+                          dot={entryKey(rowRef) in history.drafts}
+                          onToggle={() => history.toggleFavorite(rowRef)}
+                        />
                       </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
+                      {row.getAllCells().map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          className={cn(
+                            'max-w-70 truncate',
+                            cell.column.id === 'culture' || cell.column.id === 'parent'
+                              ? 'max-w-50'
+                              : cell.column.id === 'id'
+                                ? 'max-w-60'
+                                : undefined
+                          )}
+                        >
+                          {cell.column.id === 'parent' ? (
+                            <ReferenceDisplay
+                              value={row.original.parent}
+                              name={
+                                row.original.parent === null
+                                  ? null
+                                  : referenceName('parent', row.original.parent)
+                              }
+                              onNavigate={(v) => openRow('dynasty', v)}
+                            />
+                          ) : (
+                            flexRender(cell.column.columnDef.cell, cell.getContext())
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )
+                })}
               </TableBody>
               </Table>
             </div>

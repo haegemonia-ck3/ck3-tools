@@ -5,20 +5,63 @@ export interface AppSettings {
   modDir: string | null
   /** File name of the selected .mod descriptor within modDir, e.g. "Atlantis.mod" */
   selectedModFile: string | null
-  /** Recently visited characters per mod (.mod file name → most recent first, capped at 10) */
-  recentCharacters: Record<string, CharacterRef[]>
-  /** Favorited characters per mod (.mod file name → refs in the order they were starred) */
-  favoriteCharacters: Record<string, CharacterRef[]>
   /**
-   * Unsaved character edits per mod, VS Code-style: everything stays draft
-   * until saved or reverted, surviving navigation and app restarts.
-   * Keyed .mod file name → "file:id" (id as it exists in the file).
+   * Recently visited entries per tool per mod (tool key → .mod file name →
+   * most recent first, capped at 10)
    */
-  draftCharacters: Record<string, Record<string, CharacterDraft>>
+  recentEntries: Partial<Record<ToolKey, Record<string, EntryRef[]>>>
+  /**
+   * Favorited entries per tool per mod (tool key → .mod file name → refs in
+   * the order they were starred)
+   */
+  favoriteEntries: Partial<Record<ToolKey, Record<string, EntryRef[]>>>
+  /**
+   * Unsaved edits per tool per mod, VS Code-style: everything stays draft
+   * until saved or reverted, surviving navigation and app restarts.
+   * Keyed tool key → .mod file name → `entryKey` of the row.
+   */
+  entryDrafts: Partial<Record<ToolKey, Record<string, Record<string, EntryDraft>>>>
   /** Absolute path to the preferred text editor executable; null = system Notepad */
   textEditorPath: string | null
   /** Render the app in the selected mod's own CK3 fonts (see ModFonts) */
   useModFonts: boolean
+}
+
+/** The editors that remember favorites, recents and unsaved drafts of their rows. */
+export type ToolKey = 'characters' | 'dynasties' | 'cultures' | 'faiths' | 'religions' | 'titles'
+
+/**
+ * One remembered row of an editor: enough to list it as a chip and to
+ * navigate back to it. See `entryKey` in @shared/entries for how one is keyed.
+ */
+export interface EntryRef {
+  id: string
+  /** Display name at the time the ref was recorded, as a fallback label */
+  name: string | null
+  /**
+   * The extra coordinate an id needs to name a row on its own: the history
+   * file a character is defined in, `dynasty` or `house` for a lineage.
+   * Absent for the tools whose ids stand alone.
+   */
+  scope?: string
+}
+
+/**
+ * One row's unsaved edits. `draft` and `original` are the editing shape of
+ * whichever tool holds them — a store spanning every editor can't name them
+ * all, so the hook that reads a tool's drafts is what types them.
+ */
+export interface EntryDraft<T = unknown> {
+  /** The edited, unsaved state */
+  draft: T
+  /**
+   * Parse of the row at the time the draft was last touched, used to detect
+   * that the file changed on disk (e.g. in an external editor) while the
+   * draft was dormant.
+   */
+  original: T
+  /** How the row reads in the "Unsaved" list, without re-scanning for it */
+  ref: EntryRef
 }
 
 export interface CharacterDraft {
@@ -30,14 +73,6 @@ export interface CharacterDraft {
    * the draft was dormant.
    */
   original: CharacterDetail
-}
-
-export interface CharacterRef {
-  /** File name within history/characters, e.g. "HAAO_Attica.txt" */
-  file: string
-  id: string
-  /** Name at the time the ref was recorded, as a fallback label */
-  name: string | null
 }
 
 /**

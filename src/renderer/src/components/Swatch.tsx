@@ -54,3 +54,25 @@ export function IconTile({
     </span>
   )
 }
+
+/**
+ * A colour as the leading square of a ReferenceBadge: a flat fill with no
+ * border or rounding of its own (the badge clips it), hatched when the value
+ * couldn't be resolved.
+ */
+export function ColorTile({ hex }: { hex: string | null }): React.JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className="size-9"
+      style={
+        hex
+          ? { backgroundColor: hex }
+          : {
+              backgroundImage:
+                'repeating-linear-gradient(45deg, var(--muted) 0 3px, transparent 3px 6px)'
+            }
+      }
+    />
+  )
+}

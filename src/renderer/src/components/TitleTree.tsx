@@ -1,5 +1,6 @@
 import { ChevronRight, FlameKindling, Shield } from 'lucide-react'
 import type { TitleSummary } from '@shared/types'
+import FavoriteToggle from './FavoriteToggle'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { matchesQuery, normId, titleKindLabel, titleName } from '@/lib/titleView'
@@ -25,7 +26,15 @@ function TitleGlyph({ title }: { title: TitleSummary }): React.JSX.Element {
   )
 }
 
-interface RowProps {
+/** What a row needs to draw and flip its own star. */
+interface FavoriteProps {
+  isFavorite: (title: TitleSummary) => boolean
+  onToggleFavorite: (title: TitleSummary) => void
+  /** Whether the title carries unsaved edits, marked with a dot by the star */
+  hasDraft: (title: TitleSummary) => boolean
+}
+
+interface RowProps extends FavoriteProps {
   title: TitleSummary
   depth: number
   childCount: number
@@ -44,13 +53,16 @@ function TitleRow({
   childCount,
   expanded,
   onToggle,
-  onOpen
+  onOpen,
+  isFavorite,
+  onToggleFavorite,
+  hasDraft
 }: RowProps): React.JSX.Element {
   return (
     <div
       role="button"
       tabIndex={0}
-      className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm hover:bg-muted"
+      className="group flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm hover:bg-muted"
       style={{ paddingLeft: depth * 18 + 4 }}
       onClick={() => onOpen(title.id)}
       onKeyDown={(e) => {
@@ -91,14 +103,20 @@ function TitleRow({
           {titleKindLabel(title)}
         </Badge>
       )}
-      {childCount > 0 && (
-        <span className="ml-auto shrink-0 text-xs text-muted-foreground">{childCount}</span>
-      )}
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        {childCount > 0 && <span className="text-xs text-muted-foreground">{childCount}</span>}
+        <FavoriteToggle
+          className="pl-2"
+          on={isFavorite(title)}
+          dot={hasDraft(title)}
+          onToggle={() => onToggleFavorite(title)}
+        />
+      </span>
     </div>
   )
 }
 
-interface Props {
+interface Props extends FavoriteProps {
   /** The (already mode-filtered) de jure forest */
   nodes: TitleTreeNode[]
   /** Non-empty switches the tree to a flat result list */
@@ -125,8 +143,13 @@ export default function TitleTree({
   query,
   expanded,
   onToggle,
-  onOpen
+  onOpen,
+  isFavorite,
+  onToggleFavorite,
+  hasDraft
 }: Props): React.JSX.Element {
+  const favorite = { isFavorite, onToggleFavorite, hasDraft }
+
   if (query.trim() !== '') {
     const matches: TitleSummary[] = []
     const walk = (list: TitleTreeNode[]): void => {
@@ -147,6 +170,7 @@ export default function TitleTree({
             expanded={false}
             onToggle={() => {}}
             onOpen={onOpen}
+            {...favorite}
           />
         ))}
         {matches.length === 0 && (
@@ -174,6 +198,7 @@ export default function TitleTree({
           expanded={open}
           onToggle={() => onToggle(node.title.id)}
           onOpen={onOpen}
+          {...favorite}
         />
       )
       return open ? [row, ...renderNodes(node.children, depth + 1)] : [row]

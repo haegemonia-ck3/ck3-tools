@@ -3,6 +3,7 @@ import { ExternalLink, Plus, X } from 'lucide-react'
 import type { RefEntry, SaveResult, TitleData, TitleDetail, TitleFlagKey } from '@shared/types'
 import { TITLE_FLAG_KEYS } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
+import { usePersistedDraft } from '../hooks/usePersistedDraft'
 import { FieldLabel } from './CharacterForm'
 import CoatOfArms from './CoatOfArms'
 import FormSection from './FormSection'
@@ -10,6 +11,7 @@ import Hint from './Hint'
 import ReferenceBadge from './ReferenceBadge'
 import ReferenceDisplay from './ReferenceDisplay'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
+import StaleDraftAlert from './StaleDraftAlert'
 import { Swatch } from './Swatch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -87,16 +89,22 @@ export default function TitleDetailPanel({
       }
     : null
 
-  const [draft, setDraft] = useState<TitleDraft | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
 
+  const editable = detail !== null && detail.inMod
+  // Edits outlive the row: closing it, switching tools or restarting the app
+  // all leave the draft where it was, listed above the tree as unsaved.
+  const { draft, setDraft, dirty, stale, revert, markSaved } = usePersistedDraft<TitleDraft>({
+    tool: 'titles',
+    ref: detail === null ? null : { id: detail.id, name: summary?.localizedName ?? null },
+    original,
+    editable
+  })
+
   useEffect(() => {
-    setDraft(original ? structuredClone(original) : null)
     setError(null)
-    // Re-derived from detail on purpose: a reload after save re-seeds the draft
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, detail])
 
   const body = useRef<HTMLDivElement>(null)
@@ -105,9 +113,6 @@ export default function TitleDetailPanel({
     body.current?.scrollTo({ top: 0 })
   }, [id])
 
-  const editable = detail !== null && detail.inMod
-  const dirty =
-    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
 
   const set = (patch: Partial<TitleDraft>): void => {
     if (!draft) return
@@ -120,20 +125,24 @@ export default function TitleDetailPanel({
     setSaving(true)
     setError(null)
     try {
-      const result: SaveResult = await window.ck3tools.saveTitle(modPath, detail.file, detail.id, {
-        color: draft.color,
-        capital: draft.capital,
-        province: draft.province,
-        flags: draft.flags,
-        // The Add button starts a row blank; an unfilled one is not an error
+      // The Add button starts a row blank; an unfilled one is not an error
+      const saved: TitleDraft = {
+        ...draft,
         culturalNames: draft.culturalNames.filter(
           (n) => n.key.trim() !== '' && n.value.trim() !== ''
         )
-      })
+      }
+      const result: SaveResult = await window.ck3tools.saveTitle(
+        modPath,
+        detail.file,
+        detail.id,
+        saved
+      )
       if (!result.ok) {
         setError(result.error)
         return
       }
+      markSaved(saved)
       setSavedFlash(true)
       onSaved()
     } finally {
@@ -333,6 +342,7 @@ export default function TitleDetailPanel({
       </div>
 
       <div ref={body} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
+        {stale && <StaleDraftAlert what="title" />}
         {detail === null && summary !== null && (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}
@@ -522,7 +532,7 @@ export default function TitleDetailPanel({
             variant="outline"
             disabled={!dirty || saving}
             onClick={() => {
-              setDraft(original ? structuredClone(original) : null)
+              revert()
               setError(null)
             }}
           >

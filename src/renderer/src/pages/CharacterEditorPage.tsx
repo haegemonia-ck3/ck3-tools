@@ -17,7 +17,7 @@ import {
 } from '@tanstack/react-table'
 import type { Column, FilterFn, Row, SortFn } from '@tanstack/react-table'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { FilterX, Plus, Star } from 'lucide-react'
+import { FilterX, Plus } from 'lucide-react'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { toast } from 'sonner'
 import { useApp } from '../AppContext'
@@ -26,7 +26,10 @@ import CharacterCreatePanel from '../components/CharacterCreatePanel'
 import CharacterDetailPanel from '../components/CharacterDetailPanel'
 import DateRangeFilterField from '../components/DateRangeFilterField'
 import DebouncedInput from '../components/DebouncedInput'
+import EntryHistoryBar from '../components/EntryHistoryBar'
+import FavoriteToggle from '../components/FavoriteToggle'
 import ReferenceInput from '../components/ReferenceInput'
+import { useEntryHistory } from '../hooks/useEntryHistory'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -47,22 +50,28 @@ import { cn } from '@/lib/utils'
 import { formatCalendarDate, matchesDateRange } from '@/lib/ck3Date'
 import type { DateRangeFilter } from '@/lib/ck3Date'
 import { yearOf } from '@/lib/familyTree'
+import { entryKey } from '@shared/entries'
 import type {
-  AppSettings,
   CalendarConfig,
   CharacterDetail,
   CharacterDraft,
-  CharacterRef,
   CharacterSummary,
+  EntryDraft,
+  EntryRef,
   ReferenceData
 } from '@shared/types'
 import type { CharacterSearch } from '../router'
 
-const RECENTS_CAP = 10
-const RECENTS_COLLAPSED = 5
-
-const sameChar = (a: CharacterRef, b: { file: string; id: string }): boolean =>
-  a.file === b.file && a.id === b.id
+/**
+ * A character's remembered ref. Ids are unique across a mod's history files,
+ * but the file is what tells the editor where to open one, so it rides along
+ * as the ref's scope.
+ */
+const charRef = (file: string, id: string, name: string | null = null): EntryRef => ({
+  id,
+  name,
+  scope: file
+})
 
 /** Which control a column renders in the filter row under its header. */
 interface CharacterColumnMeta {
@@ -243,14 +252,13 @@ function ColumnFilter({
 }
 
 export default function CharacterEditorPage(): React.JSX.Element {
-  const { settings, selectedMod, updateSettings } = useApp()
+  const { settings, selectedMod } = useApp()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [refData, setRefData] = useState<ReferenceData | null>(null)
   /** Existing .txt files under history/characters; null until scanned */
   const [characterFiles, setCharacterFiles] = useState<string[] | null>(null)
-  const [showAllRecents, setShowAllRecents] = useState(false)
   // Which character is open lives in the URL, not in state, so opening one
   // pushes a history entry and the mouse "back" button returns to the list.
   // `create` opens the new-character panel instead, with the other search
@@ -289,56 +297,21 @@ export default function CharacterEditorPage(): React.JSX.Element {
     }
     return (id: string): string | null => names.get(id.toLowerCase()) ?? null
   }, [refData])
-  const recents = (modKey && settings?.recentCharacters?.[modKey]) || []
-  const favorites = (modKey && settings?.favoriteCharacters?.[modKey]) || []
-  const drafts = (modKey && settings?.draftCharacters?.[modKey]) || {}
+  const history = useEntryHistory('characters')
 
-  // Ref so persistDraft can stay referentially stable — the panel's persist
-  // effect depends on it, and a fresh closure per render would re-arm it.
-  const settingsRef = useRef(settings)
-  settingsRef.current = settings
-
+  // The panel edits `{ draft, original }`; the store also carries the ref the
+  // "Unsaved" chip reads by, which the page is the one that knows.
   const persistDraft = useCallback(
     (file: string, id: string, entry: CharacterDraft | null): void => {
-      if (!modKey) return
-      const all = settingsRef.current?.draftCharacters ?? {}
-      const forMod = { ...(all[modKey] ?? {}) }
-      const key = `${file}:${id}`
-      if (entry === null) {
-        if (!(key in forMod)) return
-        delete forMod[key]
-      } else {
-        forMod[key] = entry
-      }
-      void updateSettings({ draftCharacters: { ...all, [modKey]: forMod } })
+      const ref = charRef(file, id, entry?.draft.name ?? null)
+      history.persistDraft(ref, entry === null ? null : { ...entry, ref })
     },
-    [modKey, updateSettings]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [history.persistDraft]
   )
 
-  const saveList = (
-    key: 'recentCharacters' | 'favoriteCharacters',
-    list: CharacterRef[]
-  ): void => {
-    if (!modKey) return
-    void updateSettings({ [key]: { ...(settings?.[key] ?? {}), [modKey]: list } })
-  }
-
-  const recordVisit = (ref: CharacterRef): void => {
-    saveList('recentCharacters', [ref, ...recents.filter((r) => !sameChar(r, ref))].slice(0, RECENTS_CAP))
-  }
-
-  const isFavorite = (c: { file: string; id: string }): boolean =>
-    favorites.some((r) => sameChar(r, c))
-
-  const toggleFavorite = (ref: CharacterRef): void => {
-    saveList(
-      'favoriteCharacters',
-      isFavorite(ref) ? favorites.filter((r) => !sameChar(r, ref)) : [...favorites, ref]
-    )
-  }
-
-  const openCharacter = (ref: CharacterRef): void => {
-    void navigate({ to: '/characters', search: { file: ref.file, id: ref.id } })
+  const openCharacter = (ref: EntryRef): void => {
+    void navigate({ to: '/characters', search: { file: ref.scope, id: ref.id } })
     // Give the detail panel the full width: fold the tools sidebar away if it's open.
     if (isMobile) setOpenMobile(false)
     else setOpen(false)
@@ -354,22 +327,6 @@ export default function CharacterEditorPage(): React.JSX.Element {
   // straight back into the character that was just closed.
   const closeCharacter = (): void => {
     void navigate({ to: '/characters', search: {}, replace: true })
-  }
-
-  /** Point recents/favorites at a character's new id after a save renames it. */
-  const remapRefs = (file: string, oldId: string, newId: string, name: string | null): void => {
-    if (oldId === newId) return
-    const remap = (list: CharacterRef[]): CharacterRef[] =>
-      list.map((r) => (sameChar(r, { file, id: oldId }) ? { file, id: newId, name } : r))
-    const patch: Partial<AppSettings> = {}
-    if (modKey && recents.some((r) => sameChar(r, { file, id: oldId })))
-      patch.recentCharacters = { ...(settings?.recentCharacters ?? {}), [modKey]: remap(recents) }
-    if (modKey && favorites.some((r) => sameChar(r, { file, id: oldId })))
-      patch.favoriteCharacters = {
-        ...(settings?.favoriteCharacters ?? {}),
-        [modKey]: remap(favorites)
-      }
-    if (Object.keys(patch).length > 0) void updateSettings(patch)
   }
 
   const reload = (): void => {
@@ -397,7 +354,6 @@ export default function CharacterEditorPage(): React.JSX.Element {
       prevModPath.current = modPath
       closeCharacter()
     }
-    setShowAllRecents(false)
     if (!modPath) {
       setRefData(null)
       return
@@ -413,7 +369,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
   useEffect(() => {
     if (!selected) return
     const known = characters.find((c) => c.file === selected.file && c.id === selected.id)
-    recordVisit({ ...selected, name: known?.name ?? null })
+    history.recordVisit(charRef(selected.file, selected.id, known?.name ?? null))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.file, selected?.id, modKey, characters])
 
@@ -479,43 +435,15 @@ export default function CharacterEditorPage(): React.JSX.Element {
     if (search.house) createPrefill.house = search.house
   }
 
-  // Hide refs to characters missing from the current scan without pruning them from settings
-  const existing = (list: CharacterRef[]): CharacterRef[] =>
-    loading || characters.length === 0
-      ? list
-      : list.filter((r) => byKey.has(`${r.file}:${r.id}`))
-
-  const shownFavorites = existing(favorites)
-  const shownRecents = existing(recents)
-  const visibleRecents = showAllRecents ? shownRecents : shownRecents.slice(0, RECENTS_COLLAPSED)
-  // Characters with unsaved drafts; entries carry the on-file id and file name
-  const shownDrafts = existing(
-    Object.values(drafts).map((e) => ({
-      file: e.original.file,
-      id: e.original.id,
-      name: e.draft.name
-    }))
-  )
-
-  const chip = (ref: CharacterRef): React.JSX.Element => {
-    const label = byKey.get(`${ref.file}:${ref.id}`)?.name ?? ref.name ?? ref.id
-    const active = selected !== null && sameChar(ref, selected)
-    return (
-      <Button
-        key={`${ref.file}:${ref.id}`}
-        variant="outline"
-        size="xs"
-        className={cn('max-w-56 rounded-full', active && 'border-primary/50 bg-muted')}
-        title={`${ref.id} — ${ref.file}`}
-        onClick={() => openCharacter(ref)}
-      >
-        {isFavorite(ref) && <Star className="fill-current text-amber-500" />}
-        {`${ref.file}:${ref.id}` in drafts && (
-          <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Unsaved changes" />
-        )}
-        <span className="truncate">{label}</span>
-      </Button>
-    )
+  /**
+   * A remembered ref against the current scan: the name the list has now, and
+   * null for a character the scan doesn't know — hidden while it's missing,
+   * but left in settings, since another mod file may still define it.
+   */
+  const resolveRef = (ref: EntryRef): EntryRef | null => {
+    if (loading || characters.length === 0) return ref
+    const known = byKey.get(`${ref.scope}:${ref.id}`)
+    return known === undefined ? null : charRef(known.file, known.id, known.name)
   }
 
   return (
@@ -524,39 +452,12 @@ export default function CharacterEditorPage(): React.JSX.Element {
         <h1 className="text-2xl font-semibold">Character Editor</h1>
       </header>
 
-      {(shownFavorites.length > 0 || shownRecents.length > 0 || shownDrafts.length > 0) && (
-        <div className="space-y-1.5">
-          {shownFavorites.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="w-16 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                Favorites
-              </span>
-              {shownFavorites.map(chip)}
-            </div>
-          )}
-          {shownRecents.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="w-16 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                Recent
-              </span>
-              {visibleRecents.map(chip)}
-              {shownRecents.length > RECENTS_COLLAPSED && (
-                <Button variant="ghost" size="xs" onClick={() => setShowAllRecents((v) => !v)}>
-                  {showAllRecents ? 'Show less' : `Show more (${shownRecents.length - RECENTS_COLLAPSED})`}
-                </Button>
-              )}
-            </div>
-          )}
-          {shownDrafts.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="w-16 shrink-0 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                Unsaved
-              </span>
-              {shownDrafts.map(chip)}
-            </div>
-          )}
-        </div>
-      )}
+      <EntryHistoryBar
+        history={history}
+        active={selected && charRef(selected.file, selected.id)}
+        onOpen={openCharacter}
+        resolve={resolveRef}
+      />
 
       {!loading && characters.length === 0 && (
         <Card>
@@ -645,45 +546,20 @@ export default function CharacterEditorPage(): React.JSX.Element {
                 <TableBody>
                   {rows.map((row) => {
                     const isSelected = selected !== null && `${selected.file}:${selected.id}` === row.id
+                    const rowRef = charRef(row.original.file, row.original.id, row.original.name)
                     return (
                       <TableRow
                         key={row.id}
                         className="group cursor-pointer"
                         data-state={isSelected ? 'selected' : undefined}
-                        onClick={() =>
-                          openCharacter({
-                            file: row.original.file,
-                            id: row.original.id,
-                            name: row.original.name
-                          })
-                        }
+                        onClick={() => openCharacter(rowRef)}
                       >
-                        <TableCell className="relative w-9 py-0 pr-0 pl-2">
-                          {`${row.original.file}:${row.original.id}` in drafts && (
-                            <span
-                              className="absolute top-1/2 left-0.5 size-1.5 -translate-y-1/2 rounded-full bg-primary"
-                              title="Unsaved changes"
-                            />
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className={cn(
-                              'text-muted-foreground opacity-40 group-hover:opacity-100 hover:text-amber-500',
-                              isFavorite(row.original) && 'text-amber-500 opacity-100'
-                            )}
-                            title={isFavorite(row.original) ? 'Remove from favorites' : 'Add to favorites'}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              toggleFavorite({
-                                file: row.original.file,
-                                id: row.original.id,
-                                name: row.original.name
-                              })
-                            }}
-                          >
-                            <Star className={cn(isFavorite(row.original) && 'fill-current')} />
-                          </Button>
+                        <TableCell className="w-9 py-0 pr-0 pl-2">
+                          <FavoriteToggle
+                            on={history.isFavorite(rowRef)}
+                            dot={entryKey(rowRef) in history.drafts}
+                            onToggle={() => history.toggleFavorite(rowRef)}
+                          />
                         </TableCell>
                         {row.getAllCells().map((cell) => (
                           <TableCell key={cell.id} className="max-w-70 truncate">
@@ -730,7 +606,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                       toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
                       return
                     }
-                    openCharacter({ file: target.file, id: target.id, name: target.name })
+                    openCharacter(charRef(target.file, target.id, target.name))
                   }}
                   onOpenLineage={(kind, id) =>
                     void navigate({ to: '/dynasties', search: { id, kind } })
@@ -738,11 +614,20 @@ export default function CharacterEditorPage(): React.JSX.Element {
                   onOpenCulture={(id) => void navigate({ to: '/cultures', search: { id } })}
                   onOpenFaith={(id) => void navigate({ to: '/faiths', search: { id } })}
                   onCreateChild={openCreate}
-                  storedDraft={drafts[`${selected.file}:${selected.id}`] ?? null}
+                  storedDraft={
+                    (history.drafts[entryKey(charRef(selected.file, selected.id))] as
+                      | EntryDraft<CharacterDetail>
+                      | undefined) ?? null
+                  }
                   onDraftChange={persistDraft}
                   onSaved={(file, newId) => {
                     if (selected) {
-                      remapRefs(file, selected.id, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+                      // Follow the rename: the chips must point at the id the
+                      // file now carries, not the one they were recorded under
+                      history.rename(
+                        charRef(file, selected.id),
+                        charRef(file, newId, byKey.get(`${file}:${selected.id}`)?.name ?? null)
+                      )
                     }
                     void navigate({ to: '/characters', search: { file, id: newId }, replace: true })
                     reload()
@@ -769,7 +654,7 @@ export default function CharacterEditorPage(): React.JSX.Element {
                       toast.error(`Character "${id}" isn't defined in ${selectedMod.name}`)
                       return
                     }
-                    openCharacter({ file: target.file, id: target.id, name: target.name })
+                    openCharacter(charRef(target.file, target.id, target.name))
                   }}
                   onOpenLineage={(kind, id) =>
                     void navigate({ to: '/dynasties', search: { id, kind } })

@@ -26,7 +26,11 @@ import DebouncedInput from '../components/DebouncedInput'
 import CultureCreatePanel from '../components/CultureCreatePanel'
 import CultureDetailPanel from '../components/CultureDetailPanel'
 import CultureRelationsPanel from '../components/CultureRelationsPanel'
+import EntryHistoryBar from '../components/EntryHistoryBar'
+import FavoriteToggle from '../components/FavoriteToggle'
 import ReferenceInput from '../components/ReferenceInput'
+import { ColorTile } from '../components/Swatch'
+import { useEntryHistory } from '../hooks/useEntryHistory'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -41,7 +45,8 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import type { CultureData } from '@shared/types'
+import { entryKey } from '@shared/entries'
+import type { CultureData, EntryRef } from '@shared/types'
 import type { CharacterSearch, CultureSearch } from '../router'
 import {
   allPillars,
@@ -279,9 +284,11 @@ export default function CultureEditorPage(): React.JSX.Element {
   })
 
   const modPath = selectedMod?.path ?? null
+  const modKey = selectedMod?.file ?? null
   const gameDir = settings?.gameDir ?? null
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
   const calendar = selectedMod?.profile?.calendar ?? null
+  const history = useEntryHistory('cultures')
 
   const go = (next: CultureSearch, replace = false): void => {
     void navigate({ to: '/cultures', search: next, replace })
@@ -386,6 +393,30 @@ export default function CultureEditorPage(): React.JSX.Element {
 
   const selected = search.id && data ? findCulture(data, search.id) : null
 
+  // Whichever culture is open — clicked here, or deep-linked from another
+  // tool — is recorded as a visit under the spelling the definition uses.
+  useEffect(() => {
+    if (selected === null) return
+    history.recordVisit({ id: selected.id, name: selected.localizedName })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, modKey])
+
+  /**
+   * A remembered ref against the current scan: its name and colour as they
+   * read now, and null for a culture this mod doesn't load — hidden while
+   * it's missing, but left in settings for when it comes back.
+   */
+  const rowFor = useMemo(() => {
+    const byId = new Map(rows.map((r) => [normId(r.id), r]))
+    return (ref: EntryRef): CultureListRow | undefined => byId.get(normId(ref.id))
+  }, [rows])
+
+  const resolveRef = (ref: EntryRef): EntryRef | null => {
+    if (rows.length === 0) return ref
+    const row = rowFor(ref)
+    return row === undefined ? null : { id: row.id, name: row.name }
+  }
+
   // An id in the URL that matches nothing (e.g. a deep link from a character
   // whose culture isn't defined) falls back to the list with a toast.
   useEffect(() => {
@@ -423,6 +454,14 @@ export default function CultureEditorPage(): React.JSX.Element {
             {!selected.inMod && <Badge variant="outline">game</Badge>}
           </h1>
         </header>
+
+      <EntryHistoryBar
+        history={history}
+        active={selected && { id: selected.id, name: selected.localizedName }}
+        onOpen={(ref) => openRow(ref.id)}
+        resolve={resolveRef}
+        visual={(ref) => <ColorTile hex={rowFor(ref)?.color ?? null} />}
+      />
 
         <ResizablePanelGroup
           orientation="horizontal"
@@ -480,6 +519,14 @@ export default function CultureEditorPage(): React.JSX.Element {
         <h1 className="text-2xl font-semibold">Culture Editor</h1>
       </header>
 
+      <EntryHistoryBar
+        history={history}
+        active={selected && { id: selected.id, name: selected.localizedName }}
+        onOpen={(ref) => openRow(ref.id)}
+        resolve={resolveRef}
+        visual={(ref) => <ColorTile hex={rowFor(ref)?.color ?? null} />}
+      />
+
       {!loading && rows.length === 0 && (
         <Card>
           <CardContent className="flex items-center justify-between gap-3">
@@ -531,6 +578,10 @@ export default function CultureEditorPage(): React.JSX.Element {
                 <TableHeader>
                   {table.getHeaderGroups().map((hg) => (
                     <TableRow key={hg.id} className="hover:bg-transparent">
+                      <TableHead
+                        className="sticky top-0 z-10 h-auto w-9 border-b bg-card"
+                        aria-label="Favorite"
+                      />
                       {hg.headers.map((header) => (
                         <TableHead
                           key={header.id}
@@ -562,9 +613,23 @@ export default function CultureEditorPage(): React.JSX.Element {
                   {visibleRows.map((row) => (
                     <TableRow
                       key={row.id}
-                      className="cursor-pointer"
+                      className="group cursor-pointer"
+                      data-state={
+                        selected !== null && normId(selected.id) === normId(row.original.id)
+                          ? 'selected'
+                          : undefined
+                      }
                       onClick={() => openRow(row.original.id)}
                     >
+                      <TableCell className="w-9 py-0 pr-0 pl-2">
+                        <FavoriteToggle
+                          on={history.isFavorite(row.original)}
+                          dot={entryKey(row.original) in history.drafts}
+                          onToggle={() =>
+                            history.toggleFavorite({ id: row.original.id, name: row.original.name })
+                          }
+                        />
+                      </TableCell>
                       {row.getAllCells().map((cell) => (
                         <TableCell
                           key={cell.id}

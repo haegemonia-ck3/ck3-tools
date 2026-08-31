@@ -31,9 +31,9 @@ const settings: AppSettings = {
   gameDir: 'C:\\Mock\\Crusader Kings III\\game',
   modDir: 'C:\\Mock\\mod',
   selectedModFile: 'MockMod.mod',
-  recentCharacters: {},
-  favoriteCharacters: {},
-  draftCharacters: {},
+  recentEntries: {},
+  favoriteEntries: {},
+  entryDrafts: {},
   textEditorPath: null,
   useModFonts: true
 }

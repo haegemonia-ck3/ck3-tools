@@ -23,6 +23,9 @@ import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import ModPicker from '../components/ModPicker'
 import DebouncedInput from '../components/DebouncedInput'
+import EntryHistoryBar from '../components/EntryHistoryBar'
+import FavoriteToggle from '../components/FavoriteToggle'
+import { useEntryHistory } from '../hooks/useEntryHistory'
 import ReferenceDisplay from '../components/ReferenceDisplay'
 import ReferenceInput from '../components/ReferenceInput'
 import ReligionCreatePanel from '../components/ReligionCreatePanel'
@@ -48,7 +51,8 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { buildReligionRows, normId } from '@/lib/faithView'
 import type { ReligionListRow } from '@/lib/faithView'
-import type { ReligionData } from '@shared/types'
+import { entryKey } from '@shared/entries'
+import type { EntryRef, ReligionData } from '@shared/types'
 import type { ReligionSearch } from '../router'
 
 /** Which control a column renders in the filter row under its header. */
@@ -204,8 +208,10 @@ export default function ReligionEditorPage(): React.JSX.Element {
   })
 
   const modPath = selectedMod?.path ?? null
+  const modKey = selectedMod?.file ?? null
   const gameDir = settings?.gameDir ?? null
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
+  const history = useEntryHistory('religions')
 
   const go = (next: ReligionSearch, replace = false): void => {
     void navigate({ to: '/religions', search: next, replace })
@@ -331,6 +337,33 @@ export default function ReligionEditorPage(): React.JSX.Element {
     void navigate({ to: '/characters', search: { file, id } })
   }
 
+  /** The list row a remembered ref points at, matched the way every id is. */
+  const rowFor = useMemo(() => {
+    const byId = new Map(allRows.map((r) => [normId(r.id), r]))
+    return (ref: EntryRef): ReligionListRow | undefined => byId.get(normId(ref.id))
+  }, [allRows])
+
+  const selectedRow = selected === null ? null : (rowFor({ id: selected, name: null }) ?? null)
+
+  // Whichever religion is open — clicked here, or deep-linked from another
+  // tool — is recorded as a visit under the spelling the definition uses.
+  useEffect(() => {
+    if (selectedRow === null) return
+    history.recordVisit({ id: selectedRow.id, name: selectedRow.name })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRow?.id, modKey])
+
+  /**
+   * A remembered ref against the current scan: the name it reads by now, and
+   * null for a religion this mod no longer loads — hidden while it's missing,
+   * but left in settings for when it comes back.
+   */
+  const resolveRef = (ref: EntryRef): EntryRef | null => {
+    if (allRows.length === 0) return ref
+    const row = rowFor(ref)
+    return row === undefined ? null : { id: row.id, name: row.name }
+  }
+
   if (!selectedMod) {
     return (
       <div className="max-w-4xl space-y-5 p-7">
@@ -347,6 +380,13 @@ export default function ReligionEditorPage(): React.JSX.Element {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Religion Editor</h1>
       </header>
+
+      <EntryHistoryBar
+        history={history}
+        active={selectedRow && { id: selectedRow.id, name: selectedRow.name }}
+        onOpen={(ref) => openRow(ref.id)}
+        resolve={resolveRef}
+      />
 
       {!loading && allRows.length === 0 && (
         <Card>
@@ -414,6 +454,10 @@ export default function ReligionEditorPage(): React.JSX.Element {
                 <TableHeader>
                   {table.getHeaderGroups().map((hg) => (
                     <TableRow key={hg.id} className="hover:bg-transparent">
+                      <TableHead
+                        className="sticky top-0 z-10 h-auto w-9 border-b bg-card"
+                        aria-label="Favorite"
+                      />
                       {hg.headers.map((header) => (
                         <TableHead
                           key={header.id}
@@ -441,13 +485,22 @@ export default function ReligionEditorPage(): React.JSX.Element {
                     <TableRow
                       key={row.id}
                       className={cn(
-                        'cursor-pointer',
+                        'group cursor-pointer',
                         selected !== null &&
                           normId(selected) === normId(row.original.id) &&
                           'bg-muted'
                       )}
                       onClick={() => openRow(row.original.id)}
                     >
+                      <TableCell className="w-9 py-0 pr-0 pl-2">
+                        <FavoriteToggle
+                          on={history.isFavorite(row.original)}
+                          dot={entryKey(row.original) in history.drafts}
+                          onToggle={() =>
+                            history.toggleFavorite({ id: row.original.id, name: row.original.name })
+                          }
+                        />
+                      </TableCell>
                       {row.getAllCells().map((cell) => (
                         <TableCell
                           key={cell.id}

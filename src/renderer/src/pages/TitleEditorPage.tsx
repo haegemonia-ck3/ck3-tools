@@ -6,23 +6,28 @@ import { toast } from 'sonner'
 import { useApp } from '../AppContext'
 import CoatOfArms from '../components/CoatOfArms'
 import DebouncedInput from '../components/DebouncedInput'
+import EntryHistoryBar from '../components/EntryHistoryBar'
 import ModPicker from '../components/ModPicker'
 import TitleCreatePanel from '../components/TitleCreatePanel'
 import TitleDetailPanel from '../components/TitleDetailPanel'
 import TitleHistoryPanel from '../components/TitleHistoryPanel'
 import TitleTree from '../components/TitleTree'
-import { Swatch } from '../components/Swatch'
+import { ColorTile, Swatch } from '../components/Swatch'
+import { useEntryHistory } from '../hooks/useEntryHistory'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { useSidebar } from '@/components/ui/sidebar'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { entryKey } from '@shared/entries'
 import type {
   CharacterSummary,
+  EntryRef,
   TitleData,
   TitleDetail,
-  TitleHistoryEntry
+  TitleHistoryEntry,
+  TitleSummary
 } from '@shared/types'
 import type { TitleSearch } from '../router'
 import {
@@ -51,6 +56,9 @@ interface TitleListState {
 }
 
 const listStates = new Map<string, TitleListState>()
+
+/** A title's remembered ref: its id, labelled by whatever localization gives. */
+const titleRef = (t: TitleSummary): EntryRef => ({ id: t.id, name: t.localizedName })
 
 /** The remembered list state for a mod (keyed by .mod file name). */
 function listStateFor(modFile: string): TitleListState {
@@ -118,6 +126,9 @@ export default function TitleEditorPage(): React.JSX.Element {
   const gameDir = settings?.gameDir ?? null
   const replacePaths = useMemo(() => selectedMod?.replacePaths ?? [], [selectedMod])
   const calendar = selectedMod?.profile?.calendar ?? null
+  // `history` here is already the open title's history entries — this is the
+  // editor's own remembered rows.
+  const entryHistory = useEntryHistory('titles')
 
   const go = (next: TitleSearch, replace = false): void => {
     void navigate({ to: '/titles', search: next, replace })
@@ -238,6 +249,30 @@ export default function TitleEditorPage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showingList, modKey])
 
+  // Whichever title is open — clicked here, or deep-linked from a history
+  // entry — is recorded as a visit under the spelling landed_titles uses.
+  useEffect(() => {
+    if (selected === null) return
+    entryHistory.recordVisit(titleRef(selected))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, modKey])
+
+  /**
+   * A remembered ref against the current scan: the name it reads by now, and
+   * null for a title this mod no longer loads — hidden while it's missing,
+   * but left in settings for when it comes back.
+   */
+  const resolveRef = (ref: EntryRef): EntryRef | null => {
+    if (data === null) return ref
+    const title = findTitle(data.titles, ref.id)
+    return title === null ? null : titleRef(title)
+  }
+
+  /** The map colour a remembered title paints, as the chip's leading square. */
+  const refColor = (ref: EntryRef): React.JSX.Element => (
+    <ColorTile hex={(data && findTitle(data.titles, ref.id)?.color) ?? null} />
+  )
+
   const roots = useMemo(() => (data ? buildTree(data.titles) : []), [data])
   const visibleRoots = useMemo(
     () => (scope === 'mod' ? pruneToMod(roots) : roots),
@@ -275,6 +310,14 @@ export default function TitleEditorPage(): React.JSX.Element {
             {!selected.inMod && <Badge variant="outline">game</Badge>}
           </h1>
         </header>
+
+      <EntryHistoryBar
+        history={entryHistory}
+        active={selected && titleRef(selected)}
+        onOpen={(ref) => openRow(ref.id)}
+        resolve={resolveRef}
+        visual={refColor}
+      />
 
         <ResizablePanelGroup
           orientation="horizontal"
@@ -340,6 +383,14 @@ export default function TitleEditorPage(): React.JSX.Element {
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Title Editor</h1>
       </header>
+
+      <EntryHistoryBar
+        history={entryHistory}
+        active={selected && titleRef(selected)}
+        onOpen={(ref) => openRow(ref.id)}
+        resolve={resolveRef}
+        visual={refColor}
+      />
 
       {!loading && data !== null && data.titles.length === 0 && (
         <Card>
@@ -414,6 +465,9 @@ export default function TitleEditorPage(): React.JSX.Element {
                 expanded={expanded}
                 onToggle={toggleExpanded}
                 onOpen={openRow}
+                isFavorite={(t) => entryHistory.isFavorite(titleRef(t))}
+                onToggleFavorite={(t) => entryHistory.toggleFavorite(titleRef(t))}
+                hasDraft={(t) => entryKey(titleRef(t)) in entryHistory.drafts}
               />
             </div>
           </ResizablePanel>

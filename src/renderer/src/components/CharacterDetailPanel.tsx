@@ -14,6 +14,7 @@ import CharacterForm, { FieldLabel, relationsInvalid, spousesInvalid } from './C
 import DateFormatToggle from './DateFormatToggle'
 import ReferenceDisplay from './ReferenceDisplay'
 import RulerDesignerDnaDialog from './RulerDesignerDnaDialog'
+import StaleDraftAlert from './StaleDraftAlert'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -380,14 +381,7 @@ export default function CharacterDetailPanel({
       </div>
 
       <div className="@container min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
-        {stale && (
-          <Alert>
-            <AlertDescription>
-              This character changed on disk while your draft was unsaved. Revert discards the
-              draft and loads the file&apos;s version.
-            </AlertDescription>
-          </Alert>
-        )}
+        {stale && <StaleDraftAlert what="character" />}
         <CharacterForm
           draft={draft}
           set={set}

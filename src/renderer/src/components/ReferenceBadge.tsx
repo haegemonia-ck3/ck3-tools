@@ -18,20 +18,31 @@ interface Props {
    * render at `size-9` without a border or rounding of its own.
    */
   leading?: React.ReactNode
+  /**
+   * A small mark shown ahead of the label — an unsaved-changes dot, a star.
+   * Decorative: it sits under the link overlay, so it never eats the click.
+   */
+  marker?: React.ReactNode
   /** Managed data: the button switches to the referenced item inside the app */
   onNavigate?: () => void
   /** Unmanaged data: the button opens the defining file in the text editor */
   locate?: () => Promise<RefLocation | null>
   onRemove?: () => void
+  /** What the remove button says it removes; defaults to the entry itself */
+  removeTitle?: string
+  className?: string
 }
 
 export default function ReferenceBadge({
   entry,
   icon,
   leading,
+  marker,
   onNavigate,
   locate,
-  onRemove
+  onRemove,
+  removeTitle,
+  className
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
   const label = refLabel(entry)
@@ -60,10 +71,12 @@ export default function ReferenceBadge({
         // The visual is positioned rather than laid out so its intrinsic size
         // can't stretch the badge; the extra padding reserves its square.
         visual ? 'pl-11' : 'pl-2',
-        onRemove ? 'pr-1' : 'pr-2'
+        onRemove ? 'pr-1' : 'pr-2',
+        className
       )}
     >
       {visual && <span className="absolute inset-y-0 left-0 size-9">{visual}</span>}
+      {marker}
       {(onNavigate ?? locate) ? (
         <Button
           variant="link"
@@ -90,7 +103,7 @@ export default function ReferenceBadge({
           size="icon-xs"
           // Lifted back above the link's overlay so the X stays clickable.
           className="relative size-4 text-muted-foreground hover:text-destructive"
-          title={`Remove ${label}`}
+          title={removeTitle ?? `Remove ${label}`}
           onClick={onRemove}
         >
           <X />

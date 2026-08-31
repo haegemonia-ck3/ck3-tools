@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, ExternalLink, Plus } from 'lucide-react'
 import type { RefLocation, ReligionData, SaveResult } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
+import { usePersistedDraft } from '../hooks/usePersistedDraft'
 import DoctrineEditor from './DoctrineEditor'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import { Swatch } from './Swatch'
 import FormSection from './FormSection'
+import StaleDraftAlert from './StaleDraftAlert'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -64,16 +66,22 @@ export default function ReligionDetailPanel({
       }
     : null
 
-  const [draft, setDraft] = useState<ReligionDraft | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
 
+  const editable = religion !== null && religion.inMod
+  // Edits outlive the row: closing it, switching tools or restarting the app
+  // all leave the draft where it was, listed above the list as unsaved.
+  const { draft, setDraft, dirty, stale, revert, markSaved } = usePersistedDraft<ReligionDraft>({
+    tool: 'religions',
+    ref: religion === null ? null : { id: religion.id, name: religion.localizedName },
+    original,
+    editable
+  })
+
   useEffect(() => {
-    setDraft(original ? { ...original } : null)
     setError(null)
-    // Re-derived from data on purpose: a reload after save re-seeds the draft
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, data])
 
   // The "Saved ✓" flash must survive the post-save data reload (which re-runs
@@ -88,10 +96,6 @@ export default function ReligionDetailPanel({
 
   const faiths = useMemo(() => faithsOfReligion(data, id), [data, id])
   const adherents = useMemo(() => adherentsOfReligion(data, id), [data, id])
-
-  const editable = religion !== null && religion.inMod
-  const dirty =
-    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
 
   const set = (patch: Partial<ReligionDraft>): void => {
     if (!draft) return
@@ -119,6 +123,7 @@ export default function ReligionDetailPanel({
         setError(result.error)
         return
       }
+      markSaved(draft)
       setSavedFlash(true)
       onSaved()
     } finally {
@@ -189,6 +194,7 @@ export default function ReligionDetailPanel({
       </div>
 
       <div ref={body} className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
+        {stale && <StaleDraftAlert what="religion" />}
         {religion === null && (
           <Alert>
             <AlertDescription>
@@ -353,7 +359,7 @@ export default function ReligionDetailPanel({
             variant="outline"
             disabled={!dirty || saving}
             onClick={() => {
-              setDraft(original ? { ...original } : null)
+              revert()
               setError(null)
             }}
           >

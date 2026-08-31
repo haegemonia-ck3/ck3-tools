@@ -8,11 +8,13 @@ import type {
   SaveResult
 } from '@shared/types'
 import { SAVE_HOTKEY_LABEL, useFormHotkeys } from '../hooks/useFormHotkeys'
+import { usePersistedDraft } from '../hooks/usePersistedDraft'
 import CoatOfArms from './CoatOfArms'
 import DateFormatToggle from './DateFormatToggle'
 import ReferenceInput, { openReferenceTarget } from './ReferenceInput'
 import Hint from './Hint'
 import FormSection from './FormSection'
+import StaleDraftAlert from './StaleDraftAlert'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -127,7 +129,6 @@ export default function DynastyDetailPanel({
       }
     : null
 
-  const [draft, setDraft] = useState<DefDraft | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedFlash, setSavedFlash] = useState(false)
@@ -145,11 +146,18 @@ export default function DynastyDetailPanel({
       return next
     })
 
+  const editable = def !== null && def.inMod
+  // Edits outlive the row: closing it, switching tools or restarting the app
+  // all leave the draft where it was, listed above the list as unsaved.
+  const { draft, setDraft, dirty, stale, revert, markSaved } = usePersistedDraft<DefDraft>({
+    tool: 'dynasties',
+    ref: def === null ? null : { id: def.id, name: def.localizedName ?? def.name, scope: kind },
+    original,
+    editable
+  })
+
   useEffect(() => {
-    setDraft(original ? { ...original } : null)
     setError(null)
-    // Re-derived from data on purpose: a reload after save re-seeds the draft
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, id, data])
 
   // The "Saved ✓" flash must survive the post-save data reload (which re-runs
@@ -169,9 +177,6 @@ export default function DynastyDetailPanel({
     name: d.localizedName ?? d.name
   }))
 
-  const editable = def !== null && def.inMod
-  const dirty =
-    draft !== null && original !== null && JSON.stringify(draft) !== JSON.stringify(original)
 
   const members = sortMembers(
     kind === 'dynasty' ? membersOfDynasty(data, id, true) : membersOfHouse(data, id)
@@ -209,6 +214,7 @@ export default function DynastyDetailPanel({
         setError(result.error)
         return
       }
+      markSaved(draft)
       setSavedFlash(true)
       onSaved()
     } finally {
@@ -394,6 +400,7 @@ export default function DynastyDetailPanel({
       </div>
 
       <div className="min-h-0 flex-1 space-y-8 overflow-y-auto p-4">
+        {stale && <StaleDraftAlert what={kind} />}
         {/* Without the details form the CoA stands alone at the top */}
         {!(draft && def) && <CoatOfArms ids={coaIds} size={112} />}
         {def === null && (
@@ -541,7 +548,7 @@ export default function DynastyDetailPanel({
             variant="outline"
             disabled={!dirty || saving}
             onClick={() => {
-              setDraft(original ? { ...original } : null)
+              revert()
               setError(null)
             }}
           >
