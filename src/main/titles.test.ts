@@ -164,8 +164,64 @@ const LOC = [
   ' e_empire:0 "The Empire"',
   ' male_only_law:0 "Male Only"',
   ' feudal_government:0 "Feudal"',
+  ' c_nf_direct:0 "The Directs"',
+  ' dynn_New:0 "Neweidai"',
+  ' dynn_Old:0 "Oldeidai"',
   ''
 ].join('\n')
+
+// Vanilla localizes its family titles as references to the dynasty's name
+const GAME_LOC = ['l_english:', ' c_nf_yamato:0 "$dynn_Yam$ Family"', ' dynn_Yam:0 "Yamato"', ''].join(
+  '\n'
+)
+
+// Noble families named the way the game names them: after the holding house.
+// c_nf_edge has no localization of its own; its last real holder (newman —
+// the later holder = 0 marks destruction) sits in house_new -> "Neweidai".
+// c_nf_direct is localized directly, which wins over the holder chain.
+const MOD_NF = [
+  'c_nf_edge = {',
+  '\tcolor = { 100 100 100 }',
+  '\tlandless = yes',
+  '\tnoble_family = yes',
+  '}',
+  '',
+  'c_nf_direct = {',
+  '\tcolor = { 100 100 100 }',
+  '\tnoble_family = yes',
+  '}',
+  ''
+].join('\n')
+
+const MOD_NF_HISTORY = [
+  'c_nf_edge = {',
+  '\t3300.1.1 = {',
+  '\t\tholder = newman',
+  '\t}',
+  '\t3200.1.1 = { holder = oldman }',
+  '\t3350.1.1 = { holder = 0 }',
+  '}',
+  'c_nf_direct = {',
+  '\t3200.1.1 = { holder = oldman }',
+  '}',
+  ''
+].join('\n')
+
+const MOD_NF_CHARACTERS = [
+  'oldman = {',
+  '\tname = "Old Man"',
+  '\tdynasty = "old01"',
+  '}',
+  'newman = {',
+  '\tname = "New Man"',
+  '\tdynasty = old01',
+  '\tdynasty_house = house_new',
+  '}',
+  ''
+].join('\n')
+
+const MOD_DYNASTIES = ['old01 = {', '\tname = "dynn_Old"', '}', ''].join('\n')
+const MOD_HOUSES = ['house_new = {', '\tname = "dynn_New"', '}', ''].join('\n')
 
 beforeEach(() => {
   rmSync(root, { recursive: true, force: true })
@@ -177,7 +233,13 @@ beforeEach(() => {
   writeFixture(modPath, 'common/landed_titles/mod_extra.txt', MOD_EXTRA)
   writeFixture(modPath, 'common/landed_titles/mod_edge.txt', MOD_EDGE)
   writeFixture(modPath, 'common/governments/HAAO_gov.txt', MOD_GOV)
+  writeFixture(modPath, 'common/landed_titles/mod_nf.txt', MOD_NF)
+  writeFixture(modPath, 'history/titles/nf.txt', MOD_NF_HISTORY)
+  writeFixture(modPath, 'history/characters/nf_chars.txt', MOD_NF_CHARACTERS)
+  writeFixture(modPath, 'common/dynasties/00_dynasties.txt', MOD_DYNASTIES)
+  writeFixture(modPath, 'common/dynasty_houses/00_houses.txt', MOD_HOUSES)
   writeFixture(modPath, 'localization/english/titles_l_english.yml', LOC)
+  writeFixture(gameDir, 'localization/english/titles_l_english.yml', GAME_LOC)
 })
 
 afterAll(() => {
@@ -400,6 +462,31 @@ describe('saveTitle', () => {
       ok: false,
       error: 'k_atlantis not found in mod_titles.txt'
     })
+  })
+})
+
+describe('noble family names', () => {
+  it("falls back to the last real holder's house name", () => {
+    const byId = new Map(load().titles.map((t) => [t.id, t]))
+    // oldman (3200, dynasty Old) then newman (3300, house New); the final
+    // holder = 0 is a destruction marker, not a holder
+    expect(byId.get('c_nf_edge')!.localizedName).toBe('Neweidai')
+  })
+
+  it('prefers a direct localization over the holder chain', () => {
+    const byId = new Map(load().titles.map((t) => [t.id, t]))
+    expect(byId.get('c_nf_direct')!.localizedName).toBe('The Directs')
+  })
+
+  it('expands $reference$ localization values (vanilla family-title style)', () => {
+    const byId = new Map(load().titles.map((t) => [t.id, t]))
+    expect(byId.get('c_nf_yamato')!.localizedName).toBe('Yamato Family')
+  })
+
+  it('leaves an unresolvable family title nameless rather than guessing', () => {
+    const byId = new Map(load().titles.map((t) => [t.id, t]))
+    // Game-defined, no loc, and the fallback only reads the mod's history
+    expect(byId.get('d_laamp_wanderer')!.localizedName).toBeNull()
   })
 })
 
