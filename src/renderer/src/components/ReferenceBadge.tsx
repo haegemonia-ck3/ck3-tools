@@ -12,6 +12,12 @@ interface Props {
   entry: RefEntry
   /** Optional icon data URL (undefined = still loading, null = none) */
   icon?: string | null
+  /**
+   * Anything else that fills the badge's leading square, in place of an icon:
+   * a coat of arms, a swatch. The badge positions and clips it, so it should
+   * render at `size-9` without a border or rounding of its own.
+   */
+  leading?: React.ReactNode
   /** Managed data: the button switches to the referenced item inside the app */
   onNavigate?: () => void
   /** Unmanaged data: the button opens the defining file in the text editor */
@@ -22,12 +28,14 @@ interface Props {
 export default function ReferenceBadge({
   entry,
   icon,
+  leading,
   onNavigate,
   locate,
   onRemove
 }: Props): React.JSX.Element {
   const [opening, setOpening] = useState(false)
   const label = refLabel(entry)
+  const visual = leading ?? (icon ? <img className="size-9 object-cover" src={icon} alt="" /> : null)
 
   const follow = async (): Promise<void> => {
     if (onNavigate) {
@@ -48,12 +56,12 @@ export default function ReferenceBadge({
       variant="secondary"
       className={cn(
         'relative h-9 gap-1 rounded-md py-0 pr-1 text-xs',
-        // The icon is positioned rather than laid out so its intrinsic size
+        // The visual is positioned rather than laid out so its intrinsic size
         // can't stretch the badge; the extra padding reserves its square.
-        icon ? 'pl-11' : 'pl-2'
+        visual ? 'pl-11' : 'pl-2'
       )}
     >
-      {icon && <img className="absolute inset-y-0 left-0 size-9 object-cover" src={icon} alt="" />}
+      {visual && <span className="absolute inset-y-0 left-0 size-9">{visual}</span>}
       <ReferenceLabel entry={entry} stacked className="font-normal" />
       {(onNavigate ?? locate) && (
         <Button

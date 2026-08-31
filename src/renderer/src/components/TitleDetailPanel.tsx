@@ -454,6 +454,13 @@ export default function TitleDetailPanel({
                   <ReferenceBadge
                     key={child}
                     entry={{ id: child, name: nameOf(child) }}
+                    leading={
+                      <CoatOfArms
+                        ids={[child]}
+                        size={36}
+                        className="rounded-none border-0 shadow-none"
+                      />
+                    }
                     onNavigate={() => onOpenTitle(child)}
                   />
                 ))}
