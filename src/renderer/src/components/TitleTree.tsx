@@ -1,21 +1,29 @@
-import { ChevronRight, FlameKindling, Shield } from 'lucide-react'
+import { ChevronRight, Circle, FlameKindling, House, Shield } from 'lucide-react'
 import type { TitleSummary } from '@shared/types'
 import FavoriteToggle from './FavoriteToggle'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { matchesQuery, normId, titleKindLabel, titleName } from '@/lib/titleView'
-import type { TitleTreeNode } from '@/lib/titleView'
+import { matchesQuery, normId, titleGlyphKind, titleKindLabel, titleName } from '@/lib/titleView'
+import type { TitleGlyphKind, TitleTreeNode } from '@/lib/titleView'
 
 /** Search results are a flat list; past this many the query needs narrowing. */
 const SEARCH_CAP = 300
 
+const GLYPH_ICON: Record<TitleGlyphKind, typeof Shield> = {
+  title: Shield,
+  house: House,
+  adventurer: FlameKindling,
+  landless: Circle
+}
+
 /**
  * The row's type marker, tinted with the title's map colour: a shield for
- * ordinary titles, a kindling fire for noble family hearths. Filled once the
+ * ordinary titles, a house for noble families, a kindling fire for landless
+ * adventurers, a plain circle for other landless titles. Filled once the
  * title has recorded history; outline-only when nothing ever happened to it.
  */
 function TitleGlyph({ title }: { title: TitleSummary }): React.JSX.Element {
-  const Icon = title.nobleFamily?.trim().toLowerCase() === 'yes' ? FlameKindling : Shield
+  const Icon = GLYPH_ICON[titleGlyphKind(title)]
   return (
     <Icon
       aria-hidden

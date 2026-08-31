@@ -227,6 +227,7 @@ export function getTitleData(
         localizedName: null,
         color: parseColor(node.body, named)?.hex ?? null,
         landless: scalars.get('landless') ?? null,
+        requireLandless: scalars.get('require_landless') ?? null,
         nobleFamily: scalars.get('noble_family') ?? null,
         province: scalars.get('province') ?? null,
         hasHistory: withHistory.has(norm(node.id))
