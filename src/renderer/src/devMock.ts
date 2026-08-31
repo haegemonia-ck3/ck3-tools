@@ -544,6 +544,7 @@ const titleSummary = (partial: Partial<TitleSummary> & { id: string }): TitleSum
   localizedName: null,
   color: null,
   landless: null,
+  requireLandless: null,
   nobleFamily: null,
   province: null,
   // Recomputed from titleHistories by the getTitleData mock, like the backend
@@ -591,13 +592,14 @@ const titles: TitleSummary[] = [
     color: '#7fbf7f',
     province: '101'
   }),
-  // Titular — no children, no localization
-  titleSummary({ id: 'd_oracle', parent: 'k_hellas', color: '#646464' }),
+  // Titular and landless (but no adventurer flag) — the plain-circle glyph
+  titleSummary({ id: 'd_oracle', parent: 'k_hellas', color: '#646464', landless: 'yes' }),
   titleSummary({
     id: 'd_laamp_wanderers',
     localizedName: 'The Wanderers',
     color: '#646464',
-    landless: 'yes'
+    landless: 'yes',
+    requireLandless: 'yes'
   }),
   titleSummary({
     id: 'c_nf_mockidae',
@@ -1047,6 +1049,7 @@ const mock: Ck3ToolsApi = {
         color: def.color,
         province: def.province,
         landless: def.flags.landless,
+        requireLandless: def.flags.require_landless,
         nobleFamily: def.flags.noble_family
       })
     )

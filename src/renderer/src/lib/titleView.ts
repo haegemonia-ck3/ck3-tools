@@ -29,11 +29,25 @@ export function findTitle(titles: TitleSummary[], id: string): TitleSummary | nu
 
 export const titleName = (t: TitleSummary): string => t.localizedName ?? t.id
 
+const isYes = (value: string | null): boolean => value?.trim().toLowerCase() === 'yes'
+
 /** Badge-worthy special kind, read off the summary's raw flags. */
 export function titleKindLabel(t: TitleSummary): string | null {
-  if (t.nobleFamily?.trim().toLowerCase() === 'yes') return 'noble family'
-  if (t.landless?.trim().toLowerCase() === 'yes') return 'landless'
+  if (isYes(t.nobleFamily)) return 'noble family'
+  if (isYes(t.requireLandless)) return 'adventurer'
+  if (isYes(t.landless)) return 'landless'
   return null
+}
+
+/** Which glyph a tree row wears, from the summary's raw flags. */
+export type TitleGlyphKind = 'title' | 'house' | 'adventurer' | 'landless'
+
+export function titleGlyphKind(t: TitleSummary): TitleGlyphKind {
+  if (isYes(t.nobleFamily)) return 'house'
+  // require_landless is the structural mark of a landless-adventurer title
+  if (isYes(t.requireLandless)) return 'adventurer'
+  if (isYes(t.landless)) return 'landless'
+  return 'title'
 }
 
 /** One node of the de jure forest. */

@@ -308,7 +308,12 @@ describe('getTitleData', () => {
   it('reads the special-title flags into the summary', () => {
     const byId = new Map(load().titles.map((t) => [t.id, t]))
     expect(byId.get('c_nf_yamato')).toMatchObject({ landless: 'yes', nobleFamily: 'yes' })
-    expect(byId.get('d_laamp_wanderer')).toMatchObject({ landless: 'yes', nobleFamily: null })
+    expect(byId.get('d_laamp_wanderer')).toMatchObject({
+      landless: 'yes',
+      requireLandless: 'yes',
+      nobleFamily: null
+    })
+    expect(byId.get('c_nf_yamato')!.requireLandless).toBeNull()
     expect(byId.get('d_duchy')).toMatchObject({ landless: null, nobleFamily: null })
   })
 

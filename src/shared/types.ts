@@ -661,6 +661,8 @@ export interface TitleSummary {
   color: string | null
   /** Raw `landless =` value */
   landless: string | null
+  /** Raw `require_landless =` value — what marks a landless-adventurer title */
+  requireLandless: string | null
   /** Raw `noble_family =` value */
   nobleFamily: string | null
   /** Raw `province =` value (baronies) */

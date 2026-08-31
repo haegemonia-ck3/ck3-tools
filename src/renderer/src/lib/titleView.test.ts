@@ -6,6 +6,7 @@ import {
   matchesQuery,
   pruneToMod,
   sortEntries,
+  titleGlyphKind,
   titleKindLabel
 } from './titleView'
 import type { TitleHistoryEntry, TitleSummary } from '@shared/types'
@@ -18,6 +19,7 @@ const t = (partial: Partial<TitleSummary> & { id: string }): TitleSummary => ({
   localizedName: null,
   color: null,
   landless: null,
+  requireLandless: null,
   nobleFamily: null,
   province: null,
   hasHistory: false,
@@ -94,8 +96,21 @@ describe('matchesQuery / titleKindLabel', () => {
     expect(titleKindLabel(t({ id: 'c_nf_x', nobleFamily: 'yes', landless: 'yes' }))).toBe(
       'noble family'
     )
-    expect(titleKindLabel(t({ id: 'd_laamp_x', landless: 'yes' }))).toBe('landless')
-    expect(titleKindLabel(t({ id: 'd_x', landless: 'no' }))).toBeNull()
+    expect(titleKindLabel(t({ id: 'd_laamp_x', landless: 'yes', requireLandless: 'yes' }))).toBe(
+      'adventurer'
+    )
+    expect(titleKindLabel(t({ id: 'd_x', landless: 'yes' }))).toBe('landless')
+    expect(titleKindLabel(t({ id: 'd_y', landless: 'no' }))).toBeNull()
+  })
+
+  it('picks the tree glyph by kind, noble family first', () => {
+    expect(titleGlyphKind(t({ id: 'd_x' }))).toBe('title')
+    expect(titleGlyphKind(t({ id: 'c_nf_x', nobleFamily: 'yes', landless: 'yes' }))).toBe('house')
+    expect(titleGlyphKind(t({ id: 'd_laamp_x', landless: 'yes', requireLandless: 'yes' }))).toBe(
+      'adventurer'
+    )
+    expect(titleGlyphKind(t({ id: 'd_holy', landless: 'yes' }))).toBe('landless')
+    expect(titleGlyphKind(t({ id: 'd_no', landless: 'no' }))).toBe('title')
   })
 })
 
