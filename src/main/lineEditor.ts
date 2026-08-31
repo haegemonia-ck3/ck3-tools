@@ -68,11 +68,58 @@ interface StatementHit {
 const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
+ * The depth-0 code of a line, offset-preserving: everything inside inline
+ * sub-blocks (relative to the block's own depth 0) and comments is blanked
+ * out rather than removed, so a statement match carries its true span within
+ * the line. The braces that cross depth 0 stay visible, leaving a masked
+ * sub-block reading `{     }` — no key or value charset can match into it.
+ *
+ * This is the writer's mirror of the readers' `topLevelCode` eliding: the
+ * writer must see exactly what `scanScalarsCI` sees, or a save edits content
+ * the parse never reported — a single-line child block's own scalars
+ * (`b_home = { province = 100 }` inside a county), or the inside of a
+ * one-line `effect = { … }`. It also captures depth-0 code AFTER a mid-line
+ * closing brace (`} capital = c_b`), which the readers attribute to the
+ * block, so an edit replaces it instead of inserting a duplicate.
+ */
+function depthZeroCode(line: string, startDepth: number): string {
+  let out = ''
+  let depth = startDepth
+  let inQuote = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (inQuote) {
+      out += depth === 0 ? c : ' '
+      if (c === '"') inQuote = false
+      continue
+    }
+    if (c === '#') return out + ' '.repeat(line.length - i)
+    if (c === '"') {
+      inQuote = true
+      out += depth === 0 ? c : ' '
+      continue
+    }
+    if (c === '{') {
+      out += depth === 0 ? c : ' '
+      depth++
+      continue
+    }
+    if (c === '}') {
+      depth = Math.max(0, depth - 1)
+      out += depth === 0 ? c : ' '
+      continue
+    }
+    out += depth === 0 ? c : ' '
+  }
+  return out
+}
+
+/**
  * Every statement carrying one of `keys` at depth 0, in file order. Statements
  * are matched anywhere in a line, not just lines holding a single scalar — real
  * files (and this editor's own inline inserts) put several statements on one
- * line — and comments are stripped quote-aware so a `#` inside a quoted value
- * doesn't hide the statement from the writer that the reader can see.
+ * line — with comments and inline sub-blocks masked out (see depthZeroCode) so
+ * the writer sees the same depth-0 code the lenient readers do.
  */
 function findStatements(ed: LineEditor, keys: string[], ignoreCase: boolean): StatementHit[] {
   const re = new RegExp(
@@ -81,8 +128,7 @@ function findStatements(ed: LineEditor, keys: string[], ignoreCase: boolean): St
   )
   const hits: StatementHit[] = []
   for (let i = 0; i < ed.lines.length; i++) {
-    if (ed.depths[i] !== 0) continue
-    const [code] = splitComment(ed.lines[i])
+    const code = depthZeroCode(ed.lines[i], ed.depths[i])
     for (const m of code.matchAll(re)) {
       const valueEnd = m.index + m[0].length
       const quoted = m[2].startsWith('"')

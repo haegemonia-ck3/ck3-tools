@@ -253,9 +253,9 @@ function EntryForm({
             <span className="text-muted-foreground">—</span>
           </SelectItem>
           <SelectItem value="yes">yes</SelectItem>
-          {value !== null && value.toLowerCase() !== 'yes' && (
-            <SelectItem value={value}>{value}</SelectItem>
-          )}
+          {/* A raw spelling other than exactly `yes` (case included) must be
+              its own item, or the Select renders blank for it */}
+          {value !== null && value !== 'yes' && <SelectItem value={value}>{value}</SelectItem>}
         </SelectContent>
       </Select>
     </div>
@@ -553,6 +553,10 @@ export default function TitleHistoryPanel({
         setError(result.error)
         return
       }
+      // Deleting reindexes the entries after it, so an open edit form's
+      // (file, titleBlock, index) address could now point at a different
+      // entry — close it rather than let a save land on the wrong block.
+      setEditing(null)
       onChanged()
     } finally {
       setBusy(false)

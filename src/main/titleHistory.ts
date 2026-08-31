@@ -26,6 +26,16 @@ import type {
 
 const HISTORY_DIR = 'history/titles'
 
+/**
+ * What counts as a dated block when READING title history. Looser than the
+ * DATE_KEY the writers validate against: real mod files head blocks with bare
+ * years (`3244 = { … }`), and those must be visible and editable — inside a
+ * title's history block, a numeric key is always a date. The reader, the
+ * entry-address resolver and the anchors below must all use this same test,
+ * or an ordinal would point at a different block on the way back in.
+ */
+export const DATED_BLOCK_KEY = /^\d+(\.\d+){0,2}\.?$/
+
 /** Known scalar keys of a dated block: file spelling -> patch field. */
 const SCALAR_KEYS: [string, keyof TitleHistoryEntryPatch][] = [
   ['holder', 'holder'],
@@ -58,6 +68,21 @@ function lawTokens(inner: string): string[] {
     .filter((t) => t !== '')
 }
 
+/**
+ * The laws of a dated body across EVERY succession_laws block — duplicate
+ * blocks are legal script, and the parse and the save-time diff must read
+ * them identically or a law edit would silently drop the extra block's
+ * content. Null when the body has no succession_laws at all.
+ */
+function entryLaws(body: string): string[] | null {
+  let laws: string[] | null = null
+  for (const b of scanBlocks(body)) {
+    if (b.key.toLowerCase() !== 'succession_laws') continue
+    laws = [...(laws ?? []), ...lawTokens(body.slice(b.bodyStart, b.bodyEnd))]
+  }
+  return laws
+}
+
 /** Unrecognized depth-0 statements of a dated body, verbatim, for display. */
 function extraStatements(body: string): string[] {
   const statement = /(^|\s)([A-Za-z0-9_.\-']+)\s*=\s*("[^"]*"|[^\s{}"#=]+)/g
@@ -81,14 +106,11 @@ function parseEntry(
   const scalars = scanScalarsCI(body)
   const value = (key: string): string | null => scalars.get(key) ?? null
 
-  let successionLaws: string[] | null = null
+  const successionLaws = entryLaws(body)
   const opaqueBlocks: string[] = []
   for (const b of scanBlocks(body)) {
-    if (b.key.toLowerCase() === 'succession_laws') {
-      successionLaws ??= lawTokens(body.slice(b.bodyStart, b.bodyEnd))
-    } else if (!opaqueBlocks.includes(b.key)) {
-      opaqueBlocks.push(b.key)
-    }
+    if (b.key.toLowerCase() === 'succession_laws') continue
+    if (!opaqueBlocks.includes(b.key)) opaqueBlocks.push(b.key)
   }
 
   return {
@@ -142,7 +164,7 @@ export function getTitleHistory(
       const body = text.slice(block.bodyStart, block.bodyEnd)
       let index = 0
       for (const d of scanBlocks(body)) {
-        if (!DATE_KEY.test(d.key)) continue
+        if (!DATED_BLOCK_KEY.test(d.key)) continue
         entries.push(
           parseEntry(d.key, body.slice(d.bodyStart, d.bodyEnd), file, inMod, titleBlock, index)
         )
@@ -194,7 +216,7 @@ function findEntry(
     const body = text.slice(block.bodyStart, block.bodyEnd)
     let i = 0
     for (const d of scanBlocks(body)) {
-      if (!DATE_KEY.test(d.key)) continue
+      if (!DATED_BLOCK_KEY.test(d.key)) continue
       if (i === index) return { path, text, title: block, date: d }
       i++
     }
@@ -205,12 +227,6 @@ function findEntry(
 
 const sameLaws = (a: string[] | null, b: string[] | null): boolean =>
   a === null || b === null ? a === b : a.length === b.length && a.every((v, i) => v === b[i])
-
-/** The `succession_laws` list currently in a dated body; null when absent. */
-function currentLaws(body: string): string[] | null {
-  const block = scanBlocks(body).find((b) => b.key.toLowerCase() === 'succession_laws')
-  return block ? lawTokens(body.slice(block.bodyStart, block.bodyEnd)) : null
-}
 
 /**
  * Rewrite one dated block from a patch: known scalars are set surgically,
@@ -242,7 +258,7 @@ export function saveTitleHistoryEntry(
     for (const [key, field] of SCALAR_KEYS) {
       setScalar(ed, [key], patch[field] as string | null, { ignoreCase: true })
     }
-    if (!sameLaws(currentLaws(body), patch.successionLaws)) {
+    if (!sameLaws(entryLaws(body), patch.successionLaws)) {
       const laws = patch.successionLaws
       setBlockBody(
         ed,
@@ -328,7 +344,31 @@ export function addTitleHistoryEntry(
       return { ok: true }
     }
 
-    const ed = makeEditor(text.slice(title.bodyStart, title.bodyEnd))
+    const body = text.slice(title.bodyStart, title.bodyEnd)
+    if (!body.includes('\n')) {
+      // A one-line title body (`d_x = {}`) has no line to splice into — grow
+      // it into the multi-line shape, in the file's own EOL style, with the
+      // closing brace back on the title's own indentation
+      const eol = text.includes('\r\n') ? '\r\n' : '\n'
+      const lineStart = text.lastIndexOf('\n', title.start - 1) + 1
+      const closingIndent = text.slice(lineStart).match(/^[ \t]*/)![0]
+      const content = body.trim()
+      const block = [
+        `${closingIndent}\t${date} = {`,
+        ...entryLines(patch).map((l) => `${closingIndent}\t\t${l}`),
+        `${closingIndent}\t}`
+      ]
+      const newBody =
+        (content === '' ? '' : ` ${content}`) + eol + block.join(eol) + eol + closingIndent
+      writeFileSync(
+        path,
+        text.slice(0, title.bodyStart) + newBody + text.slice(title.bodyEnd),
+        'utf-8'
+      )
+      return { ok: true }
+    }
+
+    const ed = makeEditor(body)
     const at = endOfBodyIndex(ed)
     const block = [
       `${ed.indent}${date} = {`,

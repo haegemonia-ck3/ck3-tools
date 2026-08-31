@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { basename, join } from 'path'
-import { DATE_KEY } from './characters'
+import { DATED_BLOCK_KEY } from './titleHistory'
 import { makeEditor, setBlockBody, setScalar, splitComment } from './lineEditor'
 import { readLocalization } from './localization'
 import { annotateLines, scanBlocks, scanScalarsCI } from './pdx'
@@ -239,6 +239,20 @@ function parseCulturalNames(inner: string): TitleCulturalName[] {
   return names
 }
 
+/**
+ * The title's cultural names across EVERY cultural_names block — real files
+ * carry duplicate blocks, and the parse and the save-time diff must read them
+ * identically or an untouched save would rewrite (and collapse) them.
+ */
+function titleCulturalNames(body: string): TitleCulturalName[] {
+  const names: TitleCulturalName[] = []
+  for (const b of scanBlocks(body)) {
+    if (b.key.toLowerCase() !== 'cultural_names') continue
+    names.push(...parseCulturalNames(body.slice(b.bodyStart, b.bodyEnd)))
+  }
+  return names
+}
+
 function parseDetail(
   node: TitleNode,
   file: string,
@@ -252,20 +266,13 @@ function parseDetail(
 
   const children: string[] = []
   const scriptBlocks = new Set<string>()
-  let culturalNames: TitleCulturalName[] = []
   for (const b of scanBlocks(body)) {
     if (TITLE_KEY.test(b.key)) {
       children.push(b.key)
       continue
     }
     const key = b.key.toLowerCase()
-    if (key === 'color') continue
-    if (key === 'cultural_names') {
-      if (culturalNames.length === 0) {
-        culturalNames = parseCulturalNames(body.slice(b.bodyStart, b.bodyEnd))
-      }
-      continue
-    }
+    if (key === 'color' || key === 'cultural_names') continue
     scriptBlocks.add(b.key)
   }
 
@@ -281,7 +288,7 @@ function parseDetail(
     capital: scalars.get('capital') ?? null,
     province: scalars.get('province') ?? null,
     flags,
-    culturalNames,
+    culturalNames: titleCulturalNames(body),
     scriptBlocks: [...scriptBlocks]
   }
 }
@@ -319,7 +326,7 @@ function firstSubBlockLine(ed: LineEditor): number {
     if (ed.depths[i] !== 0) continue
     const [code] = splitComment(ed.lines[i])
     const m = code.match(/^\s*([A-Za-z0-9_.\-']+)\s*=\s*\{/)
-    if (m && (TITLE_KEY.test(m[1]) || DATE_KEY.test(m[1]))) return i
+    if (m && (TITLE_KEY.test(m[1]) || DATED_BLOCK_KEY.test(m[1]))) return i
   }
   return -1
 }
@@ -359,8 +366,9 @@ export function saveTitle(
     for (const key of TITLE_FLAG_KEYS) set([key], patch.flags[key])
 
     // cultural_names rewrites normalize the block's layout (dropping comments
-    // inside it), so only an actually changed list is written at all.
-    if (!sameNames(parseDetailNames(node.body), patch.culturalNames)) {
+    // inside it, collapsing duplicate blocks), so only an actually changed
+    // list is written at all — read here exactly as the parse read it.
+    if (!sameNames(titleCulturalNames(node.body), patch.culturalNames)) {
       setBlockBody(
         ed,
         'cultural_names',
@@ -380,12 +388,6 @@ export function saveTitle(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
-}
-
-/** The current cultural_names of a title body, for the save-time diff. */
-function parseDetailNames(body: string): TitleCulturalName[] {
-  const block = scanBlocks(body).find((b) => b.key.toLowerCase() === 'cultural_names')
-  return block ? parseCulturalNames(body.slice(block.bodyStart, block.bodyEnd)) : []
 }
 
 // ---------- Creating ----------
@@ -472,6 +474,12 @@ export function createTitle(modPath: string, def: NewTitle): SaveResult {
     if (parentId === '') {
       if (def.file === null || !isTxtFileName(def.file)) {
         return { ok: false, error: `Invalid file name "${def.file ?? ''}" (expected a .txt file name)` }
+      }
+      // appendBlock re-reads and rewrites the whole file, so the same
+      // decode-loss guard the save paths use applies here too
+      const target = join(modPath, ...TITLE_DIR.split('/'), def.file)
+      if (existsSync(target) && readFileSync(target, 'utf-8').includes('�')) {
+        return { ok: false, error: `${def.file} isn't valid UTF-8 — edit it in a text editor instead` }
       }
       appendBlock(join(modPath, ...TITLE_DIR.split('/')), def.file, [
         `${id} = {`,

@@ -137,17 +137,21 @@ export default function TitleEditorPage(): React.JSX.Element {
 
   /**
    * The selected title's full parse and history, loaded per selection. The
-   * token drops a slow response that lands after another selection started,
-   * so quick clicks through the tree can't show a stale title's data.
+   * token drops a slow response that lands after a NEWER load started, and
+   * the id check drops one requested for a title that is no longer selected
+   * (a panel's post-save callback can fire after the user navigated away) —
+   * either way a stale response must not clobber the current selection.
    */
   const selectionToken = useRef(0)
+  const selectedId = useRef<string | undefined>(undefined)
+  selectedId.current = search.id
   const loadSelected = async (id: string): Promise<void> => {
     const token = ++selectionToken.current
     const [d, h] = await Promise.all([
       window.ck3tools.getTitle(gameDir, modPath, replacePaths, id),
       window.ck3tools.getTitleHistory(gameDir, modPath, replacePaths, id)
     ])
-    if (token !== selectionToken.current) return
+    if (token !== selectionToken.current || id !== selectedId.current) return
     setDetail(d)
     setHistory(h)
   }
@@ -334,7 +338,14 @@ export default function TitleEditorPage(): React.JSX.Element {
               </span>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card">
-              <TitleTree nodes={visibleRoots} query={query} onOpen={openRow} />
+              {/* Keyed by mod: expand state must not carry over to another
+                  mod's tree, where the same ids can mean different titles */}
+              <TitleTree
+                key={selectedMod.file}
+                nodes={visibleRoots}
+                query={query}
+                onOpen={openRow}
+              />
             </div>
           </ResizablePanel>
         )}

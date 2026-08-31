@@ -113,6 +113,32 @@ const MOD_TITLES = [
 // LF + BOM mod file carrying a non-rewritable colour form
 const MOD_EXTRA = ['﻿k_hsv = {', '\tcolor = hsv{ 0.5 1 1 }', '}', ''].join('\n')
 
+// Reader/writer symmetry traps: a single-line child whose scalars the parent's
+// save must never touch, duplicate cultural_names blocks (the first empty),
+// and a statement glued after a mid-line closing brace that the readers
+// attribute to the OUTER title.
+const MOD_EDGE = [
+  'c_edge = {',
+  '\tcolor = { 9 9 9 }',
+  '\tcultural_names = {',
+  '\t}',
+  '\tcultural_names = {',
+  '\t\tname_list_a = cn_a # note',
+  '\t}',
+  '\tb_inline = { province = 500 landless = no }',
+  '\t1.1.1 = {',
+  '\t\tspecial_building_slot = edge_shrine',
+  '\t}',
+  '}',
+  '',
+  'k_glue = {',
+  '\td_glue = {',
+  '\t\tcolor = { 1 2 3 }',
+  '\t} capital = c_edge',
+  '}',
+  ''
+].join('\n')
+
 const GAME_GOV = ['feudal_government = {', '\tcreate_cadet_branches = yes', '}', ''].join('\n')
 const MOD_GOV = ['aristocratic_government = {', '}', ''].join('\n')
 
@@ -149,6 +175,7 @@ beforeEach(() => {
   writeFixture(gameDir, 'common/laws/00_laws.txt', GAME_LAWS)
   writeFixture(modPath, 'common/landed_titles/mod_titles.txt', MOD_TITLES)
   writeFixture(modPath, 'common/landed_titles/mod_extra.txt', MOD_EXTRA)
+  writeFixture(modPath, 'common/landed_titles/mod_edge.txt', MOD_EDGE)
   writeFixture(modPath, 'common/governments/HAAO_gov.txt', MOD_GOV)
   writeFixture(modPath, 'localization/english/titles_l_english.yml', LOC)
 })
@@ -376,6 +403,61 @@ describe('saveTitle', () => {
   })
 })
 
+describe('reader/writer symmetry', () => {
+  it('reads a single-line child as the child\'s own, not the parent\'s', () => {
+    const parent = detail('c_edge')!
+    expect(parent.province).toBeNull()
+    expect(parent.flags.landless).toBeNull()
+    expect(parent.children).toEqual(['b_inline'])
+    expect(detail('b_inline')).toMatchObject({ province: '500' })
+    expect(detail('b_inline')!.flags.landless).toBe('no')
+  })
+
+  it('concatenates duplicate cultural_names blocks', () => {
+    expect(detail('c_edge')!.culturalNames).toEqual([{ key: 'name_list_a', value: 'cn_a' }])
+  })
+
+  it('attributes a statement after a mid-line closing brace to the outer title', () => {
+    expect(detail('k_glue')!.capital).toBe('c_edge')
+  })
+
+  it('keeps a no-op save of every edge-case title byte-identical', () => {
+    const before = read('mod_edge.txt')
+    for (const id of ['c_edge', 'b_inline', 'k_glue', 'd_glue']) {
+      expect(saveTitle(modPath, 'mod_edge.txt', id, patchOf(id))).toEqual({ ok: true })
+    }
+    expect(read('mod_edge.txt')).toBe(before)
+  })
+
+  it('never edits inside a single-line child when saving the parent', () => {
+    const patch = patchOf('c_edge')
+    patch.capital = 'c_athens'
+    expect(saveTitle(modPath, 'mod_edge.txt', 'c_edge', patch)).toEqual({ ok: true })
+    const text = read('mod_edge.txt')
+    expect(text).toContain('\tb_inline = { province = 500 landless = no }')
+    expect(text).toContain('\tcapital = c_athens')
+    expect(detail('b_inline')).toMatchObject({ province: '500' })
+  })
+
+  it('edits a single-line title\'s own body in place', () => {
+    const patch = patchOf('b_inline')
+    patch.province = '501'
+    expect(saveTitle(modPath, 'mod_edge.txt', 'b_inline', patch)).toEqual({ ok: true })
+    expect(read('mod_edge.txt')).toContain('\tb_inline = { province = 501 landless = no }')
+  })
+
+  it('replaces a glued post-brace statement instead of inserting a duplicate', () => {
+    const patch = patchOf('k_glue')
+    patch.capital = 'c_athens'
+    expect(saveTitle(modPath, 'mod_edge.txt', 'k_glue', patch)).toEqual({ ok: true })
+    const text = read('mod_edge.txt')
+    expect(text).toContain('\t} capital = c_athens')
+    expect(text).not.toContain('\tcapital = c_athens\n\td_glue')
+    expect(text.match(/capital/g)).toHaveLength(1)
+    expect(detail('d_glue')!.color!.hex).toBe('#010203')
+  })
+})
+
 describe('createTitle', () => {
   const newTitle = (over: Partial<NewTitle>): NewTitle => ({
     id: 'd_new',
@@ -468,6 +550,17 @@ describe('createTitle', () => {
       error: 'Only a barony title can carry a province'
     })
     expect(createTitle(modPath, newTitle({ file: 'sub\\dir.txt' })).ok).toBe(false)
+  })
+
+  it('refuses to append into a file that is not valid UTF-8', () => {
+    writeFileSync(
+      modFile('legacy.txt'),
+      Buffer.from([0x64, 0x5f, 0x61, 0x20, 0x3d, 0x20, 0x7b, 0x20, 0x23, 0xe9, 0x0a, 0x7d, 0x0a])
+    )
+    expect(createTitle(modPath, newTitle({ file: 'legacy.txt' }))).toEqual({
+      ok: false,
+      error: "legacy.txt isn't valid UTF-8 — edit it in a text editor instead"
+    })
   })
 
   it('rejects an id the mod already defines, but allows shadowing a game id', () => {

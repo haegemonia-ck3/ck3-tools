@@ -201,7 +201,8 @@ export default function TitleDetailPanel({
 
   const flagField = (key: TitleFlagKey): React.JSX.Element => {
     const value = draft?.flags[key] ?? null
-    const known = value === null || value.toLowerCase() === 'yes' || value.toLowerCase() === 'no'
+    // Exact-match: a raw `YES` needs its own item or the Select renders blank
+    const known = value === null || value === 'yes' || value === 'no'
     return (
       <div key={key} className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-sm" title={key}>

@@ -59,6 +59,23 @@ const MOD_HISTORY = [
   'd_empty = {',
   '\t3210.1.1. = { holder = 77 }',
   '}',
+  '',
+  '# Reader/writer symmetry traps: a one-line effect whose inner holder must',
+  '# never leak into (or be edited as) the entry, a bare-year date, duplicate',
+  '# succession_laws blocks, and a one-line title body.',
+  'd_edge = {',
+  '\t3600.1.1 = { effect = { holder = 99 } }',
+  '\t3244 = {',
+  '\t\tholder = 12',
+  '\t}',
+  '}',
+  'd_twolaws = {',
+  '\t3200.1.1 = {',
+  '\t\tsuccession_laws = { male_only_law }',
+  '\t\tsuccession_laws = { equal_law }',
+  '\t}',
+  '}',
+  'd_inline = {}',
   ''
 ].join('\r\n')
 
@@ -158,6 +175,95 @@ describe('getTitleHistory', () => {
   })
 })
 
+describe('reader/writer symmetry', () => {
+  it('does not leak a one-line effect\'s inner statements into the entry', () => {
+    const entries = history('d_edge')
+    expect(entries).toHaveLength(2)
+    expect(entries[0]).toMatchObject({ holder: null, opaqueBlocks: ['effect'], extra: [] })
+  })
+
+  it('surfaces bare-year dated blocks as entries', () => {
+    expect(history('d_edge')[1]).toMatchObject({ date: '3244', holder: '12', index: 1 })
+  })
+
+  it('reads duplicate succession_laws blocks as one concatenated list', () => {
+    expect(history('d_twolaws')[0].successionLaws).toEqual(['male_only_law', 'equal_law'])
+  })
+
+  it('keeps a no-op save of every edge entry byte-identical', () => {
+    const before = read()
+    for (const id of ['d_edge', 'd_twolaws']) {
+      for (const e of history(id)) {
+        expect(
+          saveTitleHistoryEntry(modPath, e.file, id, e.titleBlock, e.index, patchOf(e))
+        ).toEqual({ ok: true })
+      }
+    }
+    expect(read()).toBe(before)
+  })
+
+  it('sets a scalar beside a one-line effect without touching its inside', () => {
+    const patch = patchOf(history('d_edge')[0])
+    patch.holder = '7'
+    expect(saveTitleHistoryEntry(modPath, 'k_hellas.txt', 'd_edge', 0, 0, patch)).toEqual({
+      ok: true
+    })
+    const text = read()
+    expect(text).toContain('effect = { holder = 99 }')
+    expect(text).toContain('holder = 7')
+    expect(history('d_edge')[0]).toMatchObject({ holder: '7', opaqueBlocks: ['effect'] })
+  })
+
+  it('edits a bare-year entry, keeping its date unless changed to a valid one', () => {
+    const entry = history('d_edge')[1]
+    const patch = patchOf(entry)
+    patch.holder = '13'
+    expect(saveTitleHistoryEntry(modPath, 'k_hellas.txt', 'd_edge', 0, 1, patch)).toEqual({
+      ok: true
+    })
+    expect(history('d_edge')[1]).toMatchObject({ date: '3244', holder: '13' })
+    const rename = patchOf(history('d_edge')[1])
+    rename.date = '3245'
+    expect(saveTitleHistoryEntry(modPath, 'k_hellas.txt', 'd_edge', 0, 1, rename)).toEqual({
+      ok: false,
+      error: 'Invalid date "3245" (expected Y.M.D)'
+    })
+    rename.date = '3244.1.1'
+    expect(saveTitleHistoryEntry(modPath, 'k_hellas.txt', 'd_edge', 0, 1, rename)).toEqual({
+      ok: true
+    })
+    expect(history('d_edge')[1].date).toBe('3244.1.1')
+  })
+
+  it('collapses duplicate succession_laws blocks only when the laws change', () => {
+    const patch = patchOf(history('d_twolaws')[0])
+    patch.successionLaws = ['male_only_law', 'equal_law', 'female_only_law']
+    expect(saveTitleHistoryEntry(modPath, 'k_hellas.txt', 'd_twolaws', 0, 0, patch)).toEqual({
+      ok: true
+    })
+    const text = read()
+    expect(text).toContain('succession_laws = { male_only_law equal_law female_only_law }')
+    expect(text).not.toContain('succession_laws = { equal_law }')
+    expect(history('d_twolaws')[0].successionLaws).toEqual([
+      'male_only_law',
+      'equal_law',
+      'female_only_law'
+    ])
+  })
+
+  it('grows a one-line title body into shape when adding an entry', () => {
+    const patch = emptyPatch('3100.1.1')
+    patch.holder = '5'
+    expect(addTitleHistoryEntry(modPath, 'k_hellas.txt', 'd_inline', patch)).toEqual({ ok: true })
+    const text = read()
+    expect(text).toContain(
+      ['d_inline = {', '\t3100.1.1 = {', '\t\tholder = 5', '\t}', '}'].join('\r\n')
+    )
+    expect(text).not.toMatch(/[^\r]\n/)
+    expect(history('d_inline')).toHaveLength(1)
+  })
+})
+
 describe('saveTitleHistoryEntry', () => {
   it('keeps a no-op save byte-identical for every entry shape', () => {
     const before = read()
@@ -242,7 +348,8 @@ describe('saveTitleHistoryEntry', () => {
     expect(saveTitleHistoryEntry(modPath, 'k_hellas.txt', 'k_hellas', 0, 2, cleared)).toEqual({
       ok: true
     })
-    expect(read()).not.toContain('succession_laws')
+    expect(history('k_hellas')[3].successionLaws).toBeNull()
+    expect(read()).not.toContain('noble_family_succession_law')
   })
 
   it('preserves the effect block through unrelated edits', () => {
