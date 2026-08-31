@@ -26,7 +26,8 @@ export function findRef(entries: readonly RefEntry[], id: string): RefEntry {
 export default function ReferenceLabel({
   entry,
   stacked = false,
-  className
+  className,
+  nameClassName
 }: {
   entry: RefEntry
   /**
@@ -36,21 +37,28 @@ export default function ReferenceLabel({
   stacked?: boolean
   /** Applied to the whole label; the id keeps its muted styling regardless. */
   className?: string
+  /**
+   * Applied to the leading line alone — the name, or the id when there is no
+   * name. This is where a link's underline goes, so it marks what reads as the
+   * label rather than trailing under the id too.
+   */
+  nameClassName?: string
 }): React.JSX.Element {
   if (entry.name === null || entry.name === '') {
-    return <span className={cn('font-mono', className)}>{entry.id}</span>
+    return <span className={cn('font-mono', className, nameClassName)}>{entry.id}</span>
   }
   if (stacked) {
     return (
       <span className={cn('flex min-w-0 flex-col leading-tight', className)}>
-        <span className="truncate">{entry.name}</span>
+        <span className={cn('truncate', nameClassName)}>{entry.name}</span>
         <span className="truncate font-mono text-[0.85em] text-muted-foreground">{entry.id}</span>
       </span>
     )
   }
   return (
     <span className={cn('min-w-0 truncate', className)}>
-      {entry.name} <span className="font-mono text-muted-foreground">({entry.id})</span>
+      <span className={nameClassName}>{entry.name}</span>{' '}
+      <span className="font-mono text-muted-foreground">({entry.id})</span>
     </span>
   )
 }

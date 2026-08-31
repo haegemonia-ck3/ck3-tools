@@ -198,7 +198,7 @@ export default function CultureRelationsPanel({
         <FieldSet className="gap-2">
           <Collapsible open={membersOpen} onOpenChange={setMembersOpen}>
             <SectionLegend className="flex w-full items-center justify-between gap-2">
-              <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md text-left hover:text-foreground">
+              <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-md text-left font-heading hover:text-foreground">
                 <ChevronRight
                   className={cn('size-3 shrink-0 transition-transform', membersOpen && 'rotate-90')}
                 />

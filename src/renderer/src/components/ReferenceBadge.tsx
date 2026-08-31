@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowRight, ExternalLink, X } from 'lucide-react'
+import { ExternalLink, X } from 'lucide-react'
 import type { RefEntry, RefLocation } from '@shared/types'
 import { openReferenceTarget } from './ReferenceInput'
 import ReferenceLabel, { refLabel } from './ReferenceLabel'
@@ -37,7 +37,8 @@ export default function ReferenceBadge({
   const label = refLabel(entry)
   const visual = leading ?? (icon ? <img className="size-9 object-cover" src={icon} alt="" /> : null)
 
-  const follow = async (): Promise<void> => {
+  const follow = async (e: React.MouseEvent): Promise<void> => {
+    e.stopPropagation()
     if (onNavigate) {
       onNavigate()
       return
@@ -55,31 +56,40 @@ export default function ReferenceBadge({
     <Badge
       variant="secondary"
       className={cn(
-        'relative h-9 gap-1 rounded-md py-0 pr-1 text-xs',
+        'relative h-9 gap-1 rounded-md py-0 text-xs',
         // The visual is positioned rather than laid out so its intrinsic size
         // can't stretch the badge; the extra padding reserves its square.
-        visual ? 'pl-11' : 'pl-2'
+        visual ? 'pl-11' : 'pl-2',
+        onRemove ? 'pr-1' : 'pr-2'
       )}
     >
       {visual && <span className="absolute inset-y-0 left-0 size-9">{visual}</span>}
-      <ReferenceLabel entry={entry} stacked className="font-normal" />
-      {(onNavigate ?? locate) && (
+      {(onNavigate ?? locate) ? (
         <Button
-          variant="ghost"
-          size="icon-xs"
-          className="size-4 text-muted-foreground hover:text-primary"
+          variant="link"
+          // Underlined like a ReferenceDisplay, and stretched over the whole
+          // badge by the ::after overlay, so the badge itself is the link.
+          className="h-auto min-w-0 gap-1 p-0 text-left font-normal text-inherit after:absolute after:inset-0 hover:no-underline"
           disabled={opening}
           title={onNavigate ? `Go to ${label}` : `Open ${label}'s definition in text editor`}
           onClick={follow}
         >
-          {onNavigate ? <ArrowRight /> : <ExternalLink />}
+          <ReferenceLabel
+            entry={entry}
+            stacked
+            nameClassName="underline decoration-link decoration-dotted underline-offset-2 group-hover/badge:decoration-solid"
+          />
+          {!onNavigate && <ExternalLink className="size-3 shrink-0" />}
         </Button>
+      ) : (
+        <ReferenceLabel entry={entry} stacked className="font-normal" />
       )}
       {onRemove && (
         <Button
           variant="ghost"
           size="icon-xs"
-          className="size-4 text-muted-foreground hover:text-destructive"
+          // Lifted back above the link's overlay so the X stays clickable.
+          className="relative size-4 text-muted-foreground hover:text-destructive"
           title={`Remove ${label}`}
           onClick={onRemove}
         >
