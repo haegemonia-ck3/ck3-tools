@@ -273,8 +273,18 @@ export default function CharacterDetailPanel({
     }
   }
 
-  /** Mother ids resolve to a display name through the mod-wide character list */
+  /** Parent ids resolve to a display name through the mod-wide character list */
   const charName = new Map(characters.map((c) => [c.id, c.name]))
+
+  /**
+   * A child's other parent: this character holds one side of the pair, so the
+   * column shows the side they don't — the mother for a male character, the
+   * father for a female one.
+   */
+  const thisIsMother = /^yes$/i.test(draft.female ?? '')
+  const otherParentLabel = thisIsMother ? 'Father' : 'Mother'
+  const otherParent = (c: CharacterSummary): string | null =>
+    thisIsMother ? c.father : c.mother
 
   /**
    * Same convention as the date fields: the era year alone while the calendar
@@ -319,7 +329,7 @@ export default function CharacterDetailPanel({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Name</TableHead>
-                <TableHead>Mother</TableHead>
+                <TableHead>{otherParentLabel}</TableHead>
                 <TableHead>Birth</TableHead>
               </TableRow>
             </TableHeader>
@@ -336,9 +346,9 @@ export default function CharacterDetailPanel({
                   </TableCell>
                   <TableCell className="max-w-50 truncate">
                     <ReferenceDisplay
-                      value={c.mother}
-                      name={c.mother === null ? null : (charName.get(c.mother) ?? null)}
-                      onNavigate={() => onNavigate(c.mother as string)}
+                      value={otherParent(c)}
+                      name={charName.get(otherParent(c) ?? '') ?? null}
+                      onNavigate={() => onNavigate(otherParent(c) as string)}
                       className="truncate"
                     />
                   </TableCell>
