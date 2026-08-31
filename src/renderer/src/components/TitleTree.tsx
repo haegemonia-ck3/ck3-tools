@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { TitleSummary } from '@shared/types'
 import { Swatch } from './Swatch'
@@ -88,6 +87,13 @@ interface Props {
   nodes: TitleTreeNode[]
   /** Non-empty switches the tree to a flat result list */
   query: string
+  /**
+   * Expansion is owned by the page (normalized ids), so it can outlive this
+   * component — the list view unmounts whenever a title is opened, and the
+   * drilled-open branches should still be open on the way back.
+   */
+  expanded: ReadonlySet<string>
+  onToggle: (id: string) => void
   onOpen: (id: string) => void
 }
 
@@ -98,17 +104,13 @@ interface Props {
  * finding something deep goes through the search box, which flattens to
  * matching rows instead.
  */
-export default function TitleTree({ nodes, query, onOpen }: Props): React.JSX.Element {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-
-  const toggle = (id: string): void => {
-    const next = new Set(expanded)
-    const key = normId(id)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    setExpanded(next)
-  }
-
+export default function TitleTree({
+  nodes,
+  query,
+  expanded,
+  onToggle,
+  onOpen
+}: Props): React.JSX.Element {
   if (query.trim() !== '') {
     const matches: TitleSummary[] = []
     const walk = (list: TitleTreeNode[]): void => {
@@ -154,7 +156,7 @@ export default function TitleTree({ nodes, query, onOpen }: Props): React.JSX.El
           depth={depth}
           childCount={node.children.length}
           expanded={open}
-          onToggle={() => toggle(node.title.id)}
+          onToggle={() => onToggle(node.title.id)}
           onOpen={onOpen}
         />
       )
