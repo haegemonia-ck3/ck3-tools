@@ -7,6 +7,7 @@ import { annotateLines, scanBlocks, scanScalarsCI } from './pdx'
 import { effectiveFiles, isUnderDir } from './refdata'
 import {
   colorTriple,
+  expandLocRefs,
   modFirst,
   norm,
   parseColor,
@@ -218,11 +219,169 @@ export function getTitleData(
     }
   }
   const loc = readLocalization(gameDir, modPath, null, (key) => wanted.has(key))
+  // Vanilla spells noble-family names as references ("$dynn_Su_82CF$ Family");
+  // the referenced keys are fetched in a second pass and substituted in.
+  expandLocRefs(loc, gameDir, modPath)
   const locName = (id: string): string | null => loc.get(id) ?? loc.get(id.toLowerCase()) ?? null
 
   for (const t of titles) t.localizedName = locName(t.id)
+
+  // A noble-family title with no localization of its own is named in the game
+  // after its holder's house — resolve that from the mod's own history.
+  const unnamed = titles.filter(
+    (t) => t.localizedName === null && t.inMod && t.nobleFamily?.trim().toLowerCase() === 'yes'
+  )
+  if (unnamed.length > 0 && modPath !== null) {
+    const names = nobleFamilyNames(gameDir, modPath, replacePaths, unnamed.map((t) => t.id))
+    for (const t of unnamed) t.localizedName = names.get(norm(t.id)) ?? null
+  }
+
   const entries = (ids: string[]): RefEntry[] => ids.map((id) => ({ id, name: locName(id) }))
   return { titles, governments: entries(governments), successionLaws: entries(laws) }
+}
+
+// ---------- Noble-family names ----------
+
+/** Lenient date sort key (bare years included), for "who holds it last". */
+function looseDateKey(date: string): number {
+  const m = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(date.trim())
+  if (m === null) return -1
+  return Number(m[1]) * 10000 + Number(m[2] ?? 1) * 100 + Number(m[3] ?? 1)
+}
+
+/** Top-level block key -> its `name` scalar, over one content dir, for `ids` only. */
+function nameKeysFor(
+  gameDir: string | null,
+  modPath: string | null,
+  replacePaths: string[],
+  relDir: string,
+  ids: Set<string>
+): Map<string, string> {
+  const names = new Map<string, string>()
+  if (ids.size === 0) return names
+  for (const path of modFirst(effectiveFiles(gameDir, modPath, replacePaths, relDir), modPath)) {
+    let text: string
+    try {
+      text = readFileSync(path, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const block of scanBlocks(text)) {
+      const key = norm(block.key)
+      if (!ids.has(key) || names.has(key)) continue
+      const name = scanScalarsCI(text.slice(block.bodyStart, block.bodyEnd)).get('name')
+      if (name !== undefined) names.set(key, name)
+    }
+  }
+  return names
+}
+
+/**
+ * Display names for noble-family titles that have no localization of their
+ * own. The game names a family title after the holding house, which changes
+ * over time — the editor shows the end of the recorded history: each title's
+ * chronologically last holder, that character's house (or dynasty), and that
+ * lineage's localized name. Titles whose chain breaks anywhere stay nameless.
+ *
+ * Only the mod's own history is scanned — a mod's family holders are its own
+ * characters, and vanilla's family titles are localized under their ids.
+ */
+function nobleFamilyNames(
+  gameDir: string | null,
+  modPath: string,
+  replacePaths: string[],
+  ids: string[]
+): Map<string, string> {
+  const wanted = new Set(ids.map(norm))
+
+  // The last holder recorded for each title; `holder = 0` is a destruction
+  // marker, so the last real holder is the family the title is named after
+  const holders = new Map<string, { key: number; holder: string }>()
+  for (const path of effectiveFiles(null, modPath, [], 'history/titles')) {
+    let text: string
+    try {
+      text = readFileSync(path, 'utf-8')
+    } catch {
+      continue
+    }
+    for (const block of scanBlocks(text)) {
+      const title = norm(block.key)
+      if (!wanted.has(title)) continue
+      const body = text.slice(block.bodyStart, block.bodyEnd)
+      for (const d of scanBlocks(body)) {
+        if (!DATED_BLOCK_KEY.test(d.key)) continue
+        const holder = scanScalarsCI(body.slice(d.bodyStart, d.bodyEnd)).get('holder')
+        if (holder === undefined || holder === '0') continue
+        const key = looseDateKey(d.key)
+        const prev = holders.get(title)
+        if (prev === undefined || key >= prev.key) holders.set(title, { key, holder })
+      }
+    }
+  }
+
+  // Each last holder's lineage, from the mod's character history
+  const holderIds = new Set([...holders.values()].map((h) => norm(h.holder)))
+  const lineages = new Map<string, { house: string | null; dynasty: string | null }>()
+  if (holderIds.size > 0) {
+    for (const path of effectiveFiles(null, modPath, [], 'history/characters')) {
+      let text: string
+      try {
+        text = readFileSync(path, 'utf-8')
+      } catch {
+        continue
+      }
+      for (const block of scanBlocks(text)) {
+        const id = norm(block.key)
+        if (!holderIds.has(id) || lineages.has(id)) continue
+        const scalars = scanScalarsCI(text.slice(block.bodyStart, block.bodyEnd))
+        lineages.set(id, {
+          house: scalars.get('dynasty_house') ?? null,
+          dynasty: scalars.get('dynasty') ?? null
+        })
+      }
+    }
+  }
+
+  // Lineage ids -> their `name` loc keys (game+mod layered: a mod character
+  // may sit in a base-game dynasty), houses preferred — they're the finer
+  // lineage and what the game names a family title after
+  const houseIds = new Set<string>()
+  const dynastyIds = new Set<string>()
+  for (const lineage of lineages.values()) {
+    if (lineage.house !== null) houseIds.add(norm(lineage.house))
+    else if (lineage.dynasty !== null) dynastyIds.add(norm(lineage.dynasty))
+  }
+  const houseNames = nameKeysFor(gameDir, modPath, replacePaths, 'common/dynasty_houses', houseIds)
+  const dynastyNames = nameKeysFor(gameDir, modPath, replacePaths, 'common/dynasties', dynastyIds)
+
+  const nameKeyOf = (title: string): string | null => {
+    const holder = holders.get(title)
+    if (holder === undefined) return null
+    const lineage = lineages.get(norm(holder.holder))
+    if (lineage === undefined) return null
+    if (lineage.house !== null) return houseNames.get(norm(lineage.house)) ?? null
+    if (lineage.dynasty !== null) return dynastyNames.get(norm(lineage.dynasty)) ?? null
+    return null
+  }
+
+  const keys = new Set<string>()
+  for (const title of wanted) {
+    const key = nameKeyOf(title)
+    if (key !== null) keys.add(key)
+  }
+  const loc =
+    keys.size === 0
+      ? new Map<string, string>()
+      : readLocalization(gameDir, modPath, null, (key) => keys.has(key))
+  expandLocRefs(loc, gameDir, modPath)
+
+  const names = new Map<string, string>()
+  for (const title of wanted) {
+    const key = nameKeyOf(title)
+    const name = key === null ? undefined : loc.get(key)
+    if (name !== undefined) names.set(title, name)
+  }
+  return names
 }
 
 // ---------- Detail ----------

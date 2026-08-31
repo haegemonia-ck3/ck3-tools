@@ -170,7 +170,7 @@ const LOC_REF = /\$([A-Za-z0-9_.\-']+)\$/g
  * are read in a second pass. One round only: what a substituted value refers to
  * in turn is left as written, the way raw values read elsewhere in the app.
  */
-function expandLocRefs(
+export function expandLocRefs(
   loc: Map<string, string>,
   gameDir: string | null,
   modPath: string | null
