@@ -30,14 +30,43 @@ import {
   buildTree,
   findTitle,
   flattenTree,
+  normId,
   pruneToMod,
   titleName
 } from '@/lib/titleView'
+
+/**
+ * The list view's state — drilled-open branches, scroll position, search and
+ * scope — kept per mod for the whole app session, so opening a title (which
+ * unmounts the list) or visiting another tool and coming back lands on the
+ * tree exactly as it was left. Module-level like the app's other in-memory
+ * caches (coats of arms); an app restart starts fresh.
+ */
+interface TitleListState {
+  /** Normalized ids of expanded branches */
+  expanded: Set<string>
+  scrollTop: number
+  query: string
+  scope: 'mod' | 'all'
+}
+
+const listStates = new Map<string, TitleListState>()
+
+/** The remembered list state for a mod (keyed by .mod file name). */
+function listStateFor(modFile: string): TitleListState {
+  let state = listStates.get(modFile)
+  if (state === undefined) {
+    state = { expanded: new Set(), scrollTop: 0, query: '', scope: 'mod' }
+    listStates.set(modFile, state)
+  }
+  return state
+}
 
 export default function TitleEditorPage(): React.JSX.Element {
   const { settings, selectedMod } = useApp()
   const { isMobile, setOpen, setOpenMobile } = useSidebar()
   const navigate = useNavigate()
+  const modKey = selectedMod?.file ?? ''
   const [data, setData] = useState<TitleData | null>(null)
   const [titleFiles, setTitleFiles] = useState<string[] | null>(null)
   const [historyFiles, setHistoryFiles] = useState<string[]>([])
@@ -45,9 +74,29 @@ export default function TitleEditorPage(): React.JSX.Element {
   const [detail, setDetail] = useState<TitleDetail | null>(null)
   const [history, setHistory] = useState<TitleHistoryEntry[] | null>(null)
   const [loading, setLoading] = useState(false)
-  const [query, setQuery] = useState('')
-  const [scope, setScope] = useState<'mod' | 'all'>('mod')
+  // Seeded from (and written through to) the per-mod store above
+  const [query, setQueryState] = useState(() => listStateFor(modKey).query)
+  const [scope, setScopeState] = useState<'mod' | 'all'>(() => listStateFor(modKey).scope)
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(listStateFor(modKey).expanded)
+  )
   const [showRawDates, setShowRawDates] = useState(false)
+
+  const setQuery = (next: string): void => {
+    listStateFor(modKey).query = next
+    setQueryState(next)
+  }
+  const setScope = (next: 'mod' | 'all'): void => {
+    listStateFor(modKey).scope = next
+    setScopeState(next)
+  }
+  const toggleExpanded = (id: string): void => {
+    const state = listStateFor(modKey)
+    const key = normId(id)
+    if (state.expanded.has(key)) state.expanded.delete(key)
+    else state.expanded.add(key)
+    setExpanded(new Set(state.expanded))
+  }
   /** While a history entry form is open, Escape cancels it rather than the page */
   const [historyFormOpen, setHistoryFormOpen] = useState(false)
   // Which title is open lives in the URL, not in state, so opening one pushes
@@ -126,10 +175,15 @@ export default function TitleEditorPage(): React.JSX.Element {
 
   // Switching mods invalidates the open title, but only on a real change: on
   // the first render the URL may already carry a deep link that must survive.
+  // The list view swaps to the new mod's own remembered state.
   const prevModPath = useRef(modPath)
   useEffect(() => {
     if (prevModPath.current !== modPath) {
       prevModPath.current = modPath
+      const state = listStateFor(modKey)
+      setQueryState(state.query)
+      setScopeState(state.scope)
+      setExpanded(new Set(state.expanded))
       closeRow()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -173,6 +227,16 @@ export default function TitleEditorPage(): React.JSX.Element {
     closeRow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.id, data, selected])
+
+  // Put the tree back where it was scrolled to whenever the list view comes
+  // (back) into existence — it unmounts while a title is open, and the rows
+  // must be rendered before the offset can stick.
+  const listScroll = useRef<HTMLDivElement>(null)
+  const showingList = selected === null && data !== null
+  useEffect(() => {
+    if (showingList) listScroll.current?.scrollTo({ top: listStateFor(modKey).scrollTop })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showingList, modKey])
 
   const roots = useMemo(() => (data ? buildTree(data.titles) : []), [data])
   const visibleRoots = useMemo(
@@ -337,13 +401,18 @@ export default function TitleEditorPage(): React.JSX.Element {
                 {loading ? 'Loading…' : `${visibleCount} titles`}
               </span>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card">
-              {/* Keyed by mod: expand state must not carry over to another
-                  mod's tree, where the same ids can mean different titles */}
+            <div
+              ref={listScroll}
+              className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card"
+              onScroll={(e) => {
+                listStateFor(modKey).scrollTop = e.currentTarget.scrollTop
+              }}
+            >
               <TitleTree
-                key={selectedMod.file}
                 nodes={visibleRoots}
                 query={query}
+                expanded={expanded}
+                onToggle={toggleExpanded}
                 onOpen={openRow}
               />
             </div>
