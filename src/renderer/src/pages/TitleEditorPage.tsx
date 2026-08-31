@@ -12,7 +12,7 @@ import TitleCreatePanel from '../components/TitleCreatePanel'
 import TitleDetailPanel from '../components/TitleDetailPanel'
 import TitleHistoryPanel from '../components/TitleHistoryPanel'
 import TitleTree from '../components/TitleTree'
-import { ColorTile, Swatch } from '../components/Swatch'
+import { colorTile, Swatch } from '../components/Swatch'
 import { useEntryHistory } from '../hooks/useEntryHistory'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -269,9 +269,8 @@ export default function TitleEditorPage(): React.JSX.Element {
   }
 
   /** The map colour a remembered title paints, as the chip's leading square. */
-  const refColor = (ref: EntryRef): React.JSX.Element => (
-    <ColorTile hex={(data && findTitle(data.titles, ref.id)?.color) ?? null} />
-  )
+  const refColor = (ref: EntryRef): React.JSX.Element | null =>
+    colorTile((data && findTitle(data.titles, ref.id)?.color) ?? null)
 
   const roots = useMemo(() => (data ? buildTree(data.titles) : []), [data])
   const visibleRoots = useMemo(

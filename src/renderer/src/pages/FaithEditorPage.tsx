@@ -30,7 +30,7 @@ import FaithCreatePanel from '../components/FaithCreatePanel'
 import FaithDetailPanel from '../components/FaithDetailPanel'
 import ReferenceDisplay from '../components/ReferenceDisplay'
 import ReferenceInput from '../components/ReferenceInput'
-import { ColorTile, Swatch } from '../components/Swatch'
+import { colorTile, Swatch } from '../components/Swatch'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -393,7 +393,7 @@ export default function FaithEditorPage(): React.JSX.Element {
         active={selectedRow && { id: selectedRow.id, name: selectedRow.name }}
         onOpen={(ref) => openRow(ref.id)}
         resolve={resolveRef}
-        visual={(ref) => <ColorTile hex={rowFor(ref)?.color ?? null} />}
+        visual={(ref) => colorTile(rowFor(ref)?.color ?? null)}
       />
 
       {!loading && allRows.length === 0 && (

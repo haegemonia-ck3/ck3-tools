@@ -57,22 +57,9 @@ export function IconTile({
 
 /**
  * A colour as the leading square of a ReferenceBadge: a flat fill with no
- * border or rounding of its own (the badge clips it), hatched when the value
- * couldn't be resolved.
+ * border or rounding of its own, since the badge positions and clips it.
+ * Nothing at all when there is no colour — an empty square is dead width the
+ * badge shouldn't reserve, unlike the hatched Swatch a list column must hold.
  */
-export function ColorTile({ hex }: { hex: string | null }): React.JSX.Element {
-  return (
-    <span
-      aria-hidden
-      className="size-9"
-      style={
-        hex
-          ? { backgroundColor: hex }
-          : {
-              backgroundImage:
-                'repeating-linear-gradient(45deg, var(--muted) 0 3px, transparent 3px 6px)'
-            }
-      }
-    />
-  )
-}
+export const colorTile = (hex: string | null): React.JSX.Element | null =>
+  hex === null ? null : <span aria-hidden className="size-9" style={{ backgroundColor: hex }} />

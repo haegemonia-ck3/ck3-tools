@@ -29,7 +29,7 @@ import CultureRelationsPanel from '../components/CultureRelationsPanel'
 import EntryHistoryBar from '../components/EntryHistoryBar'
 import FavoriteToggle from '../components/FavoriteToggle'
 import ReferenceInput from '../components/ReferenceInput'
-import { ColorTile } from '../components/Swatch'
+import { colorTile } from '../components/Swatch'
 import { useEntryHistory } from '../hooks/useEntryHistory'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -460,7 +460,7 @@ export default function CultureEditorPage(): React.JSX.Element {
         active={selected && { id: selected.id, name: selected.localizedName }}
         onOpen={(ref) => openRow(ref.id)}
         resolve={resolveRef}
-        visual={(ref) => <ColorTile hex={rowFor(ref)?.color ?? null} />}
+        visual={(ref) => colorTile(rowFor(ref)?.color ?? null)}
       />
 
         <ResizablePanelGroup
@@ -524,7 +524,7 @@ export default function CultureEditorPage(): React.JSX.Element {
         active={selected && { id: selected.id, name: selected.localizedName }}
         onOpen={(ref) => openRow(ref.id)}
         resolve={resolveRef}
-        visual={(ref) => <ColorTile hex={rowFor(ref)?.color ?? null} />}
+        visual={(ref) => colorTile(rowFor(ref)?.color ?? null)}
       />
 
       {!loading && rows.length === 0 && (
